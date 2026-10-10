@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* TRIBE project: defaults, clips. (Saving to flash comes with the storage layer.) */
-#include <string.h>
+#include "mem.h"
 #include "tribe.h"
 
 void clip_set_engine(clip_t *c, int eng)
@@ -51,6 +51,8 @@ void project_defaults(void)
     proj.set.master_vol = 100;
     for (t = 0; t < NTRK; t++) {
         proj.set.level[t] = 100;
+        proj.set.arp_gate[t] = 80;
+        proj.set.arp_oct[t] = 1;
         proj.set.cur[t] = 0;
         for (c = 0; c < NCLIP; c++)
             clip_init(&proj.clip[t][c], find(names[t]));

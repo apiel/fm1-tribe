@@ -12,6 +12,7 @@ extern uint32_t _pool_start[], _pool_end[], _rt_start[], _rt_end[], _rt_load[], 
  * Twice the half averages a heavy step over twice the time, for one more half of latency. */
 #define HALF_FRAMES 512u                    /* I2S half buffer: 11.6 ms at 44.1 kHz */
 #define HALF_WORDS (HALF_FRAMES * 2u)
+#define FS 44100u                           /* the sample rate */
 #define REND_FRAMES 256u                    /* engine_render's most per call */
 #if FELUCCA_UAC
 _Static_assert(REND_FRAMES == UA_HALF, "usb.c sizes the USB audio ring band for this block");
@@ -271,7 +272,6 @@ static void fm1_main(void)
 {
     int32_t knob = 512 * 16;
     uint32_t last_frame = 0, k;
-    uint8_t last_pat = 0xFF;
     {
         uint32_t f = irq_save();
         flash_ok = FL_FAR(fl_jedec_ram)() == 0x856014u;   /* the expected 1 MiB part, else RAM only */
@@ -314,17 +314,8 @@ static void fm1_main(void)
     panel_init();
     led_pos_init();
     plat_perf_init();
-    engine_init(proj.pat, &proj.arr.song, proj.arr.lane, &proj.sound);
-    if (project_load() != 0)
-        project_defaults();                         /* nothing saved yet (or another format) */
-    engine_apply_sound(&proj.sound);
-    seq.bpm = (float)proj.set.bpm_x10 / 10.0f;
-    seq.accent_q7 = proj.set.accent_q7;
-    project_apply_io();                             /* clock and notes out, the MIDI channels, the output */
-    engine_brk_loops();
-    plat_cpu2_set(1);                               /* the second core: at power-on, before the audio and the
-                                                     * timers, as Melodee starts it (started later, it does not
-                                                     * reach its entry); if it does not answer, one core */
+    project_defaults();                             /* TRIBE: nothing is saved yet (SAVE comes with the storage layer) */
+    engine_init();
     audio_init();
     usb_start();
 #if X0X_TRS
@@ -384,11 +375,10 @@ static void fm1_main(void)
                 enter_uboot("UBOOT");
             }
         }
-        ed_service();                               /* sample upload SysEx */
         ota_service();                              /* M-UPGRADE handshake */
         if (usb.ota_req) {
             usb.ota_req = 0;
-            seq_stop(&seq);
+            dk_play(0);
             if (flash_ok)
                 ota_session();                      /* returns only if nothing was committed */
             lcd_fill(0, 0, 240, 240, C_BLACK);
@@ -399,10 +389,6 @@ static void fm1_main(void)
 #if X0X_CDC
         cdc_task();
 #endif
-        if (seq.ppat[TRK_BRK] != last_pat) {        /* the break's new pattern may name other loops */
-            last_pat = seq.ppat[TRK_BRK];
-            engine_brk_loops();
-        }
         if (fm1_ms - last_frame >= 16u) {           /* ~60 frames/s at most; input in between */
             last_frame = fm1_ms;
             x0x_dbg.ui_frames++;

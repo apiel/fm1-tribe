@@ -124,10 +124,9 @@ static void ota_commit(const uint8_t *parm)
 }
 
 #include "app/slots.c"
-#include "app/x0x.h"
 #include "app/panel.c"
 #include "app/plat_fm1.c"
-#include "app/project.c"
-#include "app/ui.c"
-#include "app/editor.c"
+#include "tribe/tribe.h"
+#include "tribe/draw.c"
+#include "tribe/ui.c"
 #include "app/main_fm1.c"

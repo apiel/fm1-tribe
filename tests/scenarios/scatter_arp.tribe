@@ -1,0 +1,116 @@
+# the second row while playing: scatter FX (8 on the track, 8 on the mix), not notes; ARP modes
+# stopped: a key in the EDIT page auditions the track, no scatter
+tap EDIT
+expect view 1
+key w1 down
+wait 100
+expect scat 0
+key w1 up
+# playing: the same key is a track scatter (slot 1 -> scat 2), released: off
+tap PLAY
+wait 600
+key w1 down
+wait 200
+expect scat 2
+leds
+shot scatter_param.png
+key w1 up
+wait 100
+expect scat 0
+# a key of the second eight is on the whole mix (slot 9 -> scatg 2)
+key w9 down
+wait 200
+expect scatg 2
+key w9 up
+wait 100
+expect scatg 0
+# the SCATTER page (HOME twice) does the same, even stopped
+tap HOME
+tap HOME
+expect view 3
+shot scatter_page.png
+key w3 down
+wait 200
+expect scat 4
+leds
+key w3 up
+# every scatter slot runs and the output stays finite and bounded
+wav scatter.wav
+tap SEQ
+key w0 down
+wait 300
+key w0 up
+tap HOME
+tap HOME
+key w0 down
+wait 300
+key w0 up
+key w1 down
+wait 300
+key w1 up
+key w2 down
+wait 300
+key w2 up
+key w3 down
+wait 300
+key w3 up
+key w4 down
+wait 300
+key w4 up
+key w5 down
+wait 300
+key w5 up
+key w6 down
+wait 300
+key w6 up
+key w7 down
+wait 300
+key w7 up
+key w8 down
+wait 300
+key w8 up
+key w9 down
+wait 300
+key w9 up
+key w10 down
+wait 300
+key w10 up
+key w11 down
+wait 300
+key w11 up
+key w12 down
+wait 300
+key w12 up
+key w13 down
+wait 300
+key w13 up
+key w14 down
+wait 300
+key w14 up
+key w15 down
+wait 300
+key w15 up
+wavstop
+expect peak_db_max 4
+# ARP: the keyboard is a mode of ARP; mode 0 = KEYS plays directly
+tap SEQ
+tapkey b5
+expect trk 5
+tap ARP
+expect view 5
+expect arpmode 0
+shot arp_keys.png
+turn K1 2
+expect arpmode 2
+shot arp_down.png
+# held keys are held by the arpeggiator while playing
+key 12 down
+key 16 down
+wait 100
+expect arpn 2
+key 12 up
+wait 50
+expect arpn 1
+key 16 up
+tap PLAY
+expect playing 0

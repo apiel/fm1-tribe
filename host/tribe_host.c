@@ -15,7 +15,7 @@
  *   wav FILE | wavstop           start / stop recording the output
  *   shot FILE.png                save the screen
  *   leds                         print the lit (#) and dim (o) buttons and keys
- *   expect WHAT VALUE            check state (playing view trk clip queued pos eng bound muted edit grp page spage bpm; stepon N / stepoff N): exit 1 on mismatch
+ *   expect WHAT VALUE            check state (playing view trk clip queued pos eng bound muted edit grp page spage bpm scat scatg arpn arpmode; stepon N / stepoff N): exit 1 on mismatch
  *   peakreset | expect peak_db_min/max VALUE    the output's peak since
  */
 #define X0X_HOST 1
@@ -329,6 +329,10 @@ static int expect(const char *what, const char *val, int line)
     else if (!strcmp(what, "page")) got = ui.page[ui.grp];
     else if (!strcmp(what, "spage")) got = ui.spage;
     else if (!strcmp(what, "bpm")) got = proj.set.bpm_x10;
+    else if (!strcmp(what, "scat")) got = dk_scat[t];
+    else if (!strcmp(what, "scatg")) got = dk_scat_g;
+    else if (!strcmp(what, "arpn")) got = dk_arp_n[t];
+    else if (!strcmp(what, "arpmode")) got = proj.set.arp_mode[t];
     else if (!strcmp(what, "stepon")) got = step_on(&proj.clip[t][dk_clip[t]], atoi(val)) ? want : -1;     /* expect stepon N */
     else if (!strcmp(what, "stepoff")) got = step_on(&proj.clip[t][dk_clip[t]], atoi(val)) ? -1 : want;
     else if (!strcmp(what, "peak_db_min") || !strcmp(what, "peak_db_max")) {

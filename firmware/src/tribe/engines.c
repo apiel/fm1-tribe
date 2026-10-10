@@ -5,7 +5,7 @@
  * cannot hold the same voice; the second one stays silent). The 303 and the kicks are instances,
  * a few of them, handed to tracks as they ask. Everything here runs in the audio ISR except the
  * descriptors (names, pages), which are constant. */
-#include <string.h>
+#include "mem.h"
 #include "tribe.h"
 #include "../dsp/drum909.h"
 #include "../dsp/drum808.h"
@@ -349,7 +349,7 @@ void eng_render_all(float *buf, int off, int n)
     for (t = 0; t < NTRK; t++) {
         const tribe_eng_t *e = eng_info(bound_eng[t]);
         float *o = buf + t * 256 + off;
-        memset(o, 0, (size_t)n * sizeof(float));
+        memset(o, 0, (unsigned)n * sizeof(float));
         if (e->fam == F_909 || e->fam == F_808) {
             int k = kit_of(e->fam);
             k_used[k] = 1;
@@ -364,8 +364,8 @@ void eng_render_all(float *buf, int off, int n)
         }
     }
     if (k_used[0]) {
-        memset(scratch_rev, 0, (size_t)n * sizeof(float));
-        memset(scratch_dly, 0, (size_t)n * sizeof(float));
+        memset(scratch_rev, 0, (unsigned)n * sizeof(float));
+        memset(scratch_dly, 0, (unsigned)n * sizeof(float));
         {
             static float sink[256];
             memset(sink, 0, sizeof sink);
@@ -375,8 +375,8 @@ void eng_render_all(float *buf, int off, int n)
     if (k_used[1]) {
         static float sink[256];
         memset(sink, 0, sizeof sink);
-        memset(scratch_rev, 0, (size_t)n * sizeof(float));
-        memset(scratch_dly, 0, (size_t)n * sizeof(float));
+        memset(scratch_rev, 0, (unsigned)n * sizeof(float));
+        memset(scratch_dly, 0, (unsigned)n * sizeof(float));
         drum808_render(&d808, sink, scratch_rev, scratch_dly, n);
     }
 }

@@ -52,6 +52,7 @@ typedef struct {
     uint8_t level[NTRK];                /* track level 0..127 */
     uint8_t cur[NTRK];                  /* the clip each track starts on */
     uint8_t master_vol, rsv[3];
+    uint8_t arp_mode[NTRK], arp_rate[NTRK], arp_gate[NTRK], arp_oct[NTRK];   /* ARP: off(keys) up down updn rand; 1/16 1/8 1/4; % of the step; octaves */
 } dsettings_t;
 
 typedef struct {
@@ -69,7 +70,10 @@ void clip_init(clip_t *c, int eng);     /* an empty clip with the engine's defau
 void clip_set_engine(clip_t *c, int eng);   /* the engine and its default pots; the steps stay */
 
 /* -------------------------------------------------------------- engine --- */
+void ui_say(const char *a, const char *b);
 void engine_init(void);
+void engine_load(uint32_t pct, uint32_t frames);         /* the platform: a block took pct % of its time */
+extern volatile uint32_t dk_load_pct, dk_load_peak;      /* the audio block's cost, % of its time; the peak since the UI last cleared it */
 void engine_render(int32_t *out_lr, uint32_t n);        /* ISR: n stereo frames, 24-bit in int32 */
 
 /* main loop -> ISR (all queued) */
@@ -81,11 +85,15 @@ void dk_launch(int trk, int clip, int now);             /* queue a clip (switche
 void dk_mute(int trk, int on);
 void dk_note(int trk, int note, int vel);               /* a live note on (vel 0 = off) */
 void dk_master_set(int i, int value);                   /* a master pot (master.h) */
+void dk_scatter(int trk, int slot, int on);             /* a scatter effect on (slots 0-7: the track, 8-15: the mix) or off */
 
 /* ISR -> UI, read freely */
 extern volatile uint8_t dk_pos[NTRK];                   /* each track's playhead */
 extern volatile uint8_t dk_clip[NTRK], dk_queued[NTRK]; /* playing clip; queued clip or 0xFF */
 extern volatile uint8_t dk_muted[NTRK], dk_playing;
+extern volatile uint8_t dk_scat[NTRK], dk_scat_g;        /* the scatter slot (+1) each track plays; the mix's (slot - 7) */
+extern volatile uint8_t dk_arp_n[NTRK];                  /* notes each arpeggiator holds */
+extern volatile uint32_t dk_gstep;
 extern volatile uint8_t dk_bound[NTRK];                  /* the engine each track really holds (differs from the clip's when its voice is taken) */
 extern volatile uint16_t dk_peak[NTRK];                 /* Q15, tribeying (UI) */
 extern volatile uint8_t dk_hit[NTRK];                   /* last trigger's velocity, the UI lets it fall */

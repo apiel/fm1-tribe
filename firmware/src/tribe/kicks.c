@@ -3,7 +3,7 @@
  * float only, fastmath.h instead of libm, the exponentials' coefficients computed when a pot moves
  * (not per sample), the pitch envelope kept as a tribeying exponential (pow(env, k) = exp(-k t)). */
 #include <stdint.h>
-#include <string.h>
+#include "mem.h"
 #include "kicks.h"
 #include "../dsp/fastmath.h"
 
@@ -30,6 +30,12 @@ static const kp_t KP[] = {                    /* PotKick, 15 */
 #define NKP ((int)(sizeof KP / sizeof KP[0]))
 
 static x0x_param_t KWU[sizeof KW / sizeof KW[0]], KPU[sizeof KP / sizeof KP[0]];
+
+static int names_eq(const char *a, const char *b)
+{
+    while (*a && *a == *b) { a++; b++; }
+    return !*a && !*b;
+}
 
 /* units of the pots, by name */
 static char *put_u(char *b, int v)
@@ -420,7 +426,7 @@ void kick_render(int inst, float *out, int n)
     kick_t *k = &K[inst / NK][inst % NK];
     if (k->n >= k->total && k->clickenv < 0.0001f) {
         k->crush_hold = 0.0f;
-        memset(out, 0, (size_t)n * sizeof(float));      /* silent: costs nothing */
+        memset(out, 0, (unsigned)n * sizeof(float));      /* silent: costs nothing */
         return;
     }
     if (k->potkick)
@@ -435,9 +441,9 @@ void kick_format(int potkick, int i, int pot, char *buf)
     const char *n = t[i].name, *u = "%";
     float v = unmap(&t[i], pot);
     char *q = buf;
-    if (!strcmp(n, "Freq")) u = "Hz";
-    else if (!strcmp(n, "Dur") || !strcmp(n, "ClkDec") || !strcmp(n, "FMSnap")) u = "ms";
-    else if (!strcmp(n, "FMRat")) {
+    if (names_eq(n, "Freq")) u = "Hz";
+    else if (names_eq(n, "Dur") || names_eq(n, "ClkDec") || names_eq(n, "FMSnap")) u = "ms";
+    else if (names_eq(n, "FMRat")) {
         int x4 = (int)(v * 4.0f + 0.5f);                 /* quarters */
         q = put_u(q, x4 / 4);
         if (x4 & 3) { *q++ = '.'; *q++ = (char)('0' + (x4 & 3) * 25 / 10); if (((x4 & 3) * 25) % 10) *q++ = (char)('0' + ((x4 & 3) * 25) % 10); }

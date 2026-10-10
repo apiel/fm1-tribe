@@ -10,13 +10,16 @@
  * Included by the unity build after gfx.c, draw.c and project.c. */
 #include "tribe.h"
 #include "../app/plat.h"
+#include "scatter.h"
 
 enum { V_SEQ, V_PARAM, V_HOME, V_SCATTER, V_GLO, V_ARP, V_REC, NVIEWS };
 static const char *const VIEW_N[NVIEWS] = {"SEQ", "PARAM", "CLIPS", "SCATTER", "GLOBAL", "ARP", "REC"};
+static const char *const ARP_N[5] = {"KEYS", "UP", "DOWN", "UPDN", "RAND"};
+static const char *const ARP_R[3] = {"1/16", "1/8", "1/4"};
 static const char *const GRP_N[NPG] = {"FX", "ENV", "LFO", "EDIT"};
 static const uint8_t GRP_BTN[NPG] = {B_FX, B_ENV, B_LFO, B_EDIT};
-#define NGLO 5
-static const char *const GLO_N[NGLO] = {"TEMPO", "ENGINE", "LEVEL", "MASTER", "PROJECT"};
+#define NGLO 6
+static const char *const GLO_N[NGLO] = {"TEMPO", "ENGINE", "LEVEL", "MASTER", "PROJECT", "CPU"};
 
 static const uint16_t TRK_COL[NTRK] = {
     RGB(255, 96, 80), RGB(255, 150, 60), RGB(255, 210, 70), RGB(170, 230, 80), RGB(70, 220, 130),
@@ -40,6 +43,7 @@ static struct {
     uint32_t bprev, kprev, used;
     uint8_t held_note[NKEYS];            /* live note of a held key + 1 */
     uint8_t held_trk[NKEYS];
+    uint8_t held_scat[NKEYS];            /* scatter slot of a held key + 1 */
     char msg[24];
     uint32_t msg_until, frame;
     int8_t touched;                      /* the knob last turned, for its highlight */
@@ -236,9 +240,16 @@ static void key_down(int k)
         break;
     case V_PARAM:
     case V_GLO:
-        dk_note(ui.trk, 48 + w, 100);                   /* the white keys audition the track */
-        ui.held_note[WHITE_K[w]] = (uint8_t)(48 + w + 1);
-        ui.held_trk[WHITE_K[w]] = ui.trk;
+    case V_SCATTER:
+        if (ui.view == V_SCATTER || dk_playing) {        /* playing: the second row is the scatter FX, not notes */
+            ui.held_scat[k] = (uint8_t)(w + 1);
+            ui.held_trk[k] = ui.trk;
+            dk_scatter(ui.trk, w, 1);
+        } else {                                        /* stopped: audition the track */
+            dk_note(ui.trk, 48 + w, 100);
+            ui.held_note[k] = (uint8_t)(48 + w + 1);
+            ui.held_trk[k] = ui.trk;
+        }
         break;
     default:
         break;
@@ -251,6 +262,10 @@ static void key_up(int k)
     if (ui.held_note[k]) {
         dk_note(ui.held_trk[k], ui.held_note[k] - 1, 0);
         ui.held_note[k] = 0;
+    }
+    if (ui.held_scat[k]) {
+        dk_scatter(ui.held_trk[k], ui.held_scat[k] - 1, 0);
+        ui.held_scat[k] = 0;
     }
     if (ui.view == V_SEQ && w >= 0 && ui.press == ui.spage * 16 + w) {   /* a short tap on an "on" step: off */
         step_flip(cur_clip(), ui.press);
@@ -360,6 +375,23 @@ static void input(void)
                     proj.set.level[ui.trk] = (uint8_t)(v < 0 ? 0 : v > 127 ? 127 : v);
                 }
             }
+        } else if (ui.view == V_ARP) {
+            int t = ui.trk, v;
+            if (i == 0) {
+                v = proj.set.arp_mode[t] + d;
+                proj.set.arp_mode[t] = (uint8_t)(v < 0 ? 0 : v > 4 ? 4 : v);
+            } else if (i == 1) {
+                v = proj.set.arp_rate[t] + d;
+                proj.set.arp_rate[t] = (uint8_t)(v < 0 ? 0 : v > 2 ? 2 : v);
+            } else if (i == 2) {
+                v = proj.set.arp_gate[t] + d * 5;
+                proj.set.arp_gate[t] = (uint8_t)(v < 10 ? 10 : v > 100 ? 100 : v);
+            } else {
+                v = proj.set.arp_oct[t] + d;
+                proj.set.arp_oct[t] = (uint8_t)(v < 1 ? 1 : v > 3 ? 3 : v);
+            }
+            ui.touched = (int8_t)i;
+            ui.touch_until = plat_ms() + 900u;
         } else if (ui.view == V_SEQ && ui.edit >= 0)
             turn_step(i, d);
         else
@@ -411,7 +443,9 @@ static void draw_header(void)
             put_i(q, eng_pages(cur_clip()->eng, ui.grp));
         }
         x = cv_text(x, vc(&FONT_B, 1, 17), &FONT_B, b, C_HI) + 6;
-    } else
+    } else if (ui.view == V_ARP)
+        x = cv_text(x, vc(&FONT_B, 1, 17), &FONT_B, proj.set.arp_mode[ui.trk] ? "ARP" : "KEYS", C_HI) + 6;
+    else
         x = cv_text(x, vc(&FONT_B, 1, 17), &FONT_B, VIEW_N[ui.view], C_HI) + 6;
     b[0] = 'C';
     put_i(b + 1, dk_clip[ui.trk] + 1);
@@ -536,6 +570,27 @@ static void draw_home(void)
     }
 }
 
+/* the sixteen scatter keys: eight on the track, eight on the mix; big = the SCATTER page, small = under the parameters */
+static void draw_scatter(int big)
+{
+    int i;
+    for (i = 0; i < 16; i++) {
+        int row = i >> 3, col = i & 7, on = i < 8 ? dk_scat[ui.trk] == i + 1 : dk_scat_g == i - 7;
+        uint16_t c = i < 8 ? tcol(ui.trk) : C_AMB;
+        int x = col * 30, y = big ? 22 + row * 56 : 102 + row * 18, w = 29, h = big ? 44 : 16;
+        box(x, y, w, h, on ? c : (dk_playing || big ? RGB(40, 40, 48) : C_LINE));
+        text_c(x + w / 2, vc(big ? &FONT_S : &FONT_XS, y, h), big ? &FONT_S : &FONT_XS, sc_name(i),
+               on ? C_BLACK : (dk_playing || big ? C_WHITE : C_DIM));
+    }
+    if (big) {
+        char b[8];
+        put_s(b, "TRACK ");
+        put_i(b + 6, ui.trk + 1);
+        cv_text(2, vc(&FONT_XS, 4, 14), &FONT_XS, b, tcol(ui.trk));
+        cv_text(2, vc(&FONT_XS, 66, 14), &FONT_XS, "ALL TRACKS", C_AMB);
+    }
+}
+
 static void draw_text_screen(const char *a, const char *b2, uint16_t c)
 {
     text_c(120, vc(&FONT_L, 20, 40), &FONT_B, a, c);
@@ -563,8 +618,14 @@ static void draw_glo(void)
             put_i(v, proj.set.level[ui.trk]);
         else if (i == 3)
             put_s(v, "KNOBS: SOON");
-        else
+        else if (i == 4)
             put_s(v, "SAVE LOAD: SOON");
+        else {
+            char *q = put_i(v, (int)dk_load_pct);
+            q = put_s(q, "% PEAK ");
+            q = put_i(q, (int)dk_load_peak);
+            put_s(q, "%");
+        }
         text_r(230, vc(&FONT_B, y, 16), &FONT_B, v, on ? C_HI : C_DIM);
     }
 }
@@ -575,13 +636,16 @@ static void draw_main(void)
     cv_begin(240, 2 * BAND_H, C_BLACK);
     switch (ui.view) {
     case V_SEQ: draw_seq(); break;
-    case V_PARAM: draw_param(); break;
+    case V_PARAM: draw_param(); draw_scatter(0); break;
     case V_HOME: draw_home(); break;
-    case V_SCATTER: draw_text_screen("SCATTER FX", "TAP A KEY (SOON)", C_HI); break;
+    case V_SCATTER: draw_scatter(1); break;
     case V_GLO: draw_glo(); break;
     default:
-        put_s(b, ui.view == V_REC ? "REC" : "ARP");
-        draw_text_screen(b, "OCT -/+  KEYBOARD PLAYS THE TRACK", ui.view == V_REC ? RGB(255, 90, 80) : C_HI);
+        put_s(b, ui.view == V_REC ? "REC" : proj.set.arp_mode[ui.trk] ? "ARP" : "KEYS");
+        if (ui.view == V_ARP && proj.set.arp_mode[ui.trk] && !dk_playing)
+            draw_text_screen(b, "THE ARPEGGIATOR RUNS WITH PLAY", C_HI);
+        else
+            draw_text_screen(b, "OCT -/+  KEYBOARD PLAYS THE TRACK", ui.view == V_REC ? RGB(255, 90, 80) : C_HI);
         put_s(b, "OCT ");
         put_i(b + 4, ui.oct);
         text_c(120, vc(&FONT_M, 100, 30), &FONT_M, b, C_WHITE);
@@ -595,11 +659,11 @@ static void draw_knobs(void)
     int i;
     const clip_t *c = cur_clip();
     const tribe_eng_t *e = eng_info(c->eng);
-    int editing = ui.view == V_SEQ && ui.edit >= 0;
+    int editing = ui.view == V_SEQ && ui.edit >= 0, arpv = ui.view == V_ARP;
     cv_begin(240, KNOB_H, C_BLACK);
     {   /* where you are: the tag and the page dots at the right of the rule */
-        const char *tag = editing ? (e->kind == EK_SYNTH ? "STEP" : "STEP") : GRP_N[ui.grp];
-        int np = editing ? 1 : eng_pages(c->eng, ui.grp), dots = np > 1;
+        const char *tag = arpv ? "ARP" : editing ? "STEP" : GRP_N[ui.grp];
+        int np = editing || arpv ? 1 : eng_pages(c->eng, ui.grp), dots = np > 1;
         int32_t xd = 237 - (dots ? np * 5 : 0), xt = xd - (dots ? 5 : 0) - tw(&FONT_XS, tag);
         cv_rect(0, 5, xt - 5, 1, C_LINE);
         cv_text(xt, vc(&FONT_XS, 0, 11), &FONT_XS, tag, C_HI);
@@ -613,7 +677,15 @@ static void draw_knobs(void)
         float u = 0.0f;
         int bip = 0;
         val[0] = 0;
-        if (editing) {
+        if (arpv) {
+            static const char *const AN[4] = {"MODE", "RATE", "GATE", "OCT"};
+            int t = ui.trk;
+            lab = AN[i];
+            if (i == 0) { put_s(val, ARP_N[proj.set.arp_mode[t]]); u = (float)proj.set.arp_mode[t] / 4.0f; }
+            else if (i == 1) { put_s(val, ARP_R[proj.set.arp_rate[t]]); u = (float)proj.set.arp_rate[t] / 2.0f; }
+            else if (i == 2) { char *q = put_i(val, proj.set.arp_gate[t]); put_s(q, "%"); u = (float)proj.set.arp_gate[t] / 100.0f; }
+            else { put_i(val, proj.set.arp_oct[t]); u = (float)proj.set.arp_oct[t] / 3.0f; }
+        } else if (editing) {
             static const char *const DN[4] = {"NOTE", "VEL", "PROB", ""};
             static const char *const SN[4] = {"NOTE", "VEL", "LEN", "SLIDE"};
             const dstep_t *s = &c->st[ui.edit];
@@ -639,7 +711,7 @@ static void draw_knobs(void)
         arc(cx, 42, 18, u, C_LINE, tcol(ui.trk), bip);
         text_c(cx, vc(&FONT_B, 62, 14), &FONT_B, val, touched ? C_WHITE : C_HI);
     }
-    if (!editing && !eng_nparams(c->eng))
+    if (!editing && !arpv && !eng_nparams(c->eng))
         text_c(120, vc(&FONT_S, 30, 20), &FONT_S, "NO ENGINE ON THIS CLIP", C_GRAY);
     cv_commit(2, 0, KNOB_Y);
 }
@@ -696,6 +768,14 @@ static void leds(void)
                         kd |= m;
                 }
             }
+        } else if (ui.view == V_SCATTER || ((ui.view == V_PARAM || ui.view == V_GLO) && dk_playing)) {
+            for (i = 0; i < 16; i++) {
+                uint32_t m = 1u << WHITE_K[i];
+                if (i < 8 ? dk_scat[ui.trk] == i + 1 : dk_scat_g == i - 7)
+                    k |= m;
+                else
+                    kd |= m;
+            }
         } else if (ui.view == V_HOME) {
             for (i = 0; i < NCLIP; i++) {
                 uint32_t m = 1u << WHITE_K[i];
@@ -732,6 +812,8 @@ void ui_frame(void)
 {
     int t;
     input();
+    if ((ui.frame & 127u) == 127u)
+        dk_load_peak = 0;                                 /* the CPU peak is of the last ~2 s */
     for (t = 0; t < NTRK; t++) {
         dk_peak[t] = (uint16_t)(dk_peak[t] - (dk_peak[t] >> 3));
         dk_hit[t] = (uint8_t)(dk_hit[t] - (dk_hit[t] >> 3) - (dk_hit[t] ? 1 : 0));
@@ -744,3 +826,4 @@ void ui_frame(void)
 }
 
 int ui_dirty(void) { return 0; }
+void ui_say(const char *a, const char *b) { say(a, b); }

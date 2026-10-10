@@ -69,6 +69,14 @@ param table (name, range, default, group = FX/ENV/LFO/EDIT, page), `is_synth` (s
 - Emulator: like X0X, compile the same C sources to WebAssembly with Emscripten (`web/emu/`),
   plus a host build (`host/`) for scripted tests. Needs `emcc` (not installed yet) and a host cc.
 
+## Decisions (round 3)
+- Second row of keys while PLAYING in the FX/ENV/LFO/EDIT (and GLO) pages: scatter FX, not notes (stopped:
+  audition notes). The SCATTER page (HOME twice) is the same 16 keys. Keys 1-8 act on the selected track, 9-16
+  on the whole mix. Momentary (held), one effect per scope; track loop effects share 3 rings, the mix has one.
+- The plain keyboard is the KEYS mode of ARP: ARP page knobs = MODE (KEYS/UP/DOWN/UPDN/RAND), RATE (1/16, 1/8, 1/4),
+  GATE, OCT. The arpeggiator runs with PLAY (stopped: keys play directly). REC keeps its own keyboard.
+- Scatter slots: T: 1/64 1/32 1/16 (loop), REV, GATE, CRSH, DIST, RING; mix: 1/32 1/16 1/8 (loop), REV, GATE, CRSH, LPF, HPF.
+
 ## Status (phase 1 done: host + browser)
 Done: engine registry (`firmware/src/tribe/engines.c`: 909 and 808 voices, 303, KickWave, PotKick), per-track
 render hooks in the 909/808 DSP (`vout`), 10-track sequencer with 16/32/64 steps, 16 clips per track with
@@ -77,6 +85,6 @@ the UI (SEQ, FX/ENV/LFO/EDIT pages, CLIPS, GLO basics, ARP/REC keys), host simul
 browser emulator (`run_emu.sh`), tests (`tests/run_tests.sh`).
 Not yet: SAVE/LOAD (flash layout for ~55 KB of clips), scatter FX, ARP engine + settings, REC quantise,
 master-knob slot assignment and FX registry, SEL, GLO pages, MIDI, LFO params (no engine has any yet),
-the device build (`firmware/src/app/main_fm1.c` and `tools/build.py` still target X0X's engine).
+(device build now done: `python3 tools/build.py` with JIELI_TOOLCHAIN=~/.jieli/toolchain AC79_SDK=~/fw-AC79_AIoT_SDK -> build/tribe.fwsc; never flashed or run yet).
 Known approximations: kit-voice pitch (909/808) shifts the TUNE pot 1.5 units per semitone; the 303 takes
 slide as on/off; kick level trimmed 0.25 (zicBox's drive leaves +-3). Nothing is verified on hardware or by ear.
