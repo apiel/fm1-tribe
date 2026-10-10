@@ -1,0 +1,75 @@
+# TRIBE basic: boot, play, tracks, mute, steps, edit, clips, param pages
+expect view 0
+expect trk 0
+shot boot.png
+leds
+tap PLAY
+wait 1500
+expect playing 1
+wav basic.wav
+wait 3000
+wavstop
+expect peak_db_max 1
+# track select with black keys
+tapkey b3
+expect trk 3
+# mute: hold b10 + tap track key
+key b10 down
+tapkey b2
+key b10 up
+expect muted 0
+expect trk 3
+tapkey b2
+expect trk 2
+key b10 down
+tapkey b1
+key b10 up
+tapkey b1
+expect muted 1
+# steps: toggle an off step on -> edits at once
+tapkey b0
+tapkey w1
+expect stepon 1
+expect edit 1
+turn K1 5
+# a short tap on an on step turns it off
+tapkey w1
+expect stepoff 1
+tapkey w1
+expect stepon 1
+# a long press on an on step edits it and keeps it
+holdkey w1 600
+expect stepon 1
+expect edit 1
+shot seq.png
+# param pages
+tap FX
+expect view 1
+shot fx.png
+tap EDIT
+shot edit.png
+tap ENV
+tap ENV
+expect grp 1
+shot env.png
+leds
+# home / clips
+tap HOME
+expect view 2
+tapkey w4
+expect queued 4
+wait 4000
+expect clip 4
+shot home.png
+tap HOME
+expect view 3
+tap GLO
+expect view 4
+shot glo.png
+tap ARP
+expect view 5
+shot arp.png
+tap SEQ
+expect view 0
+tap PLAY
+expect playing 0

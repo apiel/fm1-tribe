@@ -1,0 +1,40 @@
+# 303 steps: pressing an empty step turns it on at once (hold it and the knobs edit it); a tap on a
+# step that is on takes it off; holding a step that is on only shows it.
+wait 300
+turn ALGO 2
+expect part 2
+# SEQ: a held step's knobs are its own (NOTE, GATE, ACCENT, SLIDE); on EDIT they p-lock its sound
+tap SEQ
+expect gate0.0 0
+tapkey w0
+expect gate0.0 1
+tapkey w0
+expect gate0.0 0
+# an empty step held: on at once, and it stays on when let go
+key w0 down
+expect gate0.0 1
+wait 600
+key w0 up
+expect gate0.0 1
+# a step that is on, held without an edit: it stays as it was
+key w0 down
+wait 600
+key w0 up
+expect gate0.0 1
+tapkey w0
+expect gate0.0 0
+# an empty step held and edited (knob 1 = note): on, and it stays
+key w2 down
+turn K1 2
+key w2 up
+expect gate0.2 1
+# a held step + OCT+ / OCT-: its note an octave up, then down; the step stays on
+expect note0.2 35
+key w2 down
+tap OCT+
+expect note0.2 47
+tap OCT-
+tap OCT-
+expect note0.2 23
+key w2 up
+expect gate0.2 1
