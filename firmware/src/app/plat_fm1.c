@@ -101,6 +101,27 @@ void plat_midi_out(uint32_t pkt) { midi_out_event(pkt); }
 int plat_store_load(uint32_t obj, void *dst, uint32_t max) { return flash_ok ? st_load(obj, dst, max) : -1; }
 int plat_store_save(uint32_t obj, const void *src, uint32_t len) { return flash_ok ? st_save(obj, src, len) : -9; }
 
+/* the clip log: sectors from 0x97000, inside the store window (FL_STORE_OK); the driver wants RAM sources */
+#define LOG_BASE 0x97000u
+int plat_log_read(uint32_t sector, uint32_t off, void *dst, uint32_t n)
+{
+    return flash_ok && sector < PLAT_LOG_SECTORS ? st_read(LOG_BASE + sector * 4096u + off, dst, n) : -1;
+}
+int plat_log_erase(uint32_t sector)
+{
+    return flash_ok && sector < PLAT_LOG_SECTORS ? st_erase(LOG_BASE + sector * 4096u) : -1;
+}
+int plat_log_prog(uint32_t sector, uint32_t off, const void *src, uint32_t n)
+{
+    static uint8_t ram[512] __attribute__((aligned(4)));
+    uint32_t i;
+    if (!flash_ok || sector >= PLAT_LOG_SECTORS || n > sizeof ram)
+        return -1;
+    for (i = 0; i < n; i++)
+        ram[i] = ((const uint8_t *)src)[i];
+    return st_prog(LOG_BASE + sector * 4096u + off, ram, n);
+}
+
 int plat_slot_zones(int k) { return (k >= 0 && k < SMP_USER_SLOTS) ? usr_nz[k] : 0; }
 
 const uint8_t *plat_slot(int k, int z, uint32_t *nsamples, uint32_t *rate, char name[9])

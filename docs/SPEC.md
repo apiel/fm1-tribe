@@ -77,13 +77,23 @@ param table (name, range, default, group = FX/ENV/LFO/EDIT, page), `is_synth` (s
   GATE, OCT. The arpeggiator runs with PLAY (stopped: keys play directly). REC keeps its own keyboard.
 - Scatter slots: T: 1/64 1/32 1/16 (loop), REV, GATE, CRSH, DIST, RING; mix: 1/32 1/16 1/8 (loop), REV, GATE, CRSH, LPF, HPF.
 
+## Decisions (round 4): saving
+- No project file, no autosave. The clips are the data: `firmware/src/tribe/store.c` keeps a log of 512-byte records
+  (one per saved clip, one for the settings) in 48 flash sectors from 0x97000; newest valid record of a clip wins,
+  a save writes only changed clips (header last, then read back), garbage collection keeps an erased spare sector.
+- SAVE button: press and release = save every changed clip + settings; hold SAVE and tap a clip key on the CLIPS page = save
+  that clip only. The SAVE light glows while something is unsaved. GLO lists the number of unsaved clips.
+- Later, maybe: a shared pool of clips that any track can load (the 16 slots per track become quick-load spots);
+  more than 16 clips per track by reading clips from flash when queued. Conflict question (the same clip on two tracks)
+  is left open on purpose.
+
 ## Status (phase 1 done: host + browser)
 Done: engine registry (`firmware/src/tribe/engines.c`: 909 and 808 voices, 303, KickWave, PotKick), per-track
 render hooks in the 909/808 DSP (`vout`), 10-track sequencer with 16/32/64 steps, 16 clips per track with
 queued (end of pattern) and immediate launch, mute, master filter/compressor/limiter (X0X master.c),
 the UI (SEQ, FX/ENV/LFO/EDIT pages, CLIPS, GLO basics, ARP/REC keys), host simulator with scripts,
 browser emulator (`run_emu.sh`), tests (`tests/run_tests.sh`).
-Not yet: SAVE/LOAD (flash layout for ~55 KB of clips), scatter FX, ARP engine + settings, REC quantise,
+Not yet: REC quantise,
 master-knob slot assignment and FX registry, SEL, GLO pages, MIDI, LFO params (no engine has any yet),
 (device build now done: `python3 tools/build.py` with JIELI_TOOLCHAIN=~/.jieli/toolchain AC79_SDK=~/fw-AC79_AIoT_SDK -> build/tribe.fwsc; never flashed or run yet).
 Known approximations: kit-voice pitch (909/808) shifts the TUNE pot 1.5 units per semitone; the 303 takes

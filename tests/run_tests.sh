@@ -9,10 +9,19 @@ FAIL=0
 sh host/build_host.sh >/dev/null || exit 1
 mkdir -p build/scen
 for s in tests/scenarios/*.tribe; do
+    case "$s" in *save1.tribe|*save2.tribe) continue;; esac
     if build/host/tribe_host "$s" build/scen >build/scen/$(basename "$s").log 2>&1; then echo "  ok   $(basename "$s")"
     else echo "  FAIL $(basename "$s")"; tail -5 build/scen/$(basename "$s").log | sed 's/^/       /'; FAIL=1; fi
 done
+SRCS_ALL="firmware/src/tribe/engine.c firmware/src/tribe/store.c firmware/src/tribe/scatter.c firmware/src/tribe/engines.c firmware/src/tribe/kicks.c firmware/src/tribe/project.c firmware/src/dsp/drum909.c firmware/src/dsp/drum808.c firmware/src/dsp/bass303.c firmware/src/dsp/master.c"
 SRCS="firmware/src/tribe/engine.c firmware/src/tribe/scatter.c firmware/src/tribe/engines.c firmware/src/tribe/kicks.c firmware/src/tribe/project.c firmware/src/dsp/drum909.c firmware/src/dsp/drum808.c firmware/src/dsp/bass303.c firmware/src/dsp/master.c"
+rm -f build/scen/flash.bin
+if TRIBE_FLASH=build/scen/flash.bin build/host/tribe_host tests/scenarios/save1.tribe build/scen >build/scen/save1.log 2>&1 \
+    && TRIBE_FLASH=build/scen/flash.bin build/host/tribe_host tests/scenarios/save2.tribe build/scen >build/scen/save2.log 2>&1; then echo "  ok   save and load (two runs)"
+else echo "  FAIL save and load (see build/scen/save1.log, save2.log)"; FAIL=1; fi
+if cc -O2 -ffp-contract=off -std=gnu99 -DX0X_HOST -Ifirmware/src -Ifirmware/src/dsp -Ibuild/gen -o build/host/store_test tests/host/store_test.c $SRCS_ALL -lm 2>build/scen/store_build.log \
+    && build/host/store_test >build/scen/store.log 2>&1; then echo "  ok   clip store under power cuts"
+else echo "  FAIL clip store under power cuts (see build/scen/store.log)"; FAIL=1; fi
 if cc -O2 -ffp-contract=off -std=gnu99 -DX0X_HOST -Ifirmware/src -Ifirmware/src/dsp -Ibuild/gen -o build/host/scatter_test tests/host/scatter_test.c $SRCS -lm 2>build/scen/scatter_build.log \
     && build/host/scatter_test base build/scen/scatter_base.f32; then
     ok=1

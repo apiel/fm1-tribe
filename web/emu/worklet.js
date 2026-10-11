@@ -41,7 +41,12 @@ class TRIBE extends AudioWorkletProcessor {
         new Uint8Array(this.mem.buffer, this.ex.web_store(+obj), b.length).set(b);
         this.ex.web_store_set_len(+obj, b.length);
       }
+      if (m.log && m.log.byteLength === this.ex.web_log_size())
+        new Uint8Array(this.mem.buffer, this.ex.web_log(), m.log.byteLength).set(new Uint8Array(m.log));
+      else
+        new Uint8Array(this.mem.buffer, this.ex.web_log(), this.ex.web_log_size()).fill(0xFF);
       this.sentWrites = this.ex.web_store_writes();
+      this.sentLog = this.ex.web_log_writes();
       this.ex.web_master(m.master ?? 2800);
       this.ex.web_boot();
       this.port.postMessage({ type: "ready" });
@@ -80,6 +85,11 @@ class TRIBE extends AudioWorkletProcessor {
         const n = ex.web_store_len(o);
         if (n >= 0) msg.store[o] = new Uint8Array(this.mem.buffer, ex.web_store(o), n).slice();
       }
+    }
+    const lw = ex.web_log_writes();
+    if (lw !== this.sentLog) {                          // the clips were saved: the page keeps the log
+      this.sentLog = lw;
+      msg.log = new Uint8Array(this.mem.buffer, ex.web_log(), ex.web_log_size()).slice();
     }
     this.port.postMessage(msg, transfer);
   }

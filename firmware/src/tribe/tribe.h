@@ -110,3 +110,9 @@ void eng_panic(int trk);                /* release now */
 int eng_slide_pending(int trk);
 void eng_lite(int on);
 void eng_render_all(float *buf, int off, int n);   /* buf[trk * 256 + off ...] */
+
+/* ------------------------------------------------------------- the clip store --- */
+int store_load(void);                   /* fills proj from the flash log; returns the records found (0: nothing saved yet) */
+int store_save(int trk, int clip);      /* trk < 0: every changed clip + settings; else that clip. Records written, or < 0 */
+void store_poll(void);                  /* call once a frame: finds changed clips, one a frame */
+int store_dirty(void);                  /* clips (and settings) changed since the last save */

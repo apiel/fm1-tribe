@@ -1,0 +1,19 @@
+# second run, same flash: the saved clips are back, everything else is as the starting clips
+expect dirty 0
+tapkey b4
+expect trk 4
+expect level 80
+expect stepon 3
+tap HOME
+tap PLAY
+wait 300
+tapkey w2
+wait 3000
+expect clip 2
+tap SEQ
+expect nsteps 2
+expect stepon 5
+expect stepon 9
+# track 1 is untouched: its starting clip (four on the floor)
+tapkey b0
+expect nsteps 4

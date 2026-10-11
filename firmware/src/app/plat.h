@@ -48,6 +48,13 @@ enum { OBJ_SET, OBJ_SOUND, OBJ_PAT0, OBJ_PAT1, OBJ_PANEL, OBJ_SONG, OBJ_MOTION, 
 /* flash: OBJ_SET 0xFC000; SOUND / PAT0 / PAT1 / SONG 0x97000.. (2 sectors each); OBJ_PANEL 0xDC000,
  * OBJ_MOTION 0xDE000 (all inside Felucca's data area, 0x97000..0xDFFFF) */
 
+/* TRIBE's clip log: PLAT_LOG_SECTORS 4 KiB sectors of flash (device: from 0x97000), raw NOR semantics:
+ * a program can only clear bits, an erase sets a whole sector to 0xFF. 0 = ok. (tribe/store.c) */
+#define PLAT_LOG_SECTORS 48
+int plat_log_read(uint32_t sector, uint32_t off, void *dst, uint32_t n);
+int plat_log_erase(uint32_t sector);
+int plat_log_prog(uint32_t sector, uint32_t off, const void *src, uint32_t n);
+
 /* user sample slots (break loops), read in place; 0 = empty slot */
 #define PLAT_NSLOTS 3
 /* every zone of a slot is one loop (tools/upload_breaks.py packs several bars per slot) */

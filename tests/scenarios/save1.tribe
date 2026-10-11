@@ -1,0 +1,33 @@
+# first run: change a few clips, save them (flash is TRIBE_FLASH); the second run (save2) must find them
+expect dirty 0
+tapkey b4
+expect trk 4
+# track 5 (index 4, 808 CP): a new step 3 and a new level on clip 1
+tapkey w3
+expect stepon 3
+tap GLO
+turn K1 1
+turn K1 1
+turn K2 -10
+expect level 80
+wait 1000
+expect dirty 2
+leds
+# a clip on another slot: HOME, queue clip 3 (index 2), edit there, then SAVE alone saves everything changed
+tap HOME
+tapkey w2
+tap PLAY
+wait 3000
+expect clip 2
+tap SEQ
+tapkey w5
+tapkey w9
+expect nsteps 2
+wait 1000
+expect dirty 3
+# SAVE with a clip key (HOME) saves just that clip
+tap HOME
+tap SAVE
+wait 300
+expect dirty 0
+tap PLAY

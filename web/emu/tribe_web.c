@@ -46,7 +46,13 @@ EXPORT void web_render(uint32_t n)
     }
 }
 
-EXPORT void web_boot(void) { boot(); }
+static int log_given;
+EXPORT void web_boot(void)
+{
+    if (!log_given)
+        memset(logmem, 0xFF, sizeof logmem);          /* no page to give a log: an empty flash */
+    boot();
+}
 EXPORT void web_buttons(uint32_t m) { held_btn = m; }
 EXPORT void web_keys(uint32_t m) { held_keys = m; }
 EXPORT void web_enc(int role, int32_t n)
@@ -74,3 +80,8 @@ EXPORT void web_store_set_len(uint32_t obj, int n)
 EXPORT uint32_t web_store_writes(void) { return store_writes; }
 EXPORT uint32_t web_nobj(void) { return OBJ_NOBJ; }
 EXPORT uint32_t web_store_max(void) { return PLAT_STORE_MAX; }
+
+/* the clip log (the page keeps it in localStorage and gives it back before boot) */
+EXPORT uint8_t *web_log(void) { log_given = 1; return &logmem[0][0]; }
+EXPORT uint32_t web_log_size(void) { return sizeof logmem; }
+EXPORT uint32_t web_log_writes(void) { return log_writes; }

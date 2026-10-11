@@ -19,7 +19,7 @@ static const char *const ARP_R[3] = {"1/16", "1/8", "1/4"};
 static const char *const GRP_N[NPG] = {"FX", "ENV", "LFO", "EDIT"};
 static const uint8_t GRP_BTN[NPG] = {B_FX, B_ENV, B_LFO, B_EDIT};
 #define NGLO 6
-static const char *const GLO_N[NGLO] = {"TEMPO", "ENGINE", "LEVEL", "MASTER", "PROJECT", "CPU"};
+static const char *const GLO_N[NGLO] = {"TEMPO", "ENGINE", "LEVEL", "MASTER", "CLIPS", "CPU"};
 
 static const uint16_t TRK_COL[NTRK] = {
     RGB(255, 96, 80), RGB(255, 150, 60), RGB(255, 210, 70), RGB(170, 230, 80), RGB(70, 220, 130),
@@ -41,6 +41,7 @@ static struct {
     uint8_t glo;                         /* GLO: the item */
     uint8_t mdjf, mcomp;                 /* the master knobs' values */
     uint32_t bprev, kprev, used;
+    uint8_t save_pending;                /* SAVE is down and nothing else was done with it */
     uint8_t held_note[NKEYS];            /* live note of a held key + 1 */
     uint8_t held_trk[NKEYS];
     uint8_t held_scat[NKEYS];            /* scatter slot of a held key + 1 */
@@ -236,6 +237,15 @@ static void key_down(int k)
         break;
     }
     case V_HOME:
+        if (ui.bprev & (1u << B_SAVE)) {                /* SAVE held: save that clip, do not launch it */
+            int n = store_save(ui.trk, w);
+            ui.save_pending = 0;
+            if (n < 0)
+                say("SAVE FAILED", 0);
+            else
+                say(n ? "CLIP SAVED" : "CLIP UNCHANGED", 0);
+            break;
+        }
         dk_launch(ui.trk, w, dk_queued[ui.trk] == w);   /* again on the queued clip: now */
         break;
     case V_PARAM:
@@ -275,6 +285,23 @@ static void key_up(int k)
     }
 }
 
+static void save_all(void)
+{
+    char b[24];
+    int n = store_save(-1, 0);
+    if (n < 0) {
+        char *q = put_s(b, "SAVE FAILED ");
+        put_i(q, n);
+        say(b, 0);
+    } else if (!n)
+        say("NOTHING TO SAVE", 0);
+    else {
+        char *q = put_i(b, n);
+        put_s(q, n == 1 ? " CLIP SAVED" : " CLIPS SAVED");
+        say(b, 0);
+    }
+}
+
 static void button_down(int b)
 {
     int g;
@@ -311,7 +338,7 @@ static void button_down(int b)
         ui.view = V_GLO;
         break;
     case B_SAVE:
-        say("SAVE: SOON", 0);
+        ui.save_pending = 1;                            /* on release: save what changed (or SAVE + a clip key: that clip) */
         break;
     case B_SEL:
         say("SEL: SOON", 0);
@@ -348,6 +375,10 @@ static void input(void)
     for (i = 0; i < NKEYS; i++)
         if ((kd >> i) & 1u)
             key_down(i);
+    if ((ui.bprev & ~b & (1u << B_SAVE)) && ui.save_pending) {          /* SAVE let go with nothing else done */
+        ui.save_pending = 0;
+        save_all();
+    }
     ui.bprev = b;
     ui.kprev = k;
     if (ui.press >= 0 && (ui.kprev >> WHITE_K[ui.press & 15]) & 1u && plat_ms() - ui.press_t > 350u) {
@@ -435,29 +466,26 @@ static void draw_header(void)
         x = cv_text(x, vc(&FONT_B, 1, 17), &FONT_B, "BUSY", RGB(255, 90, 80)) + 6;
     else if (ui.view == V_PARAM) {
         put_s(b, GRP_N[ui.grp]);
-        if (eng_pages(cur_clip()->eng, ui.grp) > 1) {
-            char *q = put_s(b + 0, GRP_N[ui.grp]);
-            *q++ = ' ';
-            q = put_i(q, ui.page[ui.grp] + 1);
-            *q++ = '/';
-            put_i(q, eng_pages(cur_clip()->eng, ui.grp));
-        }
         x = cv_text(x, vc(&FONT_B, 1, 17), &FONT_B, b, C_HI) + 6;
     } else if (ui.view == V_ARP)
         x = cv_text(x, vc(&FONT_B, 1, 17), &FONT_B, proj.set.arp_mode[ui.trk] ? "ARP" : "KEYS", C_HI) + 6;
     else
         x = cv_text(x, vc(&FONT_B, 1, 17), &FONT_B, VIEW_N[ui.view], C_HI) + 6;
-    b[0] = 'C';
-    put_i(b + 1, dk_clip[ui.trk] + 1);
-    if (dk_queued[ui.trk] != 0xFF) {
-        char *q = put_s(b + 0, "C");
+    {   /* the clip, in words; a clip waiting for the pattern's end shows where it goes */
+        char *q = put_s(b, "CLIP ");
+        int32_t cx;
         q = put_i(q, dk_clip[ui.trk] + 1);
-        *q++ = '>';
-        put_i(q, dk_queued[ui.trk] + 1);
+        if (dk_queued[ui.trk] != 0xFF) {
+            *q++ = '>';
+            put_i(q, dk_queued[ui.trk] + 1);
+        }
+        cx = cv_text(136, vc(&FONT_B, 1, 17), &FONT_B, b, dk_queued[ui.trk] != 0xFF ? C_AMB : C_WHITE);
+        if (dk_queued[ui.trk] == 0xFF) {
+            put_i(b, proj.set.bpm_x10 / 10);
+            text_r(218, vc(&FONT_B, 1, 17), &FONT_B, b, C_AMB);
+        }
+        (void)cx;
     }
-    cv_text(150, vc(&FONT_B, 1, 17), &FONT_B, b, C_WHITE);
-    put_i(b, proj.set.bpm_x10 / 10);
-    text_r(222, vc(&FONT_B, 1, 17), &FONT_B, b, C_AMB);
     if (dk_playing)
         play_icon(226, 5, C_HI);
     else
@@ -515,9 +543,9 @@ static void draw_seq(void)
             dot(x + 12, 76, 2, tc);
         put_i(b, t + 1);
         text_c(x + 12, vc(&FONT_B, 112, 12), &FONT_B, b, t == ui.trk ? C_WHITE : C_GRAY);
-        b[0] = 'c';
-        put_i(b + 1, dk_clip[t] + 1);
-        text_c(x + 12, vc(&FONT_XS, 122, 11), &FONT_XS, b, dk_queued[t] != 0xFF ? C_AMB : C_DIM);
+        put_i(b, dk_clip[t] + 1);
+        box(x + 5, 124, 14, 11, dk_queued[t] != 0xFF ? C_AMB : C_LINE);
+        text_c(x + 12, vc(&FONT_XS, 124, 11), &FONT_XS, b, dk_queued[t] != 0xFF ? C_BLACK : C_WHITE);
         if (dk_muted[t]) {
             cv_line(x + 4, 80, x + 20, 104, RGB(255, 90, 80));
             cv_line(x + 20, 80, x + 4, 104, RGB(255, 90, 80));
@@ -541,7 +569,7 @@ static void draw_param(void)
         k = row / 4 == ui.page[ui.grp];
         cv_text(10 + (row & 1 ? 120 : 0), 44 + (row / 2 % 2) * 0 + (row >> 1) * 15, &FONT_S, p->name, k ? C_WHITE : C_GRAY);
         eng_format(c->eng, i, c->par[i], v);
-        text_r(110 + (row & 1 ? 120 : 0), 44 + (row >> 1) * 15, &FONT_S, v, k ? C_HI : C_DIM);
+        text_r(110 + (row & 1 ? 120 : 0), 44 + (row >> 1) * 15, &FONT_S, v, k ? C_HI : C_GRAY);
         row++;
     }
 }
@@ -580,7 +608,7 @@ static void draw_scatter(int big)
         int x = col * 30, y = big ? 22 + row * 56 : 102 + row * 18, w = 29, h = big ? 44 : 16;
         box(x, y, w, h, on ? c : (dk_playing || big ? RGB(40, 40, 48) : C_LINE));
         text_c(x + w / 2, vc(big ? &FONT_S : &FONT_XS, y, h), big ? &FONT_S : &FONT_XS, sc_name(i),
-               on ? C_BLACK : (dk_playing || big ? C_WHITE : C_DIM));
+               on ? C_BLACK : (dk_playing || big ? C_WHITE : C_GRAY));
     }
     if (big) {
         char b[8];
@@ -618,15 +646,17 @@ static void draw_glo(void)
             put_i(v, proj.set.level[ui.trk]);
         else if (i == 3)
             put_s(v, "KNOBS: SOON");
-        else if (i == 4)
-            put_s(v, "SAVE LOAD: SOON");
+        else if (i == 4) {
+            char *q = put_i(v, store_dirty());
+            put_s(q, store_dirty() == 1 ? " UNSAVED" : " UNSAVED");
+        }
         else {
             char *q = put_i(v, (int)dk_load_pct);
             q = put_s(q, "% PEAK ");
             q = put_i(q, (int)dk_load_peak);
             put_s(q, "%");
         }
-        text_r(230, vc(&FONT_B, y, 16), &FONT_B, v, on ? C_HI : C_DIM);
+        text_r(230, vc(&FONT_B, y, 16), &FONT_B, v, on ? C_HI : C_GRAY);
     }
 }
 
@@ -786,6 +816,8 @@ static void leds(void)
             }
         }
     }
+    if (store_dirty())
+        bd |= 1u << B_SAVE;                               /* SAVE glows: something is not saved */
     plat_glow(0);
     plat_buttons_dim(bd & ~b);
     plat_keys_dim(kd & ~k);
@@ -812,6 +844,7 @@ void ui_frame(void)
 {
     int t;
     input();
+    store_poll();
     if ((ui.frame & 127u) == 127u)
         dk_load_peak = 0;                                 /* the CPU peak is of the last ~2 s */
     for (t = 0; t < NTRK; t++) {

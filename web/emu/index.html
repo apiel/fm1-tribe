@@ -89,7 +89,7 @@ kbd { font: 600 .85em ui-monospace, Menlo, monospace; background: var(--card); b
 <div class="bar">
   <span id="status">Off. Sound starts when you switch it on.</span>
   <span class="cpu" id="cpu"></span>
-  <button id="reset" type="button" title="Forget the saved patterns and sound, and start again from the factory settings">Factory reset</button>
+  <button id="reset" type="button" title="Forget the saved clips, and start again from the starting clips">Factory reset</button>
 </div>
 
 <section class="help">
@@ -375,6 +375,20 @@ function loadStore() {
     return out;
   } catch { return {}; }
 }
+const LOG_KEY = "tribe-emu-log";
+function loadLog() {
+  try {
+    const b64 = localStorage.getItem(LOG_KEY);
+    return b64 ? Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)).buffer : null;
+  } catch { return null; }
+}
+function saveLog(u8) {
+  try {
+    let s = "";
+    for (let i = 0; i < u8.length; i += 8192) s += String.fromCharCode(...u8.subarray(i, i + 8192));
+    localStorage.setItem(LOG_KEY, btoa(s));
+  } catch { /* storage unavailable: this session only */ }
+}
 function saveStore(store) {
   try {
     const raw = {};
@@ -405,10 +419,11 @@ async function switchOn() {
           window.tribeLast = m;
           if (m.load !== undefined) cpu.textContent = `TRIBE uses ${m.load}% of this computer's time`;
           if (m.store) saveStore(m.store);
+          if (m.log) saveLog(m.log);
         }
       };
     });
-    node.port.postMessage({ type: "load", wasm, store: loadStore(), master }, [wasm]);
+    node.port.postMessage({ type: "load", wasm, store: loadStore(), log: loadLog(), master }, [wasm]);
     await ready;
     await ac.resume();
     document.getElementById("start").hidden = true;
@@ -423,7 +438,7 @@ async function switchOn() {
 document.getElementById("go").addEventListener("click", switchOn);
 document.getElementById("reset").addEventListener("click", () => {
   if (document.getElementById("reset").dataset.armed) {
-    try { localStorage.removeItem(STORE_KEY); } catch {}
+    try { localStorage.removeItem(STORE_KEY); localStorage.removeItem(LOG_KEY); } catch {}
     location.reload();
   } else {
     document.getElementById("reset").dataset.armed = "1";

@@ -314,7 +314,8 @@ static void fm1_main(void)
     panel_init();
     led_pos_init();
     plat_perf_init();
-    project_defaults();                             /* TRIBE: nothing is saved yet (SAVE comes with the storage layer) */
+    project_defaults();                             /* the starting clips ... */
+    store_load();                                   /* ... replaced by whatever was saved */
     engine_init();
     audio_init();
     usb_start();

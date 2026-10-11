@@ -15,7 +15,7 @@
  *   wav FILE | wavstop           start / stop recording the output
  *   shot FILE.png                save the screen
  *   leds                         print the lit (#) and dim (o) buttons and keys
- *   expect WHAT VALUE            check state (playing view trk clip queued pos eng bound muted edit grp page spage bpm scat scatg arpn arpmode; stepon N / stepoff N): exit 1 on mismatch
+ *   expect WHAT VALUE            check state (playing view trk clip queued pos eng bound muted edit grp page spage bpm scat scatg arpn arpmode dirty level nsteps; stepon N / stepoff N): exit 1 on mismatch
  *   peakreset | expect peak_db_min/max VALUE    the output's peak since
  */
 #define X0X_HOST 1
@@ -104,6 +104,48 @@ int plat_store_save(uint32_t obj, const void *src, uint32_t len)
     store_writes++;
     return 0;
 }
+/* the clip log: PLAT_LOG_SECTORS sectors, NOR semantics (a program only clears bits); with TRIBE_FLASH=FILE
+ * the log is read from the file at boot and written back at exit, so a second run sees what the first saved */
+static uint8_t logmem[PLAT_LOG_SECTORS][4096];
+static uint32_t log_writes;
+int plat_log_read(uint32_t sector, uint32_t off, void *dst, uint32_t n)
+{
+    if (sector >= PLAT_LOG_SECTORS || off + n > 4096u)
+        return -1;
+    memcpy(dst, logmem[sector] + off, n);
+    return 0;
+}
+int plat_log_erase(uint32_t sector)
+{
+    if (sector >= PLAT_LOG_SECTORS)
+        return -1;
+    memset(logmem[sector], 0xFF, 4096);
+    log_writes++;
+    return 0;
+}
+int plat_log_prog(uint32_t sector, uint32_t off, const void *src, uint32_t n)
+{
+    uint32_t i;
+    if (sector >= PLAT_LOG_SECTORS || off + n > 4096u)
+        return -1;
+    for (i = 0; i < n; i++)
+        logmem[sector][off + i] &= ((const uint8_t *)src)[i];
+    log_writes++;
+    return 0;
+}
+#ifndef DECA_WEB
+static void flash_file(const char *path, int write)
+{
+    FILE *f = fopen(path, write ? "wb" : "rb");
+    if (!f)
+        return;
+    if (write)
+        fwrite(logmem, 1, sizeof logmem, f);
+    else if (fread(logmem, 1, sizeof logmem, f) != sizeof logmem)
+        memset(logmem, 0xFF, sizeof logmem);
+    fclose(f);
+}
+#endif
 int plat_slot_zones(int k) { (void)k; return 0; }
 const uint8_t *plat_slot(int k, int z, uint32_t *n, uint32_t *rate, char name[9]) { (void)k; (void)z; (void)n; (void)rate; (void)name; return 0; }
 uint32_t plat_cpu_pct(void) { return 0; }
@@ -243,6 +285,7 @@ static uint32_t ui_due;
 static void boot(void)
 {
     project_defaults();
+    store_load();                                   /* what was saved replaces the starting clips */
     engine_init();
     lcd_fill(0, 0, 240, 240, C_BLACK);
     ui_init();
@@ -329,6 +372,9 @@ static int expect(const char *what, const char *val, int line)
     else if (!strcmp(what, "page")) got = ui.page[ui.grp];
     else if (!strcmp(what, "spage")) got = ui.spage;
     else if (!strcmp(what, "bpm")) got = proj.set.bpm_x10;
+    else if (!strcmp(what, "dirty")) got = store_dirty();
+    else if (!strcmp(what, "level")) got = proj.set.level[t];
+    else if (!strcmp(what, "nsteps")) got = __builtin_popcount(proj.clip[t][dk_clip[t]].on[0]) + __builtin_popcount(proj.clip[t][dk_clip[t]].on[1]);
     else if (!strcmp(what, "scat")) got = dk_scat[t];
     else if (!strcmp(what, "scatg")) got = dk_scat_g;
     else if (!strcmp(what, "arpn")) got = dk_arp_n[t];
@@ -364,6 +410,9 @@ int main(int argc, char **argv)
         fprintf(stderr, "cannot open %s\n", argv[1]);
         return 2;
     }
+    memset(logmem, 0xFF, sizeof logmem);
+    if (getenv("TRIBE_FLASH"))
+        flash_file(getenv("TRIBE_FLASH"), 0);
     boot();
     while (fgets(buf, sizeof buf, sc)) {
         char *a[6] = {0}, *p = buf;
@@ -429,6 +478,8 @@ int main(int argc, char **argv)
     }
     wav_close();
     fclose(sc);
+    if (getenv("TRIBE_FLASH"))
+        flash_file(getenv("TRIBE_FLASH"), 1);
     if (fails)
         fprintf(stderr, "%d expectation(s) failed\n", fails);
     return fails ? 1 : 0;
