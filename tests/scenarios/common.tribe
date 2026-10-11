@@ -3,17 +3,19 @@ expect view 0
 tap SEL
 expect view 7
 shot common.png
-# track 1 (KICK W, engine 1): volume and the two sends
+# track 1 (KICK W, engine 1): volume and the two sends (they start at 0)
 expect eng 1
 turn K2 -5
 expectlevel 0 90
-turn K3 -10
-expectsend 0 0 107
-turn K4 -127
+expectsend 0 0 0
 expectsend 1 0 0
+turn K3 10
+expectsend 0 0 20
+turn K4 5
+expectsend 1 0 10
 # another track keeps its own
 tapkey b2
-expectsend 1 2 127
+expectsend 1 2 0
 expectlevel 2 100
 # the engine: K1 steps through the list (track 3 starts on 909 CH = 9)
 turn K1 1

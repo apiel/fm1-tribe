@@ -178,3 +178,14 @@ slide as on/off; kick level trimmed 0.25 (zicBox's drive leaves +-3). Nothing is
   ~2.6 ms... see project.c), saved with the settings. GLO is a scrolling list of 14 rows.
 - Start-up screen: TRIBE in 3x pixel letters (a track colour each), ten squares that light up, "10 TRACKS ANY ENGINE", credit line
   "BASED ON X0X AND FELUCCA". About 1.3 s on the device; the browser build shows it too. Crash / safe-mode texts say TRIBE.
+
+## Decisions (round 13): GLO and the mixer page cleaned up
+- GLO rows: TEMPO, MASTER FX (the type), the four knobs (MASTER / SELECT / PRESETS / ALGO KNOB: K2 changes what each does), six COMP rows,
+  CLIPS, CPU, BATTERY. No ENGINE (it is on the SEL page) and no VOLUME row (the volume is the MASTER knob; if MASTER is given another job, a
+  knob set to VOLUME, else full). The old "KNOBS: SEL OPEN" row is gone: SEL on a knob row opens its details only when it has some (a
+  macro's targets, the tracks an effect acts on), else it says so.
+- The bottom strip: GLO shows Scroll (n/15) and Edit (the row's value), plus "SEL MORE" when the row has details; REC shows no knobs.
+- Only the master FX the GLO menu chose runs of DRIVE / CRUSH / RING / DECIM / VINYL; the others are skipped whatever their amounts. They are no
+  longer on the knob assignment list separately (the master FX 1st / 2nd parameter are).
+- SEL glows at 50% (full on its page). Track sends start at 0. The SEL page shows a live level meter per track (after volume and mute) with the
+  volume as a white tick and thin bars for the two sends.

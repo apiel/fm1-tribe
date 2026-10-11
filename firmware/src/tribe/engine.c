@@ -485,6 +485,12 @@ static void lfo_update(int n)
     }
 }
 
+/* the filter is always there; of drive .. vinyl only the master FX the GLO menu chose runs, the others are skipped */
+static int fx_enabled(int fx)
+{
+    return fx == FX_FILTER || (fx >= FX_DRIVE && fx <= FX_VINYL && fx == FX_DRIVE + (proj.set.selfx < NSELFX ? proj.set.selfx : 0));
+}
+
 static float bus[2][256];                           /* the sends: 0 the delay, 1 the reverb */
 
 static void mix(float *l, float *r, int n)
@@ -504,7 +510,7 @@ static void mix(float *l, float *r, int n)
         if (dk_scat[t])
             sc_run(&sc_t_[t], b, n, spl);
         for (fx = FX_FILTER; fx <= FX_VINYL; fx++)          /* the effects limited to this track (a mask with its bit set) */
-            if ((proj.set.fxmask[fx] >> t) & 1u && mfx_active(fx, proj.set.fxv[fx]))
+            if (fx_enabled(fx) && (proj.set.fxmask[fx] >> t) & 1u && mfx_active(fx, proj.set.fxv[fx]))
                 mfx_run(fx, &fx_trk[t][fx], b, n, proj.set.fxv[fx]);
         for (i = 0; i < n; i++) {
             float v = b[i] * g;
@@ -532,7 +538,7 @@ static void mix(float *l, float *r, int n)
     if (dk_scat_g)
         sc_run(&sc_g, l, n, spl);                 /* the mix's scatter */
     for (fx = FX_FILTER; fx <= FX_VINYL; fx++)    /* the effects on the whole mix (no mask) */
-        if (!proj.set.fxmask[fx] && mfx_active(fx, proj.set.fxv[fx]))
+        if (fx_enabled(fx) && !proj.set.fxmask[fx] && mfx_active(fx, proj.set.fxv[fx]))
             mfx_run(fx, &fx_mix[fx], l, n, proj.set.fxv[fx]);
     memcpy(r, l, (unsigned)n * sizeof(float));
 }

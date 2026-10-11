@@ -1,0 +1,15 @@
+# the bottom strip: nothing in REC; in GLO it says Scroll / Edit; SEL glows dim, full on its page
+tap REC
+expect view 5
+wait 100
+shot rec_strip.png
+tap SEQ
+expectled SEL 1
+tap SEL
+wait 100
+expectled SEL 2
+shot common_meter.png
+tap SEL
+expect view 0
+tap GLO
+shot glo_strip.png

@@ -1,19 +1,20 @@
-# GLO: the master FX type (what SELECT runs) and the master compressor, set in the list; the list scrolls
+# GLO: the master FX type (what SELECT runs: only that one is active) and the master compressor; the list scrolls
 tap GLO
 expect view 3
 expectselfx 0
 turn K1 1
-turn K1 1
-turn K1 1
-turn K1 1
 turn K2 1
 expectselfx 1
 shot glo_masterfx.png
-# SELECT is now the crush amount
+# SELECT is now the crush amount, and the drive does nothing (it is skipped: its amount stays 0 here and, set, it would not run)
 turn SELECT 5
 expectfx 3 0 10
 expectfx 2 0 0
-# the compressor rows: THRESH (95), RATIO (2), ATTACK, RELEASE, MAKEUP, MIX
+# the compressor rows: THRESH (95), RATIO (2), ATTACK, RELEASE, MAKEUP, MIX start at the 7th row
+turn K1 1
+turn K1 1
+turn K1 1
+turn K1 1
 turn K1 1
 turn K2 -10
 expectcomp 0 75
@@ -32,3 +33,4 @@ turn K1 1
 turn K1 1
 turn K1 1
 shot glo_end.png
+# GLO has no ENGINE and no VOLUME row any more: the rows are TEMPO, MASTER FX, four knobs, six compressor rows, CLIPS, CPU, BATTERY

@@ -52,7 +52,7 @@ void project_defaults(void)
     memset(&proj, 0, sizeof proj);
     proj.set.magic = 0x54524942u;
     proj.set.bpm_x10 = 1250;
-    proj.set.master_vol = 100;
+    proj.set.master_vol = 127;                               /* the volume when MASTER is not the volume knob: full */
     proj.set.knob[0].kind = KS_VOL;                          /* MASTER: the volume */
     proj.set.knob[1].kind = KS_MFX; proj.set.knob[1].par = 0;                                   /* SELECT: the master FX (its type is in GLO) */
     proj.set.knob[2].kind = KS_FX; proj.set.knob[2].fx = FX_FILTER; proj.set.knob[2].par = 0;    /* PRESETS: the DJ filter */
@@ -74,7 +74,7 @@ void project_defaults(void)
     for (t = 0; t < NTRK; t++) {
         proj.set.level[t] = 100;
         proj.set.arp_gate[t] = 80;
-        proj.set.send[0][t] = proj.set.send[1][t] = 127;    /* the sends start open: the effect's own MIX is the amount */
+        proj.set.send[0][t] = proj.set.send[1][t] = 0;      /* the sends start closed: raise a track's send to put it in the echo / the room */
         proj.set.arp_oct[t] = 1;
         proj.set.cur[t] = 0;
         for (c = 0; c < NCLIP; c++)

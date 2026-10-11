@@ -46,6 +46,10 @@ if cc -O2 -ffp-contract=off -std=gnu99 -DX0X_HOST -Ifirmware/src -Ifirmware/src/
     for c in "0 95 same" "0 20 diff" "4 100 diff" "5 0 diff"; do
         build/host/mfx_test comp $c $B >>build/scen/mfx.log 2>&1 || { ok=0; echo "  case failed: comp $c" >>build/scen/mfx.log; }
     done
+    # only the master FX the GLO menu chose runs: crush / ring / decim / vinyl set up but not selected change nothing (the drive is the default)
+    for c in "3 100 127" "4 100 64" "5 100 127" "6 100 64"; do
+        build/host/mfx_test excl $c same $B >>build/scen/mfx.log 2>&1 || { ok=0; echo "  case failed: excl $c" >>build/scen/mfx.log; }
+    done
     # the sends: the 303 track's send to the delay / reverb at 0 leaves the audio alone, at 100 changes it
     for c in "8 100 80 0 same" "8 100 80 100 diff" "9 100 80 0 same" "9 100 80 100 diff" "8 100 80 20 diff"; do
         build/host/mfx_test send $c $B >>build/scen/mfx.log 2>&1 || { ok=0; echo "  case failed: send $c" >>build/scen/mfx.log; }
