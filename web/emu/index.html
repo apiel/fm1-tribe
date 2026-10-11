@@ -16,7 +16,7 @@
 :root[data-theme="dark"] { --ground: #131518; --ink: #e6e8eb; --muted: #9aa1a9; --rule: #2d3137; --accent: #f0a043; --card: #1a1d21; color-scheme: dark; }
 body { background: var(--ground); color: var(--ink); margin: 0; padding-inline: 16px; padding-block: 28px 48px;
        font: 400 16px/1.55 "Barlow", "Helvetica Neue", Arial, sans-serif; }
-main { max-width: 1040px; margin: 0 auto; }
+main { max-width: 1200px; margin: 0 auto; }
 header { display: flex; flex-wrap: wrap; align-items: baseline; gap: .4rem 1.2rem; margin: 0 0 1rem; }
 h1 { font: 700 2rem/1.1 "Barlow Semi Condensed", "Barlow", sans-serif; margin: 0; }
 header p { margin: 0; color: var(--muted); }
@@ -28,7 +28,7 @@ a { color: var(--accent); }
 .hit.knob { cursor: ns-resize; border-radius: 50%; }
 .hit:focus-visible { outline: 2px solid #f0a043; outline-offset: 2px; }
 .device svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-.device canvas { position: absolute; left: 31.8%; top: 9.6875%; width: 20%; height: 31.25%; image-rendering: pixelated; background: #000; border-radius: 2px; }
+.device canvas { position: absolute; left: 31.8%; top: 9.6875%; width: 20%; height: 31.25%; image-rendering: auto; background: #000; border-radius: 2px; }
 .ctl { cursor: pointer; }
 .ctl.knob { cursor: ns-resize; }
 .btnface { transition: fill .06s; }
@@ -346,19 +346,33 @@ addEventListener("blur", () => {
 });
 
 // ---------------------------------------------------------------- screen and lights
-const ctx = document.getElementById("screen").getContext("2d");
-const img = ctx.createImageData(240, 240);
+const cv = document.getElementById("screen"), ctx = cv.getContext("2d");
+const img = new ImageData(240, 240);
+const buf = document.createElement("canvas");        // the screen as the FM-1 has it: 240 x 240, one pixel each
+buf.width = buf.height = 240;
+const bctx = buf.getContext("2d");
+let lastFb = null;
 function drawScreen(fb) {
-  const d = img.data;
-  for (let i = 0; i < 240 * 240; i++) {
-    const v = fb[i], p = ((v >> 8) | (v << 8)) & 0xFFFF;
-    d[i * 4] = ((p >> 11) & 31) * 255 / 31;
-    d[i * 4 + 1] = ((p >> 5) & 63) * 255 / 63;
-    d[i * 4 + 2] = (p & 31) * 255 / 31;
-    d[i * 4 + 3] = 255;
+  if (fb) {
+    lastFb = fb;
+    const d = img.data;
+    for (let i = 0; i < 240 * 240; i++) {
+      const v = fb[i], p = ((v >> 8) | (v << 8)) & 0xFFFF;
+      d[i * 4] = ((p >> 11) & 31) * 255 / 31;
+      d[i * 4 + 1] = ((p >> 5) & 63) * 255 / 63;
+      d[i * 4 + 2] = (p & 31) * 255 / 31;
+      d[i * 4 + 3] = 255;
+    }
+    bctx.putImageData(img, 0, 0);
   }
-  ctx.putImageData(img, 0, 0);
+  // draw it at a whole multiple of 240 at least as big as the screen on the page (nearest neighbour), so
+  // every pixel stays a clean square; the browser then scales that smoothly to the size on the page
+  const k = Math.max(1, Math.ceil(cv.clientWidth * (window.devicePixelRatio || 1) / 240));
+  if (cv.width !== 240 * k) cv.width = cv.height = 240 * k;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(buf, 0, 0, 240 * k, 240 * k);
 }
+addEventListener("resize", () => { if (lastFb) drawScreen(null); });
 function drawLights(b, k, d = 0, db = 0) {
   for (const x of Object.values(buttons)) { x.g.classList.toggle("lit", !!(b & (1 << x.bit))); x.g.classList.toggle("dim", !(b & (1 << x.bit)) && !!(db & (1 << x.bit))); }
   keys.forEach((x, i) => {
@@ -436,6 +450,7 @@ async function switchOn() {
   }
 }
 document.getElementById("go").addEventListener("click", switchOn);
+if (location.hash === "#auto") switchOn();          // for automated screenshots
 document.getElementById("reset").addEventListener("click", () => {
   if (document.getElementById("reset").dataset.armed) {
     try { localStorage.removeItem(STORE_KEY); localStorage.removeItem(LOG_KEY); } catch {}
