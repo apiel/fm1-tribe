@@ -129,4 +129,5 @@ static void ota_commit(const uint8_t *parm)
 #include "tribe/tribe.h"
 #include "tribe/draw.c"
 #include "tribe/ui.c"
+#include "tribe/splash.c"
 #include "app/main_fm1.c"

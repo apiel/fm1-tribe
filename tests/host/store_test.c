@@ -61,6 +61,10 @@ static void mutate(int t, int c)
         cl->st[s].vel = (uint8_t)(1 + rand() % 127);
     }
     cl->par[rand() % 8] = (uint8_t)(rand() % 128);
+    cl->lfo[rand() % NLFO] = (uint8_t)(rand() % 128);
+    cl->rate = (uint8_t)(rand() % NSEQRATE);
+    cl->dir = (uint8_t)(rand() % NSEQDIR);
+    cl->swing = (uint8_t)(rand() % 128);
     if (rand() % 5 == 0) cl->lensel = (uint8_t)(rand() % 3);
 }
 

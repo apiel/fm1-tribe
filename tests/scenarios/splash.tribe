@@ -1,0 +1,11 @@
+# the start-up screen: TRIBE, ten squares lighting up one after another, then the sequencer
+splash
+wait 50
+shot splash_a.png
+wait 400
+shot splash_b.png
+wait 700
+shot splash_c.png
+wait 400
+expect view 0
+shot splash_done.png

@@ -12,7 +12,7 @@ enum { SK_NONE, SK_REP, SK_REV, SK_GATE, SK_CRUSH, SK_DIST, SK_RING, SK_LPS, SK_
 typedef struct { uint8_t kind, arg; const char *name; } scdef_t;
 /* arg: loops = slice length in quarter steps */
 static const scdef_t SC[SC_SLOTS] = {
-    {SK_REP, 1, "1/64"}, {SK_REP, 2, "1/32"}, {SK_REP, 4, "1/16"}, {SK_REV, 4, "REV"},
+    {SK_REP, 2, "1/32"}, {SK_REP, 4, "1/16"}, {SK_REP, 8, "1/8"}, {SK_REV, 4, "REV"},
     {SK_GATE, 0, "GATE"}, {SK_CRUSH, 0, "CRSH"}, {SK_DIST, 0, "DIST"}, {SK_RING, 0, "RING"},
     {SK_REP, 2, "1/32"}, {SK_REP, 4, "1/16"}, {SK_REP, 8, "1/8"}, {SK_REV, 8, "REV"},
     {SK_GATE, 0, "GATE"}, {SK_CRUSH, 0, "CRSH"}, {SK_LPS, 0, "LPF"}, {SK_HPS, 0, "HPF"},

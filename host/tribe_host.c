@@ -71,7 +71,8 @@ int32_t plat_enc(int role)
     return v;
 }
 uint32_t plat_master(void) { return master; }
-int plat_battery(void) { return 3; }
+static int batt_level = 3;
+int plat_battery(void) { return batt_level; }
 void plat_leds(uint32_t b, uint32_t k)
 {
     lit_btn = b;
@@ -155,6 +156,7 @@ uint32_t plat_xruns(void) { return 0; }
 #include "../firmware/src/tribe/tribe.h"
 #include "../firmware/src/tribe/draw.c"
 #include "../firmware/src/tribe/ui.c"
+#include "../firmware/src/tribe/splash.c"
 
 
 /* ---------------------------------------------------------- outputs --- */
@@ -281,6 +283,15 @@ static void wav_close(void)
 /* --------------------------------------------------------- the device --- */
 static double audio_due_ms;
 static uint32_t ui_due;
+static uint32_t splash_end, splash_t0;               /* the start-up screen: 1.3 s on the browser build (and the `splash` script command) */
+static int splash_lit = -1;
+static void splash_start(void)
+{
+    splash_static();
+    splash_t0 = now_ms;
+    splash_end = now_ms + 1300u;
+    splash_lit = 0;
+}
 
 static void boot(void)
 {
@@ -289,6 +300,9 @@ static void boot(void)
     engine_init();
     lcd_fill(0, 0, 240, 240, C_BLACK);
     ui_init();
+#ifdef DECA_WEB
+    splash_start();
+#endif
 }
 
 static void run_ms(uint32_t ms)
@@ -318,6 +332,17 @@ static void run_ms(uint32_t ms)
                 }
             }
             audio_due_ms += 256.0 * 1000.0 / 44100.0;
+        }
+        if (now_ms < splash_end) {                       /* the splash: the squares light up, the keys wait */
+            int lit = (int)((now_ms - splash_t0) / 60u);
+            lit = lit > NTRK ? NTRK : lit;
+            if (lit != splash_lit) {
+                splash_lit = lit;
+                splash_squares(lit);
+            }
+            if (now_ms + 1u == splash_end)
+                lcd_fill(0, 0, 240, 240, C_BLACK);      /* then the first UI frame draws everything */
+            continue;
         }
         if (now_ms >= ui_due) {
             ui_due = now_ms + 16;
@@ -379,6 +404,13 @@ static int expect(const char *what, const char *val, int line)
     else if (!strcmp(what, "scatg")) got = dk_scat_g;
     else if (!strcmp(what, "arpn")) got = dk_arp_n[t];
     else if (!strcmp(what, "arpmode")) got = proj.set.arp_mode[t];
+    else if (!strcmp(what, "arprate")) got = proj.set.arp_rate[t];
+    else if (!strcmp(what, "cfg")) got = ui.cfg;
+    else if (!strcmp(what, "trans")) got = dk_trans[t];
+    else if (!strcmp(what, "lensel")) got = proj.clip[t][dk_clip[t]].lensel;
+    else if (!strcmp(what, "seqrate")) got = proj.clip[t][dk_clip[t]].rate;
+    else if (!strcmp(what, "seqdir")) got = proj.clip[t][dk_clip[t]].dir;
+    else if (!strcmp(what, "seqswing")) got = proj.clip[t][dk_clip[t]].swing;
     else if (!strcmp(what, "stepon")) got = step_on(&proj.clip[t][dk_clip[t]], atoi(val)) ? want : -1;     /* expect stepon N */
     else if (!strcmp(what, "stepoff")) got = step_on(&proj.clip[t][dk_clip[t]], atoi(val)) ? -1 : want;
     else if (!strcmp(what, "peak_db_min") || !strcmp(what, "peak_db_max")) {
@@ -447,8 +479,12 @@ int main(int argc, char **argv)
             if (i < 0) { fprintf(stderr, "line %d: enc %s\n", line, a[1]); fails++; continue; }
             enc_acc[i] += atoi(a[2]);
             run_ms(40);
+        } else if (!strcmp(a[0], "splash")) {            /* the start-up screen now, for 1.3 s */
+            splash_start();
         } else if (!strcmp(a[0], "master"))
             master = (uint32_t)atoi(a[1]);
+        else if (!strcmp(a[0], "battery"))              /* battery N: 0..3 bars, 4 = on USB power, -1 unknown */
+            batt_level = atoi(a[1]);
         else if (!strcmp(a[0], "wav")) {
             snprintf(path, sizeof path, "%s/%s", outdir, a[1]);
             wav_open(path);
@@ -471,7 +507,49 @@ int main(int argc, char **argv)
             putchar('\n');
         } else if (!strcmp(a[0], "expect"))
             fails += expect(a[1], a[2], line);
-        else {
+        else if (!strcmp(a[0], "waitpos")) {             /* waitpos TRK POS: run until that track's playhead is on that step (5 s at most) */
+            int t = atoi(a[1]) % NTRK, k;
+            for (k = 0; k < 5000 && dk_pos[t] == atoi(a[2]); k++)       /* leave the step if it is on it: the wait ends at its start */
+                run_ms(1);
+            for (k = 0; k < 5000 && dk_pos[t] != atoi(a[2]); k++)
+                run_ms(1);
+        } else if (!strcmp(a[0], "expectled")) {         /* expectled BTN STATE: 0 off, 1 dim, 2 lit */
+            int b = find_name(BTN_N, NB, a[1]), got = b < 0 ? -1 : (lit_btn >> b) & 1u ? 2 : (dim_btn >> b) & 1u ? 1 : 0;
+            if (got != atoi(a[2])) { fprintf(stderr, "line %d: led %s is %d, not %s\n", line, a[1], got, a[2]); fails++; }
+        } else if (!strcmp(a[0], "expectselfx")) {       /* expectselfx N: the master FX type (0 drive, 1 crush, 2 ring, 3 decim, 4 vinyl) */
+            int got = proj.set.selfx;
+            if (got != atoi(a[1])) { fprintf(stderr, "line %d: master fx type is %d, not %s\n", line, got, a[1]); fails++; }
+        } else if (!strcmp(a[0], "expectcomp")) {       /* expectcomp J VALUE: a compressor pot (thresh ratio attack release makeup mix) */
+            int got = proj.set.comp[atoi(a[1]) % 6];
+            if (got != atoi(a[2])) { fprintf(stderr, "line %d: comp %s is %d, not %s\n", line, a[1], got, a[2]); fails++; }
+        } else if (!strcmp(a[0], "expectsend")) {        /* expectsend N TRK VALUE: a track's send (0 the delay, 1 the reverb) */
+            int got = proj.set.send[atoi(a[1]) & 1][atoi(a[2]) % NTRK];
+            if (got != atoi(a[3])) { fprintf(stderr, "line %d: send %s of track %s is %d, not %s\n", line, a[1], a[2], got, a[3]); fails++; }
+        } else if (!strcmp(a[0], "expectlfo")) {         /* expectlfo K VALUE: a control of the LFO of the clip on screen */
+            int got = proj.clip[ui.trk][dk_clip[ui.trk]].lfo[atoi(a[1]) % NLFO];
+            if (got != atoi(a[2])) { fprintf(stderr, "line %d: lfo %s is %d, not %s\n", line, a[1], got, a[2]); fails++; }
+        } else if (!strcmp(a[0], "expectstep")) {        /* expectstep S NOTE LENMIN LENMAX: a step of the track on screen */
+            const dstep_t *st = &proj.clip[ui.trk][dk_clip[ui.trk]].st[atoi(a[1]) % NSTEPS];
+            if (st->note != atoi(a[2]) || st->len < atoi(a[3]) || st->len > atoi(a[4])) {
+                fprintf(stderr, "line %d: step %s is note %d len %d (wanted %s, len %s..%s)\n", line, a[1], st->note, st->len, a[2], a[3], a[4]);
+                fails++;
+            }
+        } else if (!strcmp(a[0], "expectfx")) {           /* expectfx FX PAR VALUE: an effect's parameter */
+            int got = proj.set.fxv[atoi(a[1]) % NFX][atoi(a[2]) & 1];
+            if (got != atoi(a[3])) { fprintf(stderr, "line %d: fx %s.%s is %d, not %s\n", line, a[1], a[2], got, a[3]); fails++; }
+        } else if (!strcmp(a[0], "expectmask")) {       /* expectmask FX MASK */
+            int got = proj.set.fxmask[atoi(a[1]) % NFX];
+            if (got != atoi(a[2])) { fprintf(stderr, "line %d: mask of fx %s is %d, not %s\n", line, a[1], got, a[2]); fails++; }
+        } else if (!strcmp(a[0], "expectknob")) {       /* expectknob SLOT KIND */
+            int got = proj.set.knob[atoi(a[1]) & 3].kind;
+            if (got != atoi(a[2])) { fprintf(stderr, "line %d: knob %s is kind %d, not %s\n", line, a[1], got, a[2]); fails++; }
+        } else if (!strcmp(a[0], "expectpar")) {        /* expectpar TRK IDX VALUE: a pot of the playing clip */
+            int t = atoi(a[1]) % NTRK, got = proj.clip[t][dk_clip[t]].par[atoi(a[2]) % NPAR];
+            if (got != atoi(a[3])) { fprintf(stderr, "line %d: track %s pot %s is %d, not %s\n", line, a[1], a[2], got, a[3]); fails++; }
+        } else if (!strcmp(a[0], "expectlevel")) {      /* expectlevel TRK VALUE */
+            int got = proj.set.level[atoi(a[1]) % NTRK];
+            if (got != atoi(a[2])) { fprintf(stderr, "line %d: level of track %s is %d, not %s\n", line, a[1], got, a[2]); fails++; }
+        } else {
             fprintf(stderr, "line %d: unknown command %s\n", line, a[0]);
             fails++;
         }

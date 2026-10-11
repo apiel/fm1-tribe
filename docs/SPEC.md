@@ -98,3 +98,83 @@ master-knob slot assignment and FX registry, SEL, GLO pages, MIDI, LFO params (n
 (device build now done: `python3 tools/build.py` with JIELI_TOOLCHAIN=~/.jieli/toolchain AC79_SDK=~/fw-AC79_AIoT_SDK -> build/tribe.fwsc; never flashed or run yet).
 Known approximations: kit-voice pitch (909/808) shifts the TUNE pot 1.5 units per semitone; the 303 takes
 slide as on/off; kick level trimmed 0.25 (zicBox's drive leaves +-3). Nothing is verified on hardware or by ear.
+
+## Decisions (round 5)
+- Track LEVEL lives in two places: the first knob of the EDIT page (it heads the track's EDIT list, even for a track with no engine)
+  and KNOB 1 on the CLIPS page (HOME). It belongs to the track, not the clip, and is saved with the settings.
+- A mixer page on SEL is still free.
+
+## Decisions (round 6): the master knobs
+- Four slots: MASTER (a pot, absolute), SELECT, PRESETS, ALGORITHM (encoders, relative, 2 steps a detent). Each is
+  one of: nothing, VOLUME, one parameter of an effect, or a MACRO. Defaults: MASTER volume, SELECT DJ filter,
+  PRESETS compressor, ALGORITHM drive.
+- Effects (`tribe/mfx.c`, plus the master section's COMP): FILTER (DJ: LP left of the middle, HP right, off in the
+  middle; RESO), DRIVE (AMT, MIX), CRUSH (AMT, MIX), COMP (AMT). Each parameter can sit on any knob, so cutoff
+  and resonance can be two knobs. An effect runs on the whole mix, or on the tracks of its mask (black keys on the
+  KNOBS page; the MUTE key = all); a neutral effect costs nothing.
+- A MACRO moves up to four track parameters (a track's LEVEL or any engine pot) from one knob; SEL inverts the target.
+  It writes the pot like turning it, so it changes the clip (and the SAVE light).
+- MASTER as anything but volume acts only after it has been moved (no jump at power-on or when assigned). The volume
+  then comes from GLO > VOLUME, or from another knob assigned to VOLUME.
+- Where: GLO, KNOBS row, SEL opens the page. K1 slot, K2 what it does, K3/K4 macro target and pot.
+- Not done: macro ranges (always the full 0..127, or inverted); more effects (delay, reverb, tilt, ...);
+  an effect's tracks on COMP; the settings record is bigger, so settings saved by an earlier build are ignored once.
+- (round 6b) DELAY (MIX, FDBK: a dotted eighth, darker repeats, 16-bit ring 32 KiB) and REVERB (MIX, SIZE: four damped
+  combs + two allpasses, 24 KiB) join the list; they always act on the whole mix, after FILTER, DRIVE, CRUSH. The
+  mix-scatter ring is separate; track loop-scatter rings went from 3 to 2 to pay for the memory.
+
+## Decisions (round 7): REC and LFO
+- REC quantises to the nearest 1/16 step: the first half of a step rounds back, the second half forward (that
+  note then sounds when its step comes, not twice). A synth note's length is the time the key was held (1..32 quarter
+  steps). New steps get default prob/len/slide. Only while playing; stopped, REC just plays.
+- One LFO per clip (saved with it), on one pot of its engine: SHAPE (sine tri saw square random), RATE (synced
+  1/64..8 bars, or free 0.05..25 Hz), DEPTH (0 = off; +-half the pot's range at full), TARGET (the pot), SYNC, RETRIG
+  (restart on each note; random takes a new level). LFO button, two pages. Updated once a block (172 Hz): slow
+  modulation, not audio rate. The pot goes back to the clip's value when the depth is 0 or the target moves.
+- Clips saved before the LFO (356 bytes) still load, with the LFO off.
+
+## Decisions (round 8): SEL, sends, LFO, scatter
+- SEL = the COMMON page, the pots every engine has: ENGINE (of the clip on the track), VOLUME (the track's level),
+  SEND 1 (to FX1 = the delay), SEND 2 (to FX2 = the reverb). The page also shows all ten tracks' volume and sends as bars.
+  (In GLO > KNOBS, SEL still opens the page / inverts a macro target.)
+- Sends: per track, in the settings, post-fader and post-mute, default 127 (open): the effect's own MIX on the knobs page
+  is its return level. Delay and reverb now return into the mix before the mix scatter and the FILTER / DRIVE / CRUSH
+  (so a DJ filter takes the echo and the room with it); they have no track masks (the sends are that).
+- The LFO is for synth engines only (the 303 now). A drum hit is too short for it; drums have no LFO page and the LFO
+  button stays dark. (Retrig + random on a drum would give per-hit variation: left out until asked for.)
+- Kick P: the click is gone (disabled in the DSP, the two pots hidden but kept so saved clips keep their numbers).
+- Scatter, track row: 1/32 1/16 1/8 REV GATE CRSH DIST RING (1/64 removed, 1/8 added); mix row unchanged.
+
+## Decisions (round 9): the sequencer's config (SEQ held)
+- Hold SEQ (about 0.4 s): a page with the clip's LENGTH (16/32/64), RATE (1/16, 1/8, 1/32, 1/16T, 1/8T, 1/32T),
+  DIRECTION (FWD, REV, PING-pong, RAND) and SWING (0..100 %); the four knobs edit them, letting go goes back to the steps.
+  All four are per clip and saved with it (zeros = the old behaviour, so older clips load unchanged).
+- The clock is now a 1/96-note tick; each track steps on its own schedule (rate, swing), arpeggiators and LFOs stay on 1/16.
+  Swing delays the second step of each pair by up to a third of a step (whole ticks: coarse at fast rates). A pattern
+  ends after `length` steps in any direction (that is where a queued clip takes over). Synth gate lengths are a share of
+  the clip's own step. REC rounds to the track's own step (and its next step in its direction).
+- In SEQ the knobs are only the step's (NOTE VEL PROB / NOTE VEL LEN SLIDE); with no step picked they are greyed and inert.
+
+## Decisions (round 10): battery, no scatter page, always-on compressor
+- Battery: an icon (three bars) at the left end of the knob strip's rule, on every page that has the strip; amber at one
+  bar, red and blinking when empty, "USB" beside it when powered over USB; GLO has a BATTERY row (the last).
+- HOME has one page, the clips. The scatter keys live in the parameter pages (FX / ENV / LFO / EDIT, and GLO) while playing;
+  the separate SCATTER page is gone.
+- The master compressor is always on and has no knob: 2:1 from -12 dB, 8 ms attack, 110 ms release, +2 dB makeup, then the
+  limiter. PRESETS is now the delay's MIX and ALGORITHM the reverb's MIX by default; a saved assignment to the old COMP
+  knob is replaced by the delay's.
+
+## Decisions (round 11): ARP > TRSP
+- A sixth ARP mode, TRSP: a key is a transposition in semitones from middle C (key note - 60, the OCT buttons move the keyboard by
+  12), kept by the track until the next key; middle C = 0. The track's sequence plays transposed (every engine; kicks and 909/808
+  voices change pitch). Not saved with the clip. Leaving TRSP puts the track back to 0. While it is on the SEQ page shows
+  "TRSP +n". Stopped, a key also plays the note so you can hear it. RATE / GATE / OCT are greyed (they are for the arpeggio modes).
+
+## Decisions (round 12): master FX slot, compressor menu, splash
+- Defaults: MASTER = volume, SELECT = the master FX (type chosen in GLO > MASTER FX: DRIVE, CRUSH, RING, DECIM, VINYL; the knob is
+  its AMT, the second parameter is assignable on the KNOBS page as "MASTER FX 2nd"), PRESETS = DJ filter, ALGORITHM = its resonance.
+- New effects: RING (carrier 40 Hz..2 kHz), DECIM (sample-rate reducer), VINYL (band-limit, hiss, pops, WEAR); they can have track masks.
+- The master compressor is always on and set in GLO (COMP THRESH / RATIO / ATTACK / RELEASE / MAKEUP / MIX; defaults -12 dB, 2:1,
+  ~2.6 ms... see project.c), saved with the settings. GLO is a scrolling list of 14 rows.
+- Start-up screen: TRIBE in 3x pixel letters (a track colour each), ten squares that light up, "10 TRACKS ANY ENGINE", credit line
+  "BASED ON X0X AND FELUCCA". About 1.3 s on the device; the browser build shows it too. Crash / safe-mode texts say TRIBE.

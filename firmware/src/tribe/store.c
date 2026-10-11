@@ -91,8 +91,8 @@ static int check_slot(int s, rec_hdr_t *h)
         return -1;
     if (read_slot(s, HDR_SZ, rec_buf + HDR_SZ, h->len) || crc32(rec_buf + HDR_SZ, h->len) != h->crc)
         return -1;
-    if (h->type == 0)
-        return h->trk < NTRK && h->clip < NCLIP && h->len == sizeof(clip_t) ? h->trk * NCLIP + h->clip : -1;
+    if (h->type == 0)   /* a clip saved before the LFO was a little shorter: it loads, the LFO off */
+        return h->trk < NTRK && h->clip < NCLIP && h->len >= 356 && h->len <= sizeof(clip_t) ? h->trk * NCLIP + h->clip : -1;
     return h->type == 1 && h->len == sizeof proj.set ? KEY_SET : -1;
 }
 
@@ -353,7 +353,8 @@ int store_load(void)
         if (k == KEY_SET) {
             memcpy(&proj.set, rec_buf + HDR_SZ, sizeof proj.set);
         } else {
-            memcpy(&proj.clip[k / NCLIP][k % NCLIP], rec_buf + HDR_SZ, sizeof(clip_t));
+            memset(&proj.clip[k / NCLIP][k % NCLIP], 0, sizeof(clip_t));
+            memcpy(&proj.clip[k / NCLIP][k % NCLIP], rec_buf + HDR_SZ, h.len);
             fix_clip(&proj.clip[k / NCLIP][k % NCLIP]);
         }
         n++;

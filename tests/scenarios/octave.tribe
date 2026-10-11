@@ -1,0 +1,45 @@
+# ARP / REC: a keyboard drawn on the page, and the OCT buttons: dim = usable, full = an octave offset is set
+expectled OCT- 0
+expectled OCT+ 0
+tap ARP
+expect view 4
+wait 100
+expectled OCT- 1
+expectled OCT+ 1
+tap OCT+
+wait 100
+expectled OCT+ 2
+expectled OCT- 1
+shot arp_oct_up.png
+tap OCT-
+tap OCT-
+wait 100
+expectled OCT- 2
+expectled OCT+ 1
+key 12 down
+wait 100
+shot arp_held.png
+key 12 up
+tap OCT+
+wait 100
+expectled OCT- 1
+expectled OCT+ 1
+# REC the same; the sequencer has none (one page of 16 steps), a 32-step clip does
+tap REC
+wait 100
+expectled OCT- 1
+tap SEQ
+wait 100
+expectled OCT- 0
+# KEYS mode: rate, gate and octaves are greyed out and do nothing; in an arpeggio mode they work
+tap ARP
+tap ARP
+tap ARP
+expect view 4
+expect arpmode 0
+turn K2 1
+expect arprate 0
+turn K1 1
+expect arpmode 1
+turn K2 1
+expect arprate 1

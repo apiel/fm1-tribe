@@ -1,0 +1,30 @@
+# the LFO page: six controls of the clip (shape rate depth target / sync retrig), two pages
+tapkey b5
+expect trk 5
+tap LFO
+expect view 1
+expect grp 2
+expect page 0
+expectlfo 2 0
+turn K3 40
+expectlfo 2 80
+turn K1 1
+expectlfo 0 1
+turn K4 1
+expectlfo 3 1
+shot lfo1.png
+tap LFO
+expect page 1
+turn K1 -1
+expectlfo 4 0
+turn K2 1
+expectlfo 5 1
+shot lfo2.png
+tap LFO
+expect page 0
+# a track with no engine has no LFO page (track 10 here)
+tapkey b9
+tap SEQ
+expect view 0
+tap LFO
+expect view 0

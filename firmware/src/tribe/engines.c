@@ -88,10 +88,10 @@ const x0x_param_t *eng_param(int id, int i)
 /* which page a pot lives on: by its name, until an engine says otherwise */
 int eng_group(int id, int i)
 {
-    static const char *const hide[] = {"Rev", "Dly", "Pan", "Accent", "Veloc", "Volume", 0};
+    static const char *const hide[] = {"Rev", "Dly", "Pan", "Accent", "Veloc", "Volume", "Click", "ClkDec", 0};
     static const char *const fx[] = {"Drive", "Dist", "DrvTyp", "Crush", "Fold", "Wfold", "Reson", "Boost", 0};
     static const char *const env[] = {"Attack", "Tribey", "P.Dpth", "Pitch", "AccDec", "EnvMod", "Slide", "Tail",
-                                      "PchShp", "SwpShp", "SwpDpt", "Curve", "FMSnap", "Click", "ClkDec", "Dur", 0};
+                                      "PchShp", "SwpShp", "SwpDpt", "Curve", "FMSnap", "Dur", 0};
     static const char *const lfo[] = {"LfoRt", "LfoDpt", "LfoShp", "LfoTgt", 0};
     const x0x_param_t *p = eng_param(id, i);
     const tribe_eng_t *e = eng_info(id);
@@ -282,8 +282,11 @@ static void kit_pitch(const tribe_eng_t *e, int t, int note)
         drum808_set(&d808, e->voice, tune_ix[t], v);
 }
 
+volatile uint32_t eng_notes[NTRK];
+
 void eng_note(int t, int note, int vel, int slide)
 {
+    eng_notes[t]++;
     const tribe_eng_t *e = eng_info(bound_eng[t]);
     float v = (float)vel / 127.0f;
     switch (e->fam) {

@@ -1,6 +1,11 @@
 # TRIBE basic: boot, play, tracks, mute, steps, edit, clips, param pages
 expect view 0
 expect trk 0
+# the sequencer's knobs are the step's: with no step picked they leave the engine alone
+expectpar 0 0 64
+turn K1 5
+turn K3 5
+expectpar 0 0 64
 shot boot.png
 leds
 tap PLAY
@@ -62,12 +67,12 @@ wait 4000
 expect clip 4
 shot home.png
 tap HOME
-expect view 3
+expect view 2
 tap GLO
-expect view 4
+expect view 3
 shot glo.png
 tap ARP
-expect view 5
+expect view 4
 shot arp.png
 tap SEQ
 expect view 0

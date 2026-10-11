@@ -24,11 +24,12 @@ expect scatg 2
 key w9 up
 wait 100
 expect scatg 0
-# the SCATTER page (HOME twice) does the same, even stopped
+# HOME has one page (the clips); pressing it again stays there: the scatter keys live in the parameter pages
 tap HOME
 tap HOME
-expect view 3
-shot scatter_page.png
+expect view 2
+tap ENV
+expect view 1
 key w3 down
 wait 200
 expect scat 4
@@ -40,8 +41,7 @@ tap SEQ
 key w0 down
 wait 300
 key w0 up
-tap HOME
-tap HOME
+tap EDIT
 key w0 down
 wait 300
 key w0 up
@@ -97,7 +97,7 @@ tap SEQ
 tapkey b5
 expect trk 5
 tap ARP
-expect view 5
+expect view 4
 expect arpmode 0
 shot arp_keys.png
 turn K1 2

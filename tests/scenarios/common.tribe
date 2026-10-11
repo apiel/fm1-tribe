@@ -1,0 +1,34 @@
+# SEL: the common page (engine, volume, send 1, send 2); the LFO is for synths only; the scatter row has 1/8
+expect view 0
+tap SEL
+expect view 7
+shot common.png
+# track 1 (KICK W, engine 1): volume and the two sends
+expect eng 1
+turn K2 -5
+expectlevel 0 90
+turn K3 -10
+expectsend 0 0 107
+turn K4 -127
+expectsend 1 0 0
+# another track keeps its own
+tapkey b2
+expectsend 1 2 127
+expectlevel 2 100
+# the engine: K1 steps through the list (track 3 starts on 909 CH = 9)
+turn K1 1
+expect eng 11
+# SEL again goes back to the sequencer
+tap SEL
+expect view 0
+# the LFO: not on drums, yes on the 303
+tap LFO
+expect view 0
+tapkey b5
+tap LFO
+expect view 1
+expect grp 2
+# the kick P has no click page entries: its ENV page lists Dur, SwpShp, SwpDpt, FMSnap
+tapkey b6
+tap ENV
+shot kickp_env.png

@@ -42,7 +42,7 @@ CFLAGS = ["-Os", "-ffunction-sections", "-fno-builtin", "-Wall", "-Wno-unused-fu
 FPU = ["-mcpu=r3", "-mfprev1", "-ffp-contract=off"]
 # the DSP, the sequencer and the audio engine: separate units at -O2
 O2_UNITS = ["dsp/drum909.c", "dsp/drum808.c", "dsp/bass303.c", "dsp/master.c",
-            "tribe/engine.c", "tribe/scatter.c", "tribe/engines.c", "tribe/kicks.c", "tribe/project.c", "tribe/store.c"]
+            "tribe/engine.c", "tribe/mfx.c", "tribe/scatter.c", "tribe/engines.c", "tribe/kicks.c", "tribe/project.c", "tribe/store.c"]
 LINE = re.compile(r"^\s*([0-9a-f]+):\s+((?:[0-9a-f]{2} )+)\s*\t(.*)$")
 
 # SDK files of AC79NN_SDK_V1.2.1_2023-12-13 (the tested version)

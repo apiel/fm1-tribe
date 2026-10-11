@@ -1,0 +1,43 @@
+# ARP > TRSP: a key is a transposition from middle C that the track keeps until the next key
+tapkey b5
+expect trk 5
+tap ARP
+expect view 4
+turn K1 5
+expect arpmode 5
+expect trans 0
+shot trsp_0.png
+tap PLAY
+wait 300
+# key 14 = F3 + 14 = note 67: seven semitones above middle C (60); the keys do not play notes themselves, the sequence moves
+key 14 down
+wait 100
+expect trans 7
+expect arpn 0
+key 14 up
+wait 100
+expect trans 7
+shot trsp_7.png
+# a key below middle C goes down; middle C itself (key 7) is no transposition
+key 3 down
+wait 100
+key 3 up
+expect trans -4
+key 7 down
+wait 100
+key 7 up
+expect trans 0
+# the octave buttons move the whole keyboard: the same key is an octave up
+tap OCT+
+key 7 down
+wait 100
+key 7 up
+expect trans 12
+tap SEQ
+shot trsp_seq.png
+# leaving the mode puts the track back
+tap ARP
+turn K1 -1
+expect arpmode 4
+expect trans 0
+tap PLAY

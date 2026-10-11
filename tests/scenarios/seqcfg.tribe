@@ -1,0 +1,30 @@
+# SEQ held: the sequencer's config page (length, rate, direction, swing); let go: back to the steps
+expect cfg 0
+tap SEQ
+expect cfg 0
+press SEQ
+wait 600
+expect cfg 1
+expect lensel 0
+turn K1 1
+expect lensel 1
+turn K1 1
+expect lensel 2
+turn K1 -1
+expect lensel 1
+turn K2 1
+expect seqrate 1
+turn K3 1
+expect seqdir 1
+turn K4 10
+expect seqswing 40
+shot seqcfg.png
+release SEQ
+wait 100
+expect cfg 0
+expect view 0
+# 32 steps: two pages on the second row (OCT+ goes to page 2, then OCT+ again is back to 1)
+tap OCT+
+expect spage 1
+tap OCT+
+expect spage 0

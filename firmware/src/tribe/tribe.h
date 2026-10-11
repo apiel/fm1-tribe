@@ -34,6 +34,13 @@ int eng_param_at(int id, int group, int page, int slot);   /* parameter index, -
 void eng_format(int id, int i, int value, char *buf);       /* a value in text, <= 7 chars */
 
 /* ------------------------------------------------------------- project --- */
+/* one LFO per clip, on one pot of the engine. Values are pots 0..127 except SHAPE (LFO_SHAPES), TARGET (a pot index) and the switches */
+enum { LFO_SHAPE, LFO_RATE, LFO_DEPTH, LFO_TARGET, LFO_SYNC, LFO_RETRIG, NLFO };
+enum { LS_SINE, LS_TRI, LS_SAW, LS_SQUARE, LS_RANDOM, LFO_SHAPES };
+/* how fast a clip's steps go (a step is that many ticks of the engine's 1/96-note clock), and in which order */
+enum { SR_16, SR_8, SR_32, SR_16T, SR_8T, SR_32T, NSEQRATE };
+enum { SD_FWD, SD_REV, SD_PING, SD_RAND, NSEQDIR };
+
 typedef struct {
     uint8_t note, vel, prob, len, slide;    /* prob 0..100; len: quarter steps; slide: > 0 glides into the next step */
 } dstep_t;
@@ -44,7 +51,23 @@ typedef struct {
     uint8_t eng;                        /* engine id */
     uint8_t lensel;                     /* 0, 1, 2 = 16, 32, 64 steps */
     uint8_t par[NPAR];                  /* the engine's pots */
+    uint8_t lfo[NLFO];                  /* the clip's LFO: LFO_* below (depth 0 = off) */
+    uint8_t rate, dir, swing;           /* the sequencer's config for this clip: SR_*, SD_*, swing 0..127 (all zero = 1/16, forward, straight) */
 } clip_t;
+
+/* the master knobs: MASTER (a pot), SELECT, PRESETS, ALGORITHM (encoders). Each is a volume, one parameter of an
+ * effect, or a macro that moves up to four track parameters. */
+/* FILTER .. VINYL work on the mix (or on the tracks of a mask); DELAY and REVERB are the sends' returns; COMP is reserved (the master
+ * compressor is in the settings, always on, edited in GLO). The master FX of the SELECT knob is one of DRIVE .. VINYL, chosen in GLO. */
+enum { FX_NONE, FX_FILTER, FX_DRIVE, FX_CRUSH, FX_RING, FX_DECIM, FX_VINYL, FX_COMP, FX_DELAY, FX_REVERB, NFX };
+#define FX_HAS_MASK(fx) ((fx) >= FX_FILTER && (fx) <= FX_VINYL)    /* these can be limited to tracks; the others work on the mix */
+#define NSELFX 5                         /* the choices for the master FX: FX_DRIVE + 0 .. 4 */
+enum { KS_NONE, KS_VOL, KS_FX, KS_MACRO, KS_MFX };   /* KS_MFX: the master FX chosen in GLO (par 0 or 1 of it) */
+#define NKNOB 4
+#define NMACRO 4
+#define PIX_LEVEL 100                   /* a macro target that is a track's LEVEL, not an engine pot */
+typedef struct { uint8_t kind, fx, par, rsv; } kslot_t;
+typedef struct { uint8_t trk, par, inv, on; } mtarget_t;
 
 typedef struct {
     uint32_t magic;
@@ -52,7 +75,15 @@ typedef struct {
     uint8_t level[NTRK];                /* track level 0..127 */
     uint8_t cur[NTRK];                  /* the clip each track starts on */
     uint8_t master_vol, rsv[3];
-    uint8_t arp_mode[NTRK], arp_rate[NTRK], arp_gate[NTRK], arp_oct[NTRK];   /* ARP: off(keys) up down updn rand; 1/16 1/8 1/4; % of the step; octaves */
+    uint8_t arp_mode[NTRK], arp_rate[NTRK], arp_gate[NTRK], arp_oct[NTRK];   /* ARP: keys up down updn rand trsp; 1/16 1/8 1/4; % of the step; octaves */
+    uint8_t selfx;                      /* which effect the master FX knob runs: 0 .. NSELFX - 1 (FX_DRIVE + selfx) */
+    uint8_t comp[6];                    /* the master compressor, always on: THRESH RATIO ATTACK RELEASE MAKEUP MIX (master.h pots) */
+    uint8_t send[2][NTRK];              /* each track's send to the delay (0) and the reverb (1), 0..127 */
+    kslot_t knob[NKNOB];
+    uint8_t mval[NKNOB];                /* a macro's value */
+    uint8_t fxv[NFX][2];                /* each effect's two parameters, 0..127 */
+    uint16_t fxmask[NFX];               /* the tracks an effect acts on (bit t); 0 = the whole mix */
+    mtarget_t macro[NKNOB][NMACRO];
 } dsettings_t;
 
 typedef struct {
@@ -68,6 +99,17 @@ static inline void step_flip(clip_t *c, int s) { c->on[s >> 5] ^= 1u << (s & 31)
 void project_defaults(void);
 void clip_init(clip_t *c, int eng);     /* an empty clip with the engine's default pots */
 void clip_set_engine(clip_t *c, int eng);   /* the engine and its default pots; the steps stay */
+
+/* ------------------------------------------------------- the master effects --- */
+const char *mfx_name(int fx);
+int mfx_nparams(int fx);
+const char *mfx_pname(int fx, int p);
+void mfx_format(int fx, int p, int v, char *buf);
+int mfx_active(int fx, const uint8_t v[2]);
+typedef struct { float a, b, c, d, hold; int32_t cnt; float gp; uint32_t rng; } mfxs_t;
+void mfx_run(int fx, mfxs_t *s, float *x, int n, const uint8_t v[2]);
+void mfx_send_idle(int fx);
+void mfx_send_run(int fx, float *x, int n, const uint8_t v[2], float spl);   /* DELAY, REVERB: the send bus in, only the wet out (x 'return level') */
 
 /* -------------------------------------------------------------- engine --- */
 void ui_say(const char *a, const char *b);
@@ -85,6 +127,7 @@ void dk_launch(int trk, int clip, int now);             /* queue a clip (switche
 void dk_mute(int trk, int on);
 void dk_note(int trk, int note, int vel);               /* a live note on (vel 0 = off) */
 void dk_master_set(int i, int value);                   /* a master pot (master.h) */
+void dk_transpose(int trk, int semitones);              /* the ARP page's TRSP mode: the track's sequence plays this many semitones up (or down) */
 void dk_scatter(int trk, int slot, int on);             /* a scatter effect on (slots 0-7: the track, 8-15: the mix) or off */
 
 /* ISR -> UI, read freely */
@@ -92,8 +135,11 @@ extern volatile uint8_t dk_pos[NTRK];                   /* each track's playhead
 extern volatile uint8_t dk_clip[NTRK], dk_queued[NTRK]; /* playing clip; queued clip or 0xFF */
 extern volatile uint8_t dk_muted[NTRK], dk_playing;
 extern volatile uint8_t dk_scat[NTRK], dk_scat_g;        /* the scatter slot (+1) each track plays; the mix's (slot - 7) */
+extern volatile int8_t dk_trans[NTRK];                   /* each track's live transposition, semitones */
 extern volatile uint8_t dk_arp_n[NTRK];                  /* notes each arpeggiator holds */
 extern volatile uint32_t dk_gstep;
+extern volatile uint8_t dk_tphase[NTRK];                 /* how far into its current step each track is, 0..255 (REC rounds with it) */
+extern volatile uint8_t dk_next[NTRK];                   /* the step each track plays next */
 extern volatile uint8_t dk_bound[NTRK];                  /* the engine each track really holds (differs from the clip's when its voice is taken) */
 extern volatile uint16_t dk_peak[NTRK];                 /* Q15, tribeying (UI) */
 extern volatile uint8_t dk_hit[NTRK];                   /* last trigger's velocity, the UI lets it fall */
@@ -108,6 +154,7 @@ void eng_note(int trk, int note, int vel, int slide);
 void eng_off(int trk);                  /* the step's gate ends (a sliding 303 keeps it) */
 void eng_panic(int trk);                /* release now */
 int eng_slide_pending(int trk);
+extern volatile uint32_t eng_notes[NTRK];                /* notes started on each track (the LFO restarts on them) */
 void eng_lite(int on);
 void eng_render_all(float *buf, int off, int n);   /* buf[trk * 256 + off ...] */
 

@@ -1,0 +1,61 @@
+# the master knobs: the starting assignments, GLO > KNOBS, the MASTER pot as an effect, masks, macros
+expectknob 0 1
+expectknob 1 4
+expectknob 2 2
+expectknob 3 2
+expectfx 1 0 64
+# SELECT runs the master FX (drive until GLO says otherwise), PRESETS is the DJ filter (the middle is off), ALGORITHM its resonance
+turn SELECT 5
+expectfx 2 0 10
+turn PRESET -5
+expectfx 1 0 54
+turn ALGO 4
+expectfx 1 1 48
+# GLO: the volume as a number (row 2), then KNOBS (row 3) opens with SEL
+tap GLO
+turn K1 1
+turn K1 1
+turn K2 -5
+turn K1 1
+tap SEL
+expect view 6
+shot knobs_main.png
+# MASTER: VOLUME -> FILTER DJ (the pot is the filter only once it has been moved)
+turn K2 1
+expectknob 0 2
+master 2048
+wait 100
+expectfx 1 0 54
+master 3000
+wait 100
+expectfx 1 0 109
+shot knobs_fx.png
+# the tracks the filter acts on: black keys; the MUTE key = all
+tapkey b2
+expectmask 1 4
+tapkey b4
+expectmask 1 20
+tapkey b2
+expectmask 1 16
+tapkey b10
+expectmask 1 0
+leds
+expect trk 0
+# a macro on SELECT: one target, track 6 (the 303), its first pot
+turn K1 1
+turn K2 -1
+expectknob 1 3
+tapkey b5
+expect trk 0
+shot knobs_macro.png
+turn SELECT 10
+expectpar 5 0 20
+# the same macro aimed at the track's LEVEL (K4 to the left end), and inverted with SEL
+turn K3 1
+turn K3 -1
+turn K4 -30
+turn SELECT 15
+expectlevel 5 50
+tap SEL
+turn SELECT 5
+expectlevel 5 67

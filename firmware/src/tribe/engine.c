@@ -11,15 +11,17 @@
 
 dproj_t proj X0X_POOL;
 
+volatile uint8_t dk_tphase[NTRK], dk_next[NTRK];
 volatile uint8_t dk_bound[NTRK], dk_scat[NTRK], dk_scat_g;
 volatile uint8_t dk_arp_n[NTRK];
+volatile int8_t dk_trans[NTRK];
 volatile uint32_t dk_gstep;
 volatile uint8_t dk_pos[NTRK], dk_clip[NTRK], dk_queued[NTRK], dk_muted[NTRK], dk_playing;
 volatile uint16_t dk_peak[NTRK];
 volatile uint8_t dk_hit[NTRK];
 
 /* ------------------------------------------------------------ the queue --- */
-enum { C_PLAY, C_BPM, C_SET, C_RELOAD, C_LAUNCH, C_MUTE, C_NOTE, C_MSET, C_SCAT };
+enum { C_PLAY, C_BPM, C_SET, C_RELOAD, C_LAUNCH, C_MUTE, C_NOTE, C_MSET, C_SCAT, C_TRANS };
 typedef struct { uint8_t type, trk; int16_t a, b; } cmd_t;
 #define QN 128u
 static cmd_t q[QN];
@@ -56,21 +58,28 @@ void dk_mute(int t, int on) { push(C_MUTE, t, on, 0); }
 void dk_note(int t, int note, int vel) { push(C_NOTE, t, note, vel); }
 void dk_master_set(int i, int v) { push(C_MSET, 0, i, v); }
 void dk_scatter(int trk, int slot, int on) { push(C_SCAT, trk, slot, on); }
+void dk_transpose(int trk, int semitones) { push(C_TRANS, trk, semitones, 0); }
 
 /* ------------------------------------------------------------ the state --- */
 static master_t mst;
 static float trk_buf[NTRK * 256];
-static float spl = 11025.0f, acc;               /* samples a step lasts; samples to the next step */
+static float spl = 11025.0f, tick_spl = 1837.5f, acc;   /* samples a 16th lasts, a tick (1/96 note) lasts; samples to the next tick */
+#define TICKS_16 6
+static const uint8_t RATE_TICKS[NSEQRATE] = {6, 12, 3, 4, 8, 2};   /* ticks a step lasts at 1/16, 1/8, 1/32, 1/16T, 1/8T, 1/32T */
+static uint32_t gtick, next_tick[NTRK], last_tick[NTRK];
+static uint8_t cur_int[NTRK], cnt[NTRK], nxt[NTRK];
+static int8_t pdir[NTRK];
 static uint8_t playing_;
 static uint8_t pos[NTRK], queued[NTRK], muted[NTRK];
 static int32_t gate_left[NTRK];                 /* samples until the gate ends (0 = none) */
 static uint32_t rnd = 0x1234567u;
 
-/* scatter: one effect per track and one on the whole mix; three rings for the loop effects on tracks, one for the mix */
-#define NTRING 3
+/* scatter: one effect per track and one on the whole mix; two rings for the loop effects on tracks, one for the mix */
+#define NTRING 2
 static int16_t sc_ring[NTRING + 1][SC_RING] X0X_POOL;
 static uint8_t ring_used[NTRING + 1];
 static sc_t sc_t_[NTRK], sc_g;
+static mfxs_t fx_mix[NFX], fx_trk[NTRK][NFX];      /* effect state: on the mix, and on each track an effect is limited to */
 static int8_t sc_ring_of[NTRK];                /* track's ring index, -1 */
 static int8_t sc_g_ring;
 
@@ -89,6 +98,7 @@ static void set_bpm(int x10)
 {
     float bpm = (float)x10 * 0.1f;
     spl = 661500.0f / (bpm < 30.0f ? 30.0f : bpm > 300.0f ? 300.0f : bpm);
+    tick_spl = spl * (1.0f / (float)TICKS_16);
 }
 
 /* load a clip's engine and pots into the track */
@@ -231,6 +241,8 @@ static void scat_set(int t, int slot, int on)
     }
 }
 
+static void pattern_start(int t);
+
 static void drain(void)
 {
     while (q_r != q_w) {
@@ -241,9 +253,13 @@ static void drain(void)
                 int t;
                 playing_ = 1;
                 acc = 0.0f;
+                gtick = 0;
                 for (t = 0; t < NTRK; t++) {
                     pos[t] = 0;
                     arp_idx[t] = 0;
+                    next_tick[t] = last_tick[t] = 0;
+                    cur_int[t] = TICKS_16;
+                    pattern_start(t);
                 }
                 dk_gstep = 0;
             } else if (!c.a && playing_) {
@@ -269,7 +285,7 @@ static void drain(void)
                 eng_panic(c.trk);
             break;
         case C_NOTE:
-            if (playing_ && proj.set.arp_mode[c.trk]) {          /* the arpeggiator holds it; its clock plays it */
+            if (playing_ && proj.set.arp_mode[c.trk] >= 1 && proj.set.arp_mode[c.trk] <= 4) {   /* the arpeggiator holds it; its clock plays it */
                 if (c.b > 0)
                     arp_add(c.trk, c.a);
                 else
@@ -281,52 +297,113 @@ static void drain(void)
                 eng_panic(c.trk);
             break;
         case C_SCAT: scat_set(c.trk, c.a, c.b); break;
+        case C_TRANS: dk_trans[c.trk] = (int8_t)(c.a < -48 ? -48 : c.a > 48 ? 48 : c.a); break;
         case C_MSET: master_set(&mst, c.a, c.b); break;
         }
         q_r++;
     }
 }
 
-/* one step of every track */
-static void step_all(void)
+/* a pattern begins: the first step to play (by direction), the step counter at zero */
+static void pattern_start(int t)
+{
+    const clip_t *cl = &proj.clip[t][dk_clip[t]];
+    int len = LEN_OF(cl);
+    cnt[t] = 0;
+    pdir[t] = 1;
+    nxt[t] = (uint8_t)(cl->dir == SD_REV ? len - 1 : cl->dir == SD_RAND ? (int)(rand32() % (uint32_t)len) : 0);
+    dk_next[t] = nxt[t];
+}
+
+/* the step after p, in the clip's direction */
+static int next_step(int t, int p, int len, int dir)
+{
+    switch (dir) {
+    case SD_REV: return (p + len - 1) % len;
+    case SD_RAND: return (int)(rand32() % (uint32_t)len);
+    case SD_PING:
+        if (len < 2)
+            return 0;
+        p += pdir[t];
+        if (p >= len) {
+            p = len - 2;
+            pdir[t] = -1;
+        } else if (p < 0) {
+            p = 1;
+            pdir[t] = 1;
+        }
+        return p;
+    default: return (p + 1) % len;
+    }
+}
+
+/* one step of one track, when its own clock says so */
+static void step_track(int t)
+{
+    const clip_t *cl;
+    const dstep_t *s;
+    int p, len, hit = 0, period, off, par;
+    if (cnt[t] == 0 && queued[t] != 0xFF) {             /* a clip waits for the pattern's end */
+        switch_clip(t, queued[t]);
+        pattern_start(t);
+    }
+    cl = &proj.clip[t][dk_clip[t]];
+    len = LEN_OF(cl);
+    p = nxt[t];
+    if (p >= len)
+        p = 0;
+    dk_pos[t] = (uint8_t)p;
+    period = RATE_TICKS[cl->rate < NSEQRATE ? cl->rate : 0];
+    s = &cl->st[p];
+    if (step_on(cl, p) && eng_bound(t) && (s->prob >= 100 || (int)(rand32() % 100u) < s->prob)) {
+        if (!muted[t]) {
+            int nn = (int)s->note + dk_trans[t];                 /* the keyboard's transposition (ARP > TRSP) */
+            eng_note(t, nn < 0 ? 0 : nn > 127 ? 127 : nn, s->vel, s->slide);
+            hit = 1;
+            dk_hit[t] = s->vel;
+            if (eng_info(eng_bound(t))->kind == EK_SYNTH)     /* a gate is a share of this clip's own step */
+                gate_left[t] = (int32_t)((float)(s->len ? s->len : 3) * (float)period * tick_spl * 0.25f);
+        }
+    }
+    if (!hit && eng_slide_pending(t)) {
+        eng_panic(t);
+        gate_left[t] = 0;
+    }
+    par = cnt[t] & 1;
+    if (++cnt[t] >= len)
+        cnt[t] = 0;
+    nxt[t] = (uint8_t)next_step(t, p, len, cl->dir);
+    dk_next[t] = nxt[t];
+    /* swing: the second step of each pair arrives late (up to a third of a step), the pair keeps its length */
+    off = ((int)cl->swing * period / 3 + 63) / 127;
+    cur_int[t] = (uint8_t)(par ? period - off : period + off);
+    last_tick[t] = gtick;
+    next_tick[t] += cur_int[t];
+}
+
+/* the arpeggiators run on the 16th grid whatever a clip's rate */
+static void arp_tick(void)
 {
     int t;
-    for (t = 0; t < NTRK; t++) {
-        const clip_t *cl;
-        const dstep_t *s;
-        int p = pos[t], len, hit = 0;
-        if (queued[t] != 0xFF) {                        /* a clip waits for the pattern's end */
-            int len0 = LEN_OF(&proj.clip[t][dk_clip[t]]);
-            if (p >= len0 || p == 0)
-                switch_clip(t, queued[t]);
-        }
-        cl = &proj.clip[t][dk_clip[t]];
-        len = LEN_OF(cl);
-        if (p >= len)
-            p = 0;
-        dk_pos[t] = (uint8_t)p;
-        s = &cl->st[p];
-        if (step_on(cl, p) && eng_bound(t) && (s->prob >= 100 || (int)(rand32() % 100u) < s->prob)) {
-            if (!muted[t]) {
-                eng_note(t, s->note, s->vel, s->slide);
-                hit = 1;
-                dk_hit[t] = s->vel;
-                if (eng_info(eng_bound(t))->kind == EK_SYNTH)
-                    gate_left[t] = (int32_t)((float)(s->len ? s->len : 3) * spl * 0.25f);
-            }
-        }
-        if (!hit && eng_slide_pending(t)) {
-            eng_panic(t);
-            gate_left[t] = 0;
-        }
-        pos[t] = (uint8_t)((p + 1) % len);
-        if (proj.set.arp_mode[t] && arp_n[t] && !muted[t]) {
+    for (t = 0; t < NTRK; t++)
+        if (proj.set.arp_mode[t] >= 1 && proj.set.arp_mode[t] <= 4 && arp_n[t] && !muted[t]) {
             int div = 1 << (proj.set.arp_rate[t] > 2 ? 2 : proj.set.arp_rate[t]);
             if (dk_gstep % (uint32_t)div == 0)
                 arp_play(t, div);
         }
-    }
     dk_gstep++;
+}
+
+/* one tick (a 96th note) of the clock */
+static void tick_all(void)
+{
+    int t;
+    for (t = 0; t < NTRK; t++)
+        while (gtick >= next_tick[t])
+            step_track(t);
+    if (gtick % TICKS_16 == 0)
+        arp_tick();
+    gtick++;
 }
 
 static int32_t next_event(int32_t want)
@@ -347,19 +424,93 @@ static int32_t next_event(int32_t want)
     return k < 1 ? 1 : k;
 }
 
+/* ---- the LFOs: one a clip, moving one pot of the engine around the value the clip holds. Run once a block
+ * (172 times a second): slow modulation (wobble, sweeps), not audio rate. ---- */
+static float lfo_ph[NTRK], lfo_hold[NTRK];
+static int16_t lfo_sent[NTRK], lfo_tgt[NTRK];      /* the last value sent to the engine (-1: none), and the pot it was for */
+static uint32_t lfo_notes[NTRK];
+
+static float lfo_shape(int shape, float ph, float *hold)
+{
+    switch (shape) {
+    case LS_TRI: return ph < 0.5f ? 4.0f * ph - 1.0f : 3.0f - 4.0f * ph;
+    case LS_SAW: return 1.0f - 2.0f * ph;
+    case LS_SQUARE: return ph < 0.5f ? 1.0f : -1.0f;
+    case LS_RANDOM: return *hold;
+    default: return fm_sin_turns(ph);
+    }
+}
+
+static void lfo_update(int n)
+{
+    static const float DIV[10] = {0.25f, 0.5f, 1.0f, 2.0f, 4.0f, 8.0f, 16.0f, 32.0f, 64.0f, 128.0f};   /* steps */
+    int t;
+    for (t = 0; t < NTRK; t++) {
+        const clip_t *c = &proj.clip[t][dk_clip[t]];
+        int eng = eng_bound(t), tgt = c->lfo[LFO_TARGET], np = eng_nparams(eng), depth = c->lfo[LFO_DEPTH];
+        if (lfo_sent[t] >= 0 && (!depth || tgt != lfo_tgt[t] || !eng)) {      /* switched off, or aimed elsewhere: the pot goes home */
+            if (lfo_tgt[t] < eng_nparams(eng) && eng)
+                eng_set(t, lfo_tgt[t], c->par[lfo_tgt[t]]);
+            lfo_sent[t] = -1;
+        }
+        if (!depth || !eng || tgt >= np || eng_info(eng)->kind != EK_SYNTH)
+            continue;                                                          /* the LFO is for synths */
+        {
+            float period, max = (float)eng_param(eng, tgt)->max, v, eff;
+            int rate = c->lfo[LFO_RATE], shape = c->lfo[LFO_SHAPE], e;
+            if (c->lfo[LFO_RETRIG] && eng_notes[t] != lfo_notes[t]) {
+                lfo_ph[t] = 0.0f;                                              /* each note starts the wave again */
+                lfo_hold[t] = (float)(rand32() & 0xFFFFu) * (2.0f / 65535.0f) - 1.0f;    /* (and a random one takes a new level) */
+            }
+            lfo_notes[t] = eng_notes[t];
+            if (c->lfo[LFO_SYNC])
+                period = DIV[rate * 10 / 128] * spl;
+            else
+                period = 44100.0f / (0.05f * fm_exp2f((float)rate * (9.0f / 127.0f)));
+            lfo_ph[t] += (float)n / period;
+            if (lfo_ph[t] >= 1.0f) {
+                lfo_ph[t] -= fm_floorf(lfo_ph[t]);
+                lfo_hold[t] = (float)(rand32() & 0xFFFFu) * (2.0f / 65535.0f) - 1.0f;      /* a new random level */
+            }
+            v = lfo_shape(shape, lfo_ph[t], &lfo_hold[t]);
+            eff = (float)c->par[tgt] + v * (float)depth * (1.0f / 127.0f) * max * 0.5f;
+            e = (int)(eff + 0.5f);
+            e = e < 0 ? 0 : e > (int)max ? (int)max : e;
+            if (e != lfo_sent[t] || lfo_tgt[t] != tgt) {
+                eng_set(t, tgt, e);
+                lfo_sent[t] = (int16_t)e;
+                lfo_tgt[t] = (int16_t)tgt;
+            }
+        }
+    }
+}
+
+static float bus[2][256];                           /* the sends: 0 the delay, 1 the reverb */
+
 static void mix(float *l, float *r, int n)
 {
-    int t, i;
+    int t, i, fx;
+    int send_on[2];
+    send_on[0] = mfx_active(FX_DELAY, proj.set.fxv[FX_DELAY]);
+    send_on[1] = mfx_active(FX_REVERB, proj.set.fxv[FX_REVERB]);
+    memset(bus, 0, sizeof bus);
     for (t = 0; t < NTRK; t++) {
         float *b = trk_buf + t * 256;
         float g = (float)proj.set.level[t] * (1.0f / 127.0f), pk = 0.0f;
+        float s0 = send_on[0] ? (float)proj.set.send[0][t] * (1.0f / 127.0f) : 0.0f;
+        float s1 = send_on[1] ? (float)proj.set.send[1][t] * (1.0f / 127.0f) : 0.0f;
         if (muted[t])
             continue;
         if (dk_scat[t])
             sc_run(&sc_t_[t], b, n, spl);
+        for (fx = FX_FILTER; fx <= FX_VINYL; fx++)          /* the effects limited to this track (a mask with its bit set) */
+            if ((proj.set.fxmask[fx] >> t) & 1u && mfx_active(fx, proj.set.fxv[fx]))
+                mfx_run(fx, &fx_trk[t][fx], b, n, proj.set.fxv[fx]);
         for (i = 0; i < n; i++) {
             float v = b[i] * g;
             l[i] += v;
+            bus[0][i] += v * s0;
+            bus[1][i] += v * s1;
             if (fm_fabsf(v) > pk)
                 pk = fm_fabsf(v);
         }
@@ -369,8 +520,20 @@ static void mix(float *l, float *r, int n)
                 dk_peak[t] = (uint16_t)qk;
         }
     }
+    for (fx = FX_DELAY; fx <= FX_REVERB; fx++) {            /* the echo and the room: the bus through the effect, back into the mix */
+        if (send_on[fx - FX_DELAY]) {
+            float *w = bus[fx - FX_DELAY];
+            mfx_send_run(fx, w, n, proj.set.fxv[fx], spl);
+            for (i = 0; i < n; i++)
+                l[i] += w[i];
+        } else
+            mfx_send_idle(fx);
+    }
     if (dk_scat_g)
         sc_run(&sc_g, l, n, spl);                 /* the mix's scatter */
+    for (fx = FX_FILTER; fx <= FX_VINYL; fx++)    /* the effects on the whole mix (no mask) */
+        if (!proj.set.fxmask[fx] && mfx_active(fx, proj.set.fxv[fx]))
+            mfx_run(fx, &fx_mix[fx], l, n, proj.set.fxv[fx]);
     memcpy(r, l, (unsigned)n * sizeof(float));
 }
 
@@ -378,8 +541,10 @@ void engine_init(void)
 {
     int t;
     eng_init();
-    for (t = 0; t < NTRK; t++)
+    for (t = 0; t < NTRK; t++) {
         sc_ring_of[t] = -1;
+        lfo_sent[t] = -1;
+    }
     sc_g_ring = -1;
     master_init(&mst);
     {
@@ -401,19 +566,26 @@ static const float out_scale = 4194303.0f, out_lim = 2.0f;
 void engine_render(int32_t *out_lr, uint32_t n)
 {
     static float L[256], R[256];
-    float vol = (float)plat_master() * (1.0f / 4096.0f);
+    float vol;
+    if (proj.set.knob[0].kind == KS_VOL)             /* MASTER is the volume: the pot, as it always was */
+        vol = (float)plat_master() * (1.0f / 4096.0f);
+    else {                                           /* else the volume is a number (GLO, or another knob) */
+        float m = (float)proj.set.master_vol * (1.0f / 127.0f);
+        vol = m * m;
+    }
     int32_t left, off = 0;
     uint32_t i;
     if (n > 256u)
         n = 256u;
     left = (int32_t)n;
     drain();
+    lfo_update((int)n);
     /* the block is cut at every step and every gate end, so a note starts on its own sample */
     while (left > 0) {
         int32_t k;
         if (playing_ && acc <= 0.0f) {
-            step_all();
-            acc += spl;
+            tick_all();
+            acc += tick_spl;
         }
         k = next_event(left);
         eng_render_all(trk_buf, off, k);
@@ -432,8 +604,25 @@ void engine_render(int32_t *out_lr, uint32_t n)
         off += k;
         left -= k;
     }
+    {                                               /* how far into its step each track is (REC rounds with it) */
+        int t;
+        for (t = 0; t < NTRK; t++) {
+            float el = (float)gtick - (float)last_tick[t] - acc / tick_spl, ph = el / (float)(cur_int[t] ? cur_int[t] : 1);
+            dk_tphase[t] = (uint8_t)(playing_ ? (ph < 0.0f ? 0.0f : ph > 1.0f ? 255.0f : ph * 255.0f) : 0.0f);
+        }
+    }
     memset(L, 0, sizeof L);
     mix(L, R, (int)n);
+    {   /* the master compressor: always on, its pots are the settings' (GLO); applied when one changes */
+        static uint8_t last[6] = {255, 255, 255, 255, 255, 255};
+        static const uint8_t ID[6] = {MST_THRESH, MST_RATIO, MST_ATTACK, MST_RELEASE, MST_MAKEUP, MST_MIX};
+        int j;
+        for (j = 0; j < 6; j++)
+            if (proj.set.comp[j] != last[j]) {
+                last[j] = proj.set.comp[j];
+                master_set(&mst, ID[j], last[j]);
+            }
+    }
     master_process_st(&mst, L, R, (int)n, vol);
     for (i = 0; i < n; i++) {
         float l = L[i], r = R[i];

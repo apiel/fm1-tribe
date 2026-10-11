@@ -1,0 +1,27 @@
+# REC quantises to the nearest step (first half of a step: back, second half: forward), synth notes keep the held length
+tapkey b8
+expect trk 8
+expect nsteps 0
+tap REC
+expect view 5
+tap PLAY
+waitpos 8 0
+wait 20
+tapkey 12
+expectstep 0 65 3 3
+waitpos 8 4
+wait 85
+tapkey 14
+expectstep 5 67 3 3
+expect stepoff 4
+# a held key on a synth track: the note's length is how long it was held (480 ms at 125 BPM = 16 quarter steps)
+tap SEQ
+tapkey b5
+expect trk 5
+expect stepoff 1
+tap REC
+waitpos 5 1
+wait 15
+holdkey 12 480
+expectstep 1 65 15 18
+tap PLAY

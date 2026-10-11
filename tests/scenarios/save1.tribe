@@ -5,10 +5,8 @@ expect trk 4
 # track 5 (index 4, 808 CP): a new step 3 and a new level on clip 1
 tapkey w3
 expect stepon 3
-tap GLO
-turn K1 1
-turn K1 1
-turn K2 -10
+tap EDIT
+turn K1 -10
 expect level 80
 wait 1000
 expect dirty 2

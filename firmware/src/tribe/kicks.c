@@ -109,7 +109,7 @@ static void decode(kick_t *k)
         /* pitchEnv = menv^(1 + shape*5), menv tribeying with a 25 ms constant */
         k->c_mod = fm_expf(-(1.0f + k->pchshp * 5.0f) / (SR * 0.025f));
     } else {
-        k->freq = v[0]; k->dur_samples = v[1] * 0.001f * SR; k->click = v[2] * 0.01f;
+        k->freq = v[0]; k->dur_samples = v[1] * 0.001f * SR; k->click = 0.0f;        /* no click: v[2], v[3] stay as hidden pots */
         k->clkdec = v[3] * 0.001f; k->morph = v[4] * 0.01f; k->swpshp = v[5] * 0.01f; k->swpdpt = v[6] * 0.01f;
         k->fm = v[7] * 0.01f; k->fmrat = v[8]; k->fmsnap = v[9] * 0.001f; k->drive = v[10] * 0.01f;
         k->wfold = v[11] * 0.01f; k->reson = v[12] * 0.01f; k->crush = v[13] * 0.01f; k->boost = v[14] * 0.01f;

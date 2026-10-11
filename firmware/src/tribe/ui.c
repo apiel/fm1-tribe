@@ -12,14 +12,18 @@
 #include "../app/plat.h"
 #include "scatter.h"
 
-enum { V_SEQ, V_PARAM, V_HOME, V_SCATTER, V_GLO, V_ARP, V_REC, NVIEWS };
-static const char *const VIEW_N[NVIEWS] = {"SEQ", "PARAM", "CLIPS", "SCATTER", "GLOBAL", "ARP", "REC"};
-static const char *const ARP_N[5] = {"KEYS", "UP", "DOWN", "UPDN", "RAND"};
+enum { V_SEQ, V_PARAM, V_HOME, V_GLO, V_ARP, V_REC, V_KNOBS, V_COMMON, NVIEWS };
+static const char *const VIEW_N[NVIEWS] = {"SEQ", "PARAM", "CLIPS", "GLO", "ARP", "REC", "KNOBS", "MIX"};
+static const char *const ARP_N[6] = {"KEYS", "UP", "DOWN", "UPDN", "RAND", "TRSP"};
+#define ARP_ON(t) (proj.set.arp_mode[t] >= 1 && proj.set.arp_mode[t] <= 4)   /* an arpeggio mode (not KEYS, not TRSP) */
+#define ARP_TRSP 5
 static const char *const ARP_R[3] = {"1/16", "1/8", "1/4"};
 static const char *const GRP_N[NPG] = {"FX", "ENV", "LFO", "EDIT"};
 static const uint8_t GRP_BTN[NPG] = {B_FX, B_ENV, B_LFO, B_EDIT};
-#define NGLO 6
-static const char *const GLO_N[NGLO] = {"TEMPO", "ENGINE", "LEVEL", "MASTER", "CLIPS", "CPU"};
+#define NGLO 14
+static const char *const GLO_N[NGLO] = {"TEMPO", "ENGINE", "VOLUME", "KNOBS", "MASTER FX", "COMP THRESH", "COMP RATIO", "COMP ATTACK",
+                                         "COMP RELEASE", "COMP MAKEUP", "COMP MIX", "CLIPS", "CPU", "BATTERY"};
+#define GLO_COMP0 5                    /* the compressor rows: GLO_COMP0 .. +5 (settings.comp[]) */
 
 static const uint16_t TRK_COL[NTRK] = {
     RGB(255, 96, 80), RGB(255, 150, 60), RGB(255, 210, 70), RGB(170, 230, 80), RGB(70, 220, 130),
@@ -38,18 +42,32 @@ static struct {
     int8_t press;                        /* a tap on an "on" step waiting to turn it off, -1 none */
     uint32_t press_t;
     int8_t oct;                          /* the keyboard's octave offset, -2..2 */
-    uint8_t glo;                         /* GLO: the item */
-    uint8_t mdjf, mcomp;                 /* the master knobs' values */
+    uint8_t glo, gtop;                   /* GLO: the item, and the first row on screen */
+    uint8_t ks, kt;                      /* KNOBS page: the slot, and the macro target on it */
+    int16_t pot_ref;                     /* MASTER as a control: where the pot was when it was last used */
+    uint8_t pot_armed;
     uint32_t bprev, kprev, used;
+    uint8_t cfg, seq_hold;               /* SEQ held: the sequencer's config page, until it is let go */
+    uint32_t seq_t0;
     uint8_t save_pending;                /* SAVE is down and nothing else was done with it */
     uint8_t held_note[NKEYS];            /* live note of a held key + 1 */
     uint8_t held_trk[NKEYS];
     uint8_t held_scat[NKEYS];            /* scatter slot of a held key + 1 */
+    uint8_t rec_step[NKEYS];             /* REC: the step a held key wrote + 1 */
+    uint32_t rec_t0[NKEYS];
     char msg[24];
     uint32_t msg_until, frame;
     int8_t touched;                      /* the knob last turned, for its highlight */
     uint32_t touch_until;
 } ui;
+
+static int tw_len(const char *s)
+{
+    int n = 0;
+    while (s[n])
+        n++;
+    return n;
+}
 
 static void say(const char *a, const char *b)
 {
@@ -64,7 +82,19 @@ static int clip_has(const clip_t *c) { return c->on[0] | c->on[1]; }
 static int nsteps_page(void) { return LEN_OF(cur_clip()) / 16; }
 static uint16_t tcol(int t) { return TRK_COL[t % NTRK]; }
 
-static int group_ok(int g) { return eng_pages(cur_clip()->eng, g) > 0; }
+/* the pages of a group: the engine's pots, and the track's LEVEL first on EDIT (it belongs to the track, not the clip) */
+#define PIX_LFO 110                                    /* the LFO's six controls: PIX_LFO + LFO_* */
+static int grp_count(int g)
+{
+    int n = eng_nparams(cur_clip()->eng), i, c = g == PG_EDIT;
+    if (g == PG_LFO)
+        return eng_info(cur_clip()->eng)->kind == EK_SYNTH ? NLFO : 0;     /* the LFO is for synths; a drum hit is too short for one */
+    for (i = 0; i < n; i++)
+        c += eng_group(cur_clip()->eng, i) == g;
+    return c;
+}
+static int npages(int g) { return (grp_count(g) + 3) / 4; }
+static int group_ok(int g) { return grp_count(g) > 0; }
 static void fix_group(void)
 {
     int g;
@@ -89,8 +119,109 @@ static void select_track(int t)
     fix_group();
 }
 
+/* ---- the LFO's controls ---- */
+static const char *const LFO_L[NLFO] = {"Shape", "Rate", "Depth", "Target", "Sync", "Retrig"};
+static const char *const LFO_SHAPE_N[LFO_SHAPES] = {"SINE", "TRI", "SAW", "SQR", "RND"};
+static const char *const LFO_DIV_N[10] = {"1/64", "1/32", "1/16", "1/8", "1/4", "1/2", "1BAR", "2BAR", "4BAR", "8BAR"};
+static void lfo_text(const clip_t *c, int k, char *b)
+{
+    int v = c->lfo[k];
+    switch (k) {
+    case LFO_SHAPE: put_s(b, LFO_SHAPE_N[v < LFO_SHAPES ? v : 0]); break;
+    case LFO_RATE:
+        if (c->lfo[LFO_SYNC])
+            put_s(b, LFO_DIV_N[v * 10 / 128]);
+        else {
+            int hz10 = (int)(fm_exp2f((float)v * (9.0f / 127.0f)) * 0.5f + 0.5f);      /* 0.05 Hz * 2^(v 9/127), in tenths */
+            char *q = hz10 >= 100 ? put_i(b, hz10 / 10) : put_i(put_s(put_i(b, hz10 / 10), "."), hz10 % 10);
+            put_s(q, "Hz");
+        }
+        break;
+    case LFO_DEPTH: put_s(put_i(b, v * 100 / 127), "%"); break;
+    case LFO_TARGET: put_s(b, v < eng_nparams(c->eng) ? eng_param(c->eng, v)->name : "-"); break;
+    default: put_s(b, v ? "ON" : "OFF"); break;
+    }
+}
+static float lfo_u(const clip_t *c, int k)
+{
+    int v = c->lfo[k];
+    switch (k) {
+    case LFO_SHAPE: return (float)v / (float)(LFO_SHAPES - 1);
+    case LFO_TARGET: return eng_nparams(c->eng) > 1 ? (float)v / (float)(eng_nparams(c->eng) - 1) : 0.0f;
+    case LFO_SYNC: case LFO_RETRIG: return v ? 1.0f : 0.0f;
+    default: return (float)v / 127.0f;
+    }
+}
+static void lfo_turn(int k, int d)
+{
+    clip_t *c = cur_clip();
+    int v = c->lfo[k];
+    switch (k) {
+    case LFO_SHAPE: v += d > 0 ? 1 : -1; v = v < 0 ? 0 : v >= LFO_SHAPES ? LFO_SHAPES - 1 : v; break;
+    case LFO_TARGET: v += d > 0 ? 1 : -1; v = v < 0 ? 0 : v >= eng_nparams(c->eng) ? eng_nparams(c->eng) - 1 : v; break;
+    case LFO_SYNC: case LFO_RETRIG: v = d > 0; break;
+    default: v += d * 2; v = v < 0 ? 0 : v > 127 ? 127 : v; break;
+    }
+    c->lfo[k] = (uint8_t)v;
+}
+
+/* ---- the sequencer's config (SEQ held): length, rate, direction, swing of the clip on the track ---- */
+static const char *const SEQ_L[4] = {"Length", "Rate", "Dir", "Swing"};
+static const char *const SR_N[NSEQRATE] = {"1/16", "1/8", "1/32", "1/16T", "1/8T", "1/32T"};
+static const char *const SD_N[NSEQDIR] = {"FWD", "REV", "PING", "RAND"};
+static void seqcfg_text(const clip_t *c, int i, char *b)
+{
+    switch (i) {
+    case 0: put_s(put_i(b, LEN_OF(c)), " STEPS"); break;
+    case 1: put_s(b, SR_N[c->rate < NSEQRATE ? c->rate : 0]); break;
+    case 2: put_s(b, SD_N[c->dir < NSEQDIR ? c->dir : 0]); break;
+    default: put_s(put_i(b, c->swing * 100 / 127), "%"); break;
+    }
+}
+static float seqcfg_u(const clip_t *c, int i)
+{
+    switch (i) {
+    case 0: return (float)c->lensel / 2.0f;
+    case 1: return (float)c->rate / (float)(NSEQRATE - 1);
+    case 2: return (float)c->dir / (float)(NSEQDIR - 1);
+    default: return (float)c->swing / 127.0f;
+    }
+}
+static void seqcfg_turn(int i, int d)
+{
+    clip_t *c = cur_clip();
+    int v, s = d > 0 ? 1 : -1;
+    switch (i) {
+    case 0:
+        v = c->lensel + s;
+        c->lensel = (uint8_t)(v < 0 ? 0 : v > 2 ? 2 : v);
+        if (ui.spage >= LEN_OF(c) / 16)
+            ui.spage = 0;
+        ui.edit = -1;
+        break;
+    case 1: v = c->rate + s; c->rate = (uint8_t)(v < 0 ? 0 : v >= NSEQRATE ? NSEQRATE - 1 : v); break;
+    case 2: v = c->dir + s; c->dir = (uint8_t)(v < 0 ? 0 : v >= NSEQDIR ? NSEQDIR - 1 : v); break;
+    default: v = c->swing + d * 4; c->swing = (uint8_t)(v < 0 ? 0 : v > 127 ? 127 : v); break;
+    }
+    ui.touched = (int8_t)i;
+    ui.touch_until = plat_ms() + 900u;
+}
+
 /* ------------------------------------------------------------------ input --- */
-static int param_ix(int slot) { return eng_param_at(cur_clip()->eng, ui.grp, ui.page[ui.grp], slot); }
+static int param_ix(int slot)
+{
+    int k = ui.page[ui.grp] * 4 + slot;
+    if (ui.view == V_HOME)                              /* CLIPS: KNOB 1 is the track's level */
+        return slot == 0 ? PIX_LEVEL : -1;
+    if (ui.grp == PG_LFO)
+        return k < NLFO ? PIX_LFO + k : -1;
+    if (ui.grp == PG_EDIT) {
+        if (k == 0)
+            return PIX_LEVEL;
+        k--;
+    }
+    return eng_param_at(cur_clip()->eng, ui.grp, k / 4, k % 4);
+}
 
 static void turn_param(int slot, int d)
 {
@@ -99,6 +230,19 @@ static void turn_param(int slot, int d)
     clip_t *c = cur_clip();
     if (i < 0)
         return;
+    if (i >= PIX_LFO && i < PIX_LFO + NLFO) {
+        lfo_turn(i - PIX_LFO, d);
+        ui.touched = (int8_t)slot;
+        ui.touch_until = plat_ms() + 900u;
+        return;
+    }
+    if (i == PIX_LEVEL) {
+        v = proj.set.level[ui.trk] + d * 2;
+        proj.set.level[ui.trk] = (uint8_t)(v < 0 ? 0 : v > 127 ? 127 : v);
+        ui.touched = (int8_t)slot;
+        ui.touch_until = plat_ms() + 900u;
+        return;
+    }
     p = eng_param(c->eng, i);
     v = c->par[i] + d * (p->max >= 100 ? 2 : 1);
     v = v < 0 ? 0 : v > p->max ? p->max : v;
@@ -144,33 +288,151 @@ static void turn_step(int slot, int d)
     ui.touch_until = plat_ms() + 900u;
 }
 
-static void turn_master(int which, int d)
+/* ---------------------------------------------------------------- the master knobs --- */
+#define NASSIGN 15
+static const struct { uint8_t kind, fx, par; } ASSIGN[NASSIGN] = {
+    {KS_NONE, 0, 0}, {KS_VOL, 0, 0}, {KS_FX, FX_FILTER, 0}, {KS_FX, FX_FILTER, 1}, {KS_FX, FX_DRIVE, 0},
+    {KS_FX, FX_DRIVE, 1}, {KS_FX, FX_CRUSH, 0}, {KS_FX, FX_CRUSH, 1}, {KS_FX, FX_DELAY, 0}, {KS_FX, FX_DELAY, 1}, {KS_FX, FX_REVERB, 0},
+    {KS_FX, FX_REVERB, 1}, {KS_MACRO, 0, 0}, {KS_MFX, 0, 0}, {KS_MFX, 0, 1}};
+static const char *const KNOB_N[NKNOB] = {"MASTER", "SELECT", "PRESETS", "ALGO"};
+
+static int sel_fx(void) { return FX_DRIVE + (proj.set.selfx < NSELFX ? proj.set.selfx : 0); }
+static int slot_fx(const kslot_t *k) { return k->kind == KS_MFX ? sel_fx() : k->fx; }
+
+static int assign_of(const kslot_t *k)
 {
-    int v;
-    char b[16];
-    if (which == 0) {                                   /* SELECT: the DJ filter, 64 = off */
-        v = ui.mdjf + d * 2;
-        ui.mdjf = (uint8_t)(v < 0 ? 0 : v > 127 ? 127 : v);
-        dk_master_set(13, ui.mdjf);
-        say(ui.mdjf < 62 ? "LOW PASS " : ui.mdjf > 66 ? "HIGH PASS " : "FILTER OFF", 0);
-        if (ui.mdjf < 62 || ui.mdjf > 66)
-            put_i(ui.msg + (ui.mdjf < 62 ? 9 : 10), ui.mdjf < 62 ? ui.mdjf * 100 / 62 : (ui.mdjf - 66) * 100 / 61);
-    } else {                                            /* PRESETS: the one-knob compressor */
-        v = ui.mcomp + d * 2;
-        ui.mcomp = (uint8_t)(v < 0 ? 0 : v > 127 ? 127 : v);
-        dk_master_set(12, ui.mcomp);
-        put_s(b, "COMP ");
-        put_i(b + 5, ui.mcomp * 100 / 127);
-        say(b, 0);
+    int i;
+    for (i = 0; i < NASSIGN; i++)
+        if (ASSIGN[i].kind == k->kind && (k->kind != KS_FX || ASSIGN[i].fx == k->fx) && ((k->kind != KS_FX && k->kind != KS_MFX) || ASSIGN[i].par == k->par))
+            return i;
+    return 0;
+}
+static void assign_text(int slot, char *b)
+{
+    const kslot_t *k = &proj.set.knob[slot];
+    char *q;
+    if (k->kind == KS_VOL)
+        put_s(b, "VOLUME");
+    else if (k->kind == KS_MACRO)
+        put_s(b, "MACRO");
+    else if (k->kind == KS_FX || k->kind == KS_MFX) {
+        q = put_s(b, mfx_name(slot_fx(k)));
+        if (mfx_nparams(slot_fx(k)) > 1) {
+            *q++ = ' ';
+            put_s(q, mfx_pname(slot_fx(k), k->par));
+        }
+    } else
+        put_s(b, "OFF");
+}
+static int knob_value(int slot)
+{
+    const kslot_t *k = &proj.set.knob[slot];
+    return k->kind == KS_VOL ? proj.set.master_vol : (k->kind == KS_FX || k->kind == KS_MFX) ? proj.set.fxv[slot_fx(k)][k->par & 1] : k->kind == KS_MACRO ? proj.set.mval[slot] : 0;
+}
+static void knob_text(int slot, char *b)             /* the value, in its own unit */
+{
+    const kslot_t *k = &proj.set.knob[slot];
+    if (k->kind == KS_FX || k->kind == KS_MFX)
+        mfx_format(slot_fx(k), k->par, knob_value(slot), b);
+    else if (k->kind == KS_NONE)
+        put_s(b, "-");
+    else
+        put_s(put_i(b, knob_value(slot) * 100 / 127), "%");
+}
+
+static void macro_apply(int slot)
+{
+    int i, v = proj.set.mval[slot];
+    for (i = 0; i < NMACRO; i++) {
+        const mtarget_t *m = &proj.set.macro[slot][i];
+        int val = m->inv ? 127 - v : v;
+        if (!m->on || m->trk >= NTRK)
+            continue;
+        if (m->par == PIX_LEVEL)
+            proj.set.level[m->trk] = (uint8_t)val;
+        else {
+            int e = proj.clip[m->trk][dk_clip[m->trk]].eng;
+            if (m->par < eng_nparams(e)) {
+                int mx = eng_param(e, m->par)->max;
+                dk_set(m->trk, m->par, val * mx / 127);
+            }
+        }
+    }
+}
+
+/* set a knob's value (0..127), and say it */
+static void knob_set(int slot, int v)
+{
+    kslot_t *k = &proj.set.knob[slot];
+    char b[24], *q;
+    v = v < 0 ? 0 : v > 127 ? 127 : v;
+    if (k->kind == KS_VOL)
+        proj.set.master_vol = (uint8_t)v;
+    else if (k->kind == KS_FX || k->kind == KS_MFX)
+        proj.set.fxv[slot_fx(k)][k->par & 1] = (uint8_t)v;
+    else if (k->kind == KS_MACRO) {
+        proj.set.mval[slot] = (uint8_t)v;
+        macro_apply(slot);
+    } else
+        return;
+    assign_text(slot, b);
+    q = b + (int)tw_len(b);
+    *q++ = ' ';
+    knob_text(slot, q);
+    say(b, 0);
+}
+
+static void knob_turn(int slot, int d)
+{
+    if (proj.set.knob[slot].kind != KS_NONE && !(slot == 0 && proj.set.knob[0].kind == KS_VOL))
+        knob_set(slot, knob_value(slot) + d * 2);
+}
+
+/* MASTER is a pot: absolute. As the volume the engine reads it itself; as anything else its position is the
+ * value, but only once it has been moved (so a new assignment, or power on, does not make the value jump) */
+static void master_pot(void)
+{
+    int pos = (int)(fm_sqrtf((float)plat_master() * 256.0f) * (1.0f / 8.0f));
+    pos = pos > 127 ? 127 : pos;
+    if (ui.pot_ref < 0 || proj.set.knob[0].kind == KS_VOL) {
+        ui.pot_ref = (int16_t)pos;
+        ui.pot_armed = 0;
+        return;
+    }
+    if (!ui.pot_armed && (pos - ui.pot_ref > 2 || ui.pot_ref - pos > 2))
+        ui.pot_armed = 1;
+    if (ui.pot_armed && pos != ui.pot_ref) {
+        ui.pot_ref = (int16_t)pos;
+        knob_set(0, pos);
     }
 }
 
 static void write_step(int t, int s, int note, int vel)
 {
     clip_t *c = &proj.clip[t][dk_clip[t]];
+    if (!step_on(c, s)) {                             /* a fresh step: plain defaults, not what was left in it */
+        c->st[s].prob = 100;
+        c->st[s].len = 3;
+        c->st[s].slide = 0;
+    }
     c->on[s >> 5] |= 1u << (s & 31);
     c->st[s].note = (uint8_t)note;
     c->st[s].vel = (uint8_t)vel;
+}
+
+/* REC: a synth note lasts as long as the key was held */
+static void rec_release(int k)
+{
+    clip_t *c;
+    if (!ui.rec_step[k])
+        return;
+    c = &proj.clip[ui.held_trk[k]][dk_clip[ui.held_trk[k]]];
+    if (eng_info(c->eng)->kind == EK_SYNTH) {
+        uint32_t step_ms = 150000u / (proj.set.bpm_x10 ? proj.set.bpm_x10 : 1200u), q;
+        q = (plat_ms() - ui.rec_t0[k]) * 4u / step_ms;
+        c->st[ui.rec_step[k] - 1].len = (uint8_t)(q < 1 ? 1 : q > 32 ? 32 : q);
+    }
+    ui.rec_step[k] = 0;
 }
 
 static void key_note(int k, int down)
@@ -180,15 +442,32 @@ static void key_note(int k, int down)
         note = 0;
     if (note > 127)
         note = 127;
+    if (down && ui.view == V_ARP && proj.set.arp_mode[ui.trk] == ARP_TRSP) {     /* TRSP: the key is a transposition from middle C, held until the next */
+        dk_transpose(ui.trk, note - 60);
+        if (!dk_playing) {                                                      /* stopped: hear it on the track */
+            ui.held_note[k] = (uint8_t)(note + 1);
+            ui.held_trk[k] = ui.trk;
+            dk_note(ui.trk, note, 100);
+        }
+        return;
+    }
     if (down) {
+        int fwd = 0;
         ui.held_note[k] = (uint8_t)(note + 1);
         ui.held_trk[k] = ui.trk;
-        dk_note(ui.trk, note, 100);
-        if (ui.view == V_REC && dk_playing) {
-            clip_t *c = cur_clip();
-            int p = dk_pos[ui.trk] % LEN_OF(c);
+        ui.rec_step[k] = 0;
+        if (ui.view == V_REC && dk_playing) {         /* quantised to the nearest step: the first half of a step rounds back,
+                                                       * the second half forward (and that note sounds when its step comes) */
+            int len = LEN_OF(cur_clip()), p = dk_pos[ui.trk] % len;
+            fwd = dk_tphase[ui.trk] >= 128;
+            if (fwd)
+                p = dk_next[ui.trk] % len;                 /* the step the clip plays next, in its own direction */
             write_step(ui.trk, p, note, 100);
+            ui.rec_step[k] = (uint8_t)(p + 1);
+            ui.rec_t0[k] = plat_ms();
         }
+        if (!fwd)
+            dk_note(ui.trk, note, 100);
     } else if (ui.held_note[k]) {
         dk_note(ui.held_trk[k], ui.held_note[k] - 1, 0);
         ui.held_note[k] = 0;
@@ -201,6 +480,26 @@ static void key_down(int k)
     uint32_t now = plat_ms();
     if (ui.view == V_ARP || ui.view == V_REC) {
         key_note(k, 1);
+        return;
+    }
+    if (b >= 0 && ui.view == V_KNOBS) {                 /* the tracks an effect is limited to / a macro target's track */
+        kslot_t *kk = &proj.set.knob[ui.ks];
+        if ((kk->kind == KS_FX || kk->kind == KS_MFX) && FX_HAS_MASK(slot_fx(kk))) {
+            uint16_t *mk = &proj.set.fxmask[slot_fx(kk)];
+            *mk = b == 10 ? 0 : (uint16_t)(*mk ^ (1u << b));            /* the MUTE key: back to the whole mix */
+            if (*mk == 0x3FFu)
+                *mk = 0;
+        } else if (kk->kind == KS_MACRO) {
+            mtarget_t *m = &proj.set.macro[ui.ks][ui.kt];
+            if (b == 10 || (m->on && m->trk == b))
+                m->on = 0;
+            else {
+                m->trk = (uint8_t)b;
+                m->on = 1;
+                if (m->par != PIX_LEVEL && m->par >= eng_nparams(proj.clip[b][dk_clip[b]].eng))
+                    m->par = PIX_LEVEL;
+            }
+        }
         return;
     }
     if (b >= 0) {
@@ -250,8 +549,7 @@ static void key_down(int k)
         break;
     case V_PARAM:
     case V_GLO:
-    case V_SCATTER:
-        if (ui.view == V_SCATTER || dk_playing) {        /* playing: the second row is the scatter FX, not notes */
+        if (dk_playing) {                                /* playing: the second row is the scatter FX, not notes */
             ui.held_scat[k] = (uint8_t)(w + 1);
             ui.held_trk[k] = ui.trk;
             dk_scatter(ui.trk, w, 1);
@@ -270,6 +568,7 @@ static void key_up(int k)
 {
     int w = WHITE_OF[k];
     if (ui.held_note[k]) {
+        rec_release(k);
         dk_note(ui.held_trk[k], ui.held_note[k] - 1, 0);
         ui.held_note[k] = 0;
     }
@@ -311,6 +610,8 @@ static void button_down(int b)
         break;
     case B_SEQ:
         ui.view = V_SEQ;
+        ui.seq_hold = 1;                                      /* kept down: the config page opens */
+        ui.seq_t0 = plat_ms();
         break;
     case B_FX: case B_ENV: case B_LFO: case B_EDIT:
         for (g = 0; g < NPG; g++)
@@ -321,7 +622,7 @@ static void button_down(int b)
             break;
         }
         if (ui.view == V_PARAM && ui.grp == g)
-            ui.page[g] = (uint8_t)((ui.page[g] + 1) % eng_pages(cur_clip()->eng, g));
+            ui.page[g] = (uint8_t)((ui.page[g] + 1) % npages(g));
         ui.view = V_PARAM;
         ui.grp = (uint8_t)g;
         break;
@@ -332,7 +633,7 @@ static void button_down(int b)
         ui.view = ui.view == V_REC ? V_SEQ : V_REC;
         break;
     case B_HOME:
-        ui.view = ui.view == V_HOME ? V_SCATTER : V_HOME;
+        ui.view = V_HOME;
         break;
     case B_GLO:
         ui.view = V_GLO;
@@ -341,14 +642,21 @@ static void button_down(int b)
         ui.save_pending = 1;                            /* on release: save what changed (or SAVE + a clip key: that clip) */
         break;
     case B_SEL:
-        say("SEL: SOON", 0);
+        if (ui.view == V_GLO && ui.glo == 3) {            /* GLO > KNOBS: open the assignment page */
+            ui.view = V_KNOBS;
+        } else if (ui.view == V_KNOBS && proj.set.knob[ui.ks].kind == KS_MACRO) {
+            mtarget_t *m = &proj.set.macro[ui.ks][ui.kt];
+            m->inv = (uint8_t)!m->inv;                      /* SEL: turn the target upside down */
+            say(m->inv ? "TARGET INVERTED" : "TARGET NORMAL", 0);
+        } else
+            ui.view = ui.view == V_COMMON ? V_SEQ : V_COMMON;        /* SEL: what every engine has: engine, volume, the two sends */
         break;
     case B_OCTDN: case B_OCTUP: {
         int d = b == B_OCTUP ? 1 : -1;
         if (ui.view == V_ARP || ui.view == V_REC) {
             ui.oct = (int8_t)(ui.oct + d < -2 ? -2 : ui.oct + d > 2 ? 2 : ui.oct + d);
         } else if (ui.view == V_PARAM) {
-            int n = eng_pages(cur_clip()->eng, ui.grp);
+            int n = npages(ui.grp);
             ui.page[ui.grp] = (uint8_t)((ui.page[ui.grp] + n + d) % n);
         } else {
             int n = nsteps_page();
@@ -372,6 +680,14 @@ static void input(void)
     for (i = 0; i < NB; i++)
         if ((bd >> i) & 1u)
             button_down(i);
+    if (ui.seq_hold) {                                      /* SEQ kept down for a moment: its config page, until it is let go */
+        if (!((b >> B_SEQ) & 1u))
+            ui.seq_hold = ui.cfg = 0;
+        else if (!ui.cfg && plat_ms() - ui.seq_t0 > 400u && ui.view == V_SEQ) {
+            ui.cfg = 1;
+            ui.edit = -1;
+        }
+    }
     for (i = 0; i < NKEYS; i++)
         if ((kd >> i) & 1u)
             key_down(i);
@@ -389,6 +705,10 @@ static void input(void)
         int d = plat_enc(EN_K1 + i);
         if (!d)
             continue;
+        if (ui.cfg) {
+            seqcfg_turn(i, d);
+            continue;
+        }
         if (ui.view == V_GLO) {
             if (i == 0)
                 ui.glo = (uint8_t)((ui.glo + NGLO + (d > 0 ? 1 : -1)) % NGLO);
@@ -401,16 +721,62 @@ static void input(void)
                     int e = (c->eng + eng_count() + d) % eng_count();
                     dk_engine(ui.trk, e);
                     fix_group();
-                } else if (ui.glo == 2) {
-                    int v = proj.set.level[ui.trk] + d * 2;
-                    proj.set.level[ui.trk] = (uint8_t)(v < 0 ? 0 : v > 127 ? 127 : v);
+                } else if (ui.glo == 2) {                       /* the volume as a number (the MASTER knob may be it already) */
+                    int v = proj.set.master_vol + d * 2;
+                    proj.set.master_vol = (uint8_t)(v < 0 ? 0 : v > 127 ? 127 : v);
+                } else if (ui.glo == 4) {                       /* which effect the SELECT knob runs */
+                    int v = proj.set.selfx + (d > 0 ? 1 : -1);
+                    proj.set.selfx = (uint8_t)(v < 0 ? 0 : v >= NSELFX ? NSELFX - 1 : v);
+                } else if (ui.glo >= GLO_COMP0 && ui.glo < GLO_COMP0 + 6) {      /* the master compressor */
+                    int j = ui.glo - GLO_COMP0, v = proj.set.comp[j] + (j == 1 ? (d > 0 ? 1 : -1) : d * 2);
+                    proj.set.comp[j] = (uint8_t)(v < 0 ? 0 : v > (j == 1 ? 9 : 127) ? (j == 1 ? 9 : 127) : v);
                 }
+            }
+        } else if (ui.view == V_COMMON) {
+            int t = ui.trk, v;
+            if (i == 0) {                                  /* the engine of the clip on this track */
+                int e = (cur_clip()->eng + eng_count() + (d > 0 ? 1 : -1)) % eng_count();
+                dk_engine(t, e);
+                fix_group();
+            } else if (i == 1) {
+                v = proj.set.level[t] + d * 2;
+                proj.set.level[t] = (uint8_t)(v < 0 ? 0 : v > 127 ? 127 : v);
+            } else {
+                uint8_t *sd = &proj.set.send[i - 2][t];
+                v = *sd + d * 2;
+                *sd = (uint8_t)(v < 0 ? 0 : v > 127 ? 127 : v);
+            }
+            ui.touched = (int8_t)i;
+            ui.touch_until = plat_ms() + 900u;
+        } else if (ui.view == V_KNOBS) {
+            kslot_t *k = &proj.set.knob[ui.ks];
+            mtarget_t *m = &proj.set.macro[ui.ks][ui.kt];
+            if (i == 0)
+                ui.ks = (uint8_t)((ui.ks + NKNOB + (d > 0 ? 1 : -1)) % NKNOB);
+            else if (i == 1) {                             /* what the knob does */
+                int a = (assign_of(k) + NASSIGN + (d > 0 ? 1 : -1)) % NASSIGN;
+                k->kind = ASSIGN[a].kind;
+                k->fx = ASSIGN[a].fx;
+                k->par = ASSIGN[a].par;
+                ui.pot_ref = -1;                           /* MASTER: re-arm, so the new assignment does not jump */
+            } else if (k->kind == KS_MACRO && i == 2)
+                ui.kt = (uint8_t)((ui.kt + NMACRO + (d > 0 ? 1 : -1)) % NMACRO);
+            else if (k->kind == KS_MACRO && i == 3) {      /* the target's pot: LEVEL, then the engine's, in order */
+                int e = proj.clip[m->trk][dk_clip[m->trk]].eng, n = eng_nparams(e) + 1;
+                int pos = (m->par == PIX_LEVEL ? 0 : m->par + 1) + d;
+                pos = pos < 0 ? 0 : pos >= n ? n - 1 : pos;
+                m->par = pos == 0 ? PIX_LEVEL : (uint8_t)(pos - 1);
+                m->on = 1;
             }
         } else if (ui.view == V_ARP) {
             int t = ui.trk, v;
+            if (i > 0 && !ARP_ON(t))
+                continue;                              /* KEYS: rate, gate and octaves belong to the arpeggiator */
             if (i == 0) {
                 v = proj.set.arp_mode[t] + d;
-                proj.set.arp_mode[t] = (uint8_t)(v < 0 ? 0 : v > 4 ? 4 : v);
+                if (proj.set.arp_mode[t] == ARP_TRSP)
+                    dk_transpose(t, 0);                         /* leaving TRSP: back to the clip's own pitch */
+                proj.set.arp_mode[t] = (uint8_t)(v < 0 ? 0 : v > ARP_TRSP ? ARP_TRSP : v);
             } else if (i == 1) {
                 v = proj.set.arp_rate[t] + d;
                 proj.set.arp_rate[t] = (uint8_t)(v < 0 ? 0 : v > 2 ? 2 : v);
@@ -425,16 +791,21 @@ static void input(void)
             ui.touch_until = plat_ms() + 900u;
         } else if (ui.view == V_SEQ && ui.edit >= 0)
             turn_step(i, d);
+        else if (ui.view == V_SEQ)
+            continue;                                      /* SEQ: the knobs are the step's; with no step picked they do nothing */
         else
             turn_param(i, d);
     }
-    m = (uint32_t)plat_enc(EN_SELECT);
+    m = (uint32_t)plat_enc(EN_SELECT);                 /* the master knobs: each does what it is assigned to */
     if ((int32_t)m)
-        turn_master(0, (int32_t)m);
+        knob_turn(1, (int32_t)m);
     m = (uint32_t)plat_enc(EN_PRESET);
     if ((int32_t)m)
-        turn_master(1, (int32_t)m);
-    (void)plat_enc(EN_ALGO);
+        knob_turn(2, (int32_t)m);
+    m = (uint32_t)plat_enc(EN_ALGO);
+    if ((int32_t)m)
+        knob_turn(3, (int32_t)m);
+    master_pot();
 }
 
 /* ---------------------------------------------------------------- drawing --- */
@@ -468,7 +839,7 @@ static void draw_header(void)
         put_s(b, GRP_N[ui.grp]);
         x = cv_text(x, vc(&FONT_B, 1, 17), &FONT_B, b, C_HI) + 6;
     } else if (ui.view == V_ARP)
-        x = cv_text(x, vc(&FONT_B, 1, 17), &FONT_B, proj.set.arp_mode[ui.trk] ? "ARP" : "KEYS", C_HI) + 6;
+        x = cv_text(x, vc(&FONT_B, 1, 17), &FONT_B, proj.set.arp_mode[ui.trk] == ARP_TRSP ? "TRSP" : proj.set.arp_mode[ui.trk] ? "ARP" : "KEYS", C_HI) + 6;
     else
         x = cv_text(x, vc(&FONT_B, 1, 17), &FONT_B, VIEW_N[ui.view], C_HI) + 6;
     {   /* the clip, in words; a clip waiting for the pattern's end shows where it goes */
@@ -523,6 +894,13 @@ static void draw_seq(void)
     cv_text(70, vc(&FONT_XS, 50, 12), &FONT_XS, "LEN", C_GRAY);
     put_i(b, len);
     cv_text(92, vc(&FONT_XS, 50, 12), &FONT_XS, b, C_WHITE);
+    if (dk_trans[ui.trk]) {                              /* a live transposition from the ARP page is easy to forget */
+        char *q2 = put_s(b, "TRSP ");
+        if (dk_trans[ui.trk] > 0)
+            *q2++ = '+';
+        put_i(q2, dk_trans[ui.trk]);
+        text_r(238, vc(&FONT_XS, 50, 12), &FONT_XS, b, C_AMB);
+    }
     if (ui.edit >= 0) {
         put_note(b, c->st[ui.edit].note);
         cv_text(130, vc(&FONT_XS, 50, 12), &FONT_XS, "STEP", C_GRAY);
@@ -560,6 +938,25 @@ static void draw_param(void)
     char v[8];
     uint16_t col = tcol(ui.trk);
     text_c(120, vc(&FONT_L, 2, 40), &FONT_B, eng_info(c->eng)->name, col);
+    if (ui.grp == PG_LFO) {                             /* the clip's LFO: six controls */
+        int k;
+        char lv[12];
+        for (k = 0; k < NLFO; k++) {
+            int on = k / 4 == ui.page[ui.grp];
+            lfo_text(c, k, lv);
+            cv_text(10 + (k & 1 ? 120 : 0), 44 + (k >> 1) * 15, &FONT_S, LFO_L[k], on ? C_WHITE : C_GRAY);
+            text_r(110 + (k & 1 ? 120 : 0), 44 + (k >> 1) * 15, &FONT_S, lv, on ? C_HI : C_GRAY);
+        }
+        return;
+    }
+    if (ui.grp == PG_EDIT) {                            /* the track's level heads the EDIT list */
+        char lv[8];
+        int k = ui.page[ui.grp] == 0;
+        put_i(lv, proj.set.level[ui.trk]);
+        cv_text(10, 44, &FONT_S, "Level", k ? C_WHITE : C_GRAY);
+        text_r(110, 44, &FONT_S, lv, k ? C_HI : C_GRAY);
+        row = 1;
+    }
     for (i = 0; i < n; i++) {
         int g = eng_group(c->eng, i), k;
         const x0x_param_t *p;
@@ -598,25 +995,124 @@ static void draw_home(void)
     }
 }
 
-/* the sixteen scatter keys: eight on the track, eight on the mix; big = the SCATTER page, small = under the parameters */
-static void draw_scatter(int big)
+/* the sixteen scatter keys under the parameters: eight on the track, eight on the mix (live while playing) */
+static void draw_scatter(void)
 {
     int i;
     for (i = 0; i < 16; i++) {
         int row = i >> 3, col = i & 7, on = i < 8 ? dk_scat[ui.trk] == i + 1 : dk_scat_g == i - 7;
         uint16_t c = i < 8 ? tcol(ui.trk) : C_AMB;
-        int x = col * 30, y = big ? 22 + row * 56 : 102 + row * 18, w = 29, h = big ? 44 : 16;
-        box(x, y, w, h, on ? c : (dk_playing || big ? RGB(40, 40, 48) : C_LINE));
-        text_c(x + w / 2, vc(big ? &FONT_S : &FONT_XS, y, h), big ? &FONT_S : &FONT_XS, sc_name(i),
-               on ? C_BLACK : (dk_playing || big ? C_WHITE : C_GRAY));
+        int x = col * 30, y = 102 + row * 18, w = 29, h = 16;
+        box(x, y, w, h, on ? c : (dk_playing ? RGB(40, 40, 48) : C_LINE));
+        text_c(x + w / 2, vc(&FONT_XS, y, h), &FONT_XS, sc_name(i), on ? C_BLACK : (dk_playing ? C_WHITE : C_GRAY));
     }
-    if (big) {
-        char b[8];
-        put_s(b, "TRACK ");
-        put_i(b + 6, ui.trk + 1);
-        cv_text(2, vc(&FONT_XS, 4, 14), &FONT_XS, b, tcol(ui.trk));
-        cv_text(2, vc(&FONT_XS, 66, 14), &FONT_XS, "ALL TRACKS", C_AMB);
+}
+
+static void mask_text(uint16_t mk, char *b)
+{
+    int t;
+    char *q = b;
+    if (!mk) {
+        put_s(b, "ALL TRACKS");
+        return;
     }
+    for (t = 0; t < NTRK; t++)
+        if ((mk >> t) & 1u) {
+            if (q != b)
+                *q++ = ' ';
+            *q++ = 'T';
+            q = put_i(q, t + 1);
+        }
+}
+static void macro_text(const mtarget_t *m, char *b)
+{
+    char *q;
+    if (!m->on) {
+        put_s(b, "-");
+        return;
+    }
+    q = put_s(b, "T");
+    q = put_i(q, m->trk + 1);
+    *q++ = ' ';
+    if (m->par == PIX_LEVEL)
+        q = put_s(q, "Level");
+    else {
+        int e = proj.clip[m->trk][dk_clip[m->trk]].eng;
+        q = put_s(q, m->par < eng_nparams(e) ? eng_param(e, m->par)->name : "?");
+    }
+    if (m->inv)
+        put_s(q, " INV");
+}
+
+/* the COMMON page: every track's volume and its two sends (the selected one lit), under a legend */
+static void draw_common(void)
+{
+    int t;
+    char b[4];
+    static const uint16_t CS[2] = {RGB(255, 184, 70), RGB(100, 200, 255)};
+    for (t = 0; t < NTRK; t++) {
+        int x = t * 24 + 1, sel = t == ui.trk, h;
+        uint16_t tc = tcol(t);
+        if (sel)
+            box(x - 1, 16, 24, 118, RGB(30, 30, 38));
+        h = proj.set.level[t] * 88 / 127;
+        cv_rect(x + 2, 108 - h, 6, h, dk_muted[t] ? C_DIM : tc);
+        h = proj.set.send[0][t] * 88 / 127;
+        cv_rect(x + 9, 108 - h, 5, h, sel ? CS[0] : dim(CS[0], 8));
+        h = proj.set.send[1][t] * 88 / 127;
+        cv_rect(x + 15, 108 - h, 5, h, sel ? CS[1] : dim(CS[1], 8));
+        put_i(b, t + 1);
+        text_c(x + 10, vc(&FONT_B, 112, 14), &FONT_B, b, sel ? C_WHITE : C_GRAY);
+    }
+    cv_rect(2, 6, 6, 4, C_WHITE);
+    cv_text(10, vc(&FONT_XS, 2, 12), &FONT_XS, "VOLUME", C_GRAY);
+    cv_rect(68, 6, 6, 4, CS[0]);
+    cv_text(76, vc(&FONT_XS, 2, 12), &FONT_XS, "FX1 DELAY", C_GRAY);
+    cv_rect(148, 6, 6, 4, CS[1]);
+    cv_text(156, vc(&FONT_XS, 2, 12), &FONT_XS, "FX2 REVERB", C_GRAY);
+}
+
+static void draw_knobs_page(void)
+{
+    int i;
+    char b[32];
+    const kslot_t *k = &proj.set.knob[ui.ks];
+    for (i = 0; i < NKNOB; i++) {
+        int y = 3 + i * 21, on = ui.ks == i;
+        char v[12];
+        if (on)
+            box(0, y - 1, 240, 20, RGB(40, 40, 48));
+        cv_text(6, vc(&FONT_S, y, 18), &FONT_S, KNOB_N[i], on ? C_WHITE : C_GRAY);
+        assign_text(i, b);
+        cv_text(84, vc(&FONT_B, y, 18), &FONT_B, b, on ? C_HI : C_WHITE);
+        knob_text(i, v);
+        text_r(234, vc(&FONT_S, y, 18), &FONT_S, v, on ? C_WHITE : C_GRAY);
+    }
+    cv_rect(0, 90, 240, 1, C_LINE);
+    if (k->kind == KS_FX || k->kind == KS_MFX) {
+        int fx = slot_fx(k);
+        if (fx == FX_DELAY || fx == FX_REVERB)
+            put_s(b, "THE RETURN");
+        else if (!FX_HAS_MASK(fx))
+            put_s(b, "THE WHOLE MIX");
+        else
+            mask_text(proj.set.fxmask[fx], b);
+        cv_text(6, vc(&FONT_XS, 94, 14), &FONT_XS, fx == FX_DELAY || fx == FX_REVERB ? "FED BY EACH TRACK'S SEND (SEL)" : k->kind == KS_MFX ? (FX_HAS_MASK(fx) ? "THE MASTER FX (TYPE IN GLO): TRACKS (BLACK KEYS)" : "THE MASTER FX (TYPE IN GLO)") : !FX_HAS_MASK(fx) ? "ON" : "TRACKS (BLACK KEYS)", C_GRAY);
+        cv_text(6, vc(&FONT_B, 112, 18), &FONT_B, b, C_AMB);
+    } else if (k->kind == KS_MACRO) {
+        for (i = 0; i < NMACRO; i++) {
+            int y = 93 + i * 11;
+            if (ui.kt == i)
+                box(0, y, 240, 11, RGB(40, 40, 48));
+            put_i(b, i + 1);
+            cv_text(6, vc(&FONT_XS, y, 11), &FONT_XS, b, C_GRAY);
+            macro_text(&proj.set.macro[ui.ks][i], b);
+            cv_text(24, vc(&FONT_XS, y, 11), &FONT_XS, b, proj.set.macro[ui.ks][i].on ? C_WHITE : C_GRAY);
+        }
+    } else if (k->kind == KS_VOL)
+        cv_text(6, vc(&FONT_B, 100, 18), &FONT_B, "THE MASTER VOLUME", C_AMB);
+    else
+        cv_text(6, vc(&FONT_B, 100, 18), &FONT_B, "NOTHING ASSIGNED", C_GRAY);
 }
 
 static void draw_text_screen(const char *a, const char *b2, uint16_t c)
@@ -625,15 +1121,42 @@ static void draw_text_screen(const char *a, const char *b2, uint16_t c)
     text_c(120, vc(&FONT_S, 70, 20), &FONT_S, b2, C_GRAY);
 }
 
+/* a compressor pot in its unit (the master's maps: THRESH -48..0 dB, ATTACK 0.1..100 ms, RELEASE 10..1500 ms, MAKEUP 0..24 dB) */
+static void comp_text(int j, char *b)
+{
+    static const char *const RATIO[10] = {"1:1", "1.5:1", "2:1", "3:1", "4:1", "6:1", "8:1", "12:1", "20:1", "INF"};
+    int p = proj.set.comp[j];
+    float ms;
+    char *q;
+    switch (j) {
+    case 0: put_s(put_i(b, -48 + p * 48 / 127), "dB"); break;
+    case 1: put_s(b, RATIO[p < 10 ? p : 9]); break;
+    case 2: case 3:
+        ms = j == 2 ? 0.1f * fm_powf(1000.0f, (float)p / 127.0f) : 10.0f * fm_powf(150.0f, (float)p / 127.0f);
+        if (ms < 10.0f)
+            q = put_i(put_s(put_i(b, (int)ms), "."), (int)(ms * 10.0f) % 10);
+        else
+            q = put_i(b, (int)(ms + 0.5f));
+        put_s(q, "ms");
+        break;
+    case 4: put_s(put_i(b, p * 24 / 127), "dB"); break;
+    default: put_s(put_i(b, p * 100 / 127), "%"); break;
+    }
+}
+
 static void draw_glo(void)
 {
-    int i;
+    int i, rows = 7;
     char v[24];
     const clip_t *c = cur_clip();
-    for (i = 0; i < NGLO; i++) {
-        int y = 6 + i * 22, on = ui.glo == i;
+    if (ui.glo < ui.gtop)
+        ui.gtop = ui.glo;
+    if (ui.glo >= ui.gtop + rows)
+        ui.gtop = (uint8_t)(ui.glo - rows + 1);
+    for (i = ui.gtop; i < ui.gtop + rows && i < NGLO; i++) {
+        int y = 3 + (i - ui.gtop) * 19, on = ui.glo == i;
         if (on)
-            box(0, y - 2, 240, 20, RGB(40, 40, 48));
+            box(0, y - 1, 236, 18, RGB(40, 40, 48));
         cv_text(10, vc(&FONT_B, y, 16), &FONT_B, GLO_N[i], on ? C_WHITE : C_GRAY);
         v[0] = 0;
         if (i == 0) {
@@ -643,14 +1166,20 @@ static void draw_glo(void)
         } else if (i == 1)
             put_s(v, eng_info(c->eng)->name);
         else if (i == 2)
-            put_i(v, proj.set.level[ui.trk]);
+            put_s(put_i(v, proj.set.master_vol * 100 / 127), proj.set.knob[0].kind == KS_VOL ? "% (MASTER KNOB)" : "%");
         else if (i == 3)
-            put_s(v, "KNOBS: SOON");
-        else if (i == 4) {
+            put_s(v, "SEL: OPEN");
+        else if (i == 4)
+            put_s(v, mfx_name(sel_fx()));
+        else if (i >= GLO_COMP0 && i < GLO_COMP0 + 6)
+            comp_text(i - GLO_COMP0, v);
+        else if (i == 11) {
             char *q = put_i(v, store_dirty());
-            put_s(q, store_dirty() == 1 ? " UNSAVED" : " UNSAVED");
-        }
-        else {
+            put_s(q, " UNSAVED");
+        } else if (i == 13) {
+            int bat = plat_battery();
+            put_s(v, bat == 4 ? "USB POWER" : bat < 0 ? "?" : bat == 3 ? "FULL" : bat == 2 ? "2/3" : bat == 1 ? "1/3" : "LOW");
+        } else {
             char *q = put_i(v, (int)dk_load_pct);
             q = put_s(q, "% PEAK ");
             q = put_i(q, (int)dk_load_peak);
@@ -658,6 +1187,47 @@ static void draw_glo(void)
         }
         text_r(230, vc(&FONT_B, y, 16), &FONT_B, v, on ? C_HI : C_GRAY);
     }
+    if (NGLO > rows) {                                  /* where the list is: a thin bar at the right edge */
+        int h = rows * 133 / NGLO, y0 = 2 + ui.gtop * (133 - h) / (NGLO - rows);
+        cv_rect(238, 2, 1, 133, C_LINE);
+        cv_rect(237, y0, 3, h, C_GRAY);
+    }
+}
+
+/* the keyboard as the FM-1 has it, small: sixteen white keys, eleven black ones above (after which white key each sits),
+ * the keys you hold filled in the track's colour */
+static void draw_keyboard(int x0, int y0, int latched, int root)
+{
+    static const uint8_t AFTER[11] = {0, 1, 2, 4, 5, 7, 8, 9, 11, 12, 14};
+    int i;
+    uint16_t tc = tcol(ui.trk);
+    for (i = 0; i < 16; i++) {
+        int held = ui.held_note[WHITE_K[i]] != 0 || WHITE_K[i] == latched;
+        box(x0 + i * 15, y0, 14, 56, held ? tc : RGB(215, 215, 220));
+        if (WHITE_K[i] == root)
+            dot(x0 + i * 15 + 7, y0 + 48, 3, held ? C_BLACK : RGB(120, 120, 130));
+    }
+    for (i = 0; i < 11; i++) {
+        int held = ui.held_note[BLACK_K[i]] != 0 || BLACK_K[i] == latched;
+        box(x0 + (AFTER[i] + 1) * 15 - 5, y0 - 2, 9, 32, held ? tc : RGB(40, 42, 50));
+        if (!held)
+            frame(x0 + (AFTER[i] + 1) * 15 - 5, y0 - 2, 9, 32, RGB(90, 92, 100));
+    }
+}
+
+static void draw_seqcfg(void)
+{
+    const clip_t *c = cur_clip();
+    int i;
+    char v[16];
+    for (i = 0; i < 4; i++) {
+        int y = 4 + i * 28;
+        seqcfg_text(c, i, v);
+        box(0, y, 240, 26, ui.touched == i && (int32_t)(ui.touch_until - plat_ms()) > 0 ? RGB(40, 40, 48) : RGB(24, 24, 30));
+        cv_text(10, vc(&FONT_S, y, 26), &FONT_S, SEQ_L[i], C_GRAY);
+        text_r(230, vc(&FONT_M, y, 26), &FONT_M, v, C_HI);
+    }
+    text_c(120, vc(&FONT_XS, 120, 14), &FONT_XS, "LET GO OF SEQ TO GO BACK", C_GRAY);
 }
 
 static void draw_main(void)
@@ -665,23 +1235,47 @@ static void draw_main(void)
     char b[16];
     cv_begin(240, 2 * BAND_H, C_BLACK);
     switch (ui.view) {
-    case V_SEQ: draw_seq(); break;
-    case V_PARAM: draw_param(); draw_scatter(0); break;
+    case V_SEQ: if (ui.cfg) draw_seqcfg(); else draw_seq(); break;
+    case V_PARAM: draw_param(); draw_scatter(); break;
     case V_HOME: draw_home(); break;
-    case V_SCATTER: draw_scatter(1); break;
     case V_GLO: draw_glo(); break;
-    default:
-        put_s(b, ui.view == V_REC ? "REC" : proj.set.arp_mode[ui.trk] ? "ARP" : "KEYS");
-        if (ui.view == V_ARP && proj.set.arp_mode[ui.trk] && !dk_playing)
-            draw_text_screen(b, "THE ARPEGGIATOR RUNS WITH PLAY", C_HI);
-        else
-            draw_text_screen(b, "OCT -/+  KEYBOARD PLAYS THE TRACK", ui.view == V_REC ? RGB(255, 90, 80) : C_HI);
-        put_s(b, "OCT ");
-        put_i(b + 4, ui.oct);
-        text_c(120, vc(&FONT_M, 100, 30), &FONT_M, b, C_WHITE);
+    case V_KNOBS: draw_knobs_page(); break;
+    case V_COMMON: draw_common(); break;
+    default: {                                          /* ARP / KEYS / REC: the keyboard plays the track */
+        int lo = 53 + 12 * ui.oct, steady = ui.view == V_ARP && ARP_ON(ui.trk) && !dk_playing;
+        char *q;
+        int trsp = ui.view == V_ARP && proj.set.arp_mode[ui.trk] == ARP_TRSP;
+        put_s(b, ui.view == V_REC ? "REC" : trsp ? "TRANSPOSE" : proj.set.arp_mode[ui.trk] ? "ARP" : "KEYS");
+        text_c(120, vc(&FONT_B, 4, 20), &FONT_B, b, ui.view == V_REC ? RGB(255, 90, 80) : C_HI);
+        draw_keyboard(0, 34, trsp ? 60 + dk_trans[ui.trk] - lo : -1, trsp ? 60 - lo : -1);
+        if (trsp) {                                                      /* the live transposition, in semitones */
+            q = put_s(b, "TRSP ");
+            if (dk_trans[ui.trk] > 0)
+                *q++ = '+';
+            put_i(q, dk_trans[ui.trk]);
+            text_c(120, vc(&FONT_M, 98, 26), &FONT_M, b, dk_trans[ui.trk] ? C_AMB : C_GRAY);
+        } else {
+            q = put_s(b, "OCT ");
+            if (ui.oct > 0)
+                *q++ = '+';
+            put_i(q, ui.oct);
+            text_c(120, vc(&FONT_M, 98, 26), &FONT_M, b, ui.oct ? C_WHITE : C_GRAY);
+        }
+        if (trsp)
+            text_c(120, vc(&FONT_XS, 124, 12), &FONT_XS, "MIDDLE C (THE DOT) = NO TRANSPOSITION", C_GRAY);
+        else if (steady)
+            text_c(120, vc(&FONT_XS, 124, 12), &FONT_XS, "THE ARPEGGIATOR RUNS WITH PLAY", C_AMB);
+        else {
+            char r[16], *p2 = put_note(r, lo);
+            p2 = put_s(p2, " - ");
+            put_note(p2, lo + 26);
+            text_c(120, vc(&FONT_XS, 124, 12), &FONT_XS, r, C_GRAY);
+        }
         break;
     }
+    }
     cv_commit_rect(1, 0, MAIN_Y);
+
 }
 
 static void draw_knobs(void)
@@ -689,13 +1283,23 @@ static void draw_knobs(void)
     int i;
     const clip_t *c = cur_clip();
     const tribe_eng_t *e = eng_info(c->eng);
-    int editing = ui.view == V_SEQ && ui.edit >= 0, arpv = ui.view == V_ARP;
+    int editing = ui.view == V_SEQ && ui.edit >= 0, arpv = ui.view == V_ARP, knv = ui.view == V_KNOBS, cov = ui.view == V_COMMON, scfg = ui.cfg;
     cv_begin(240, KNOB_H, C_BLACK);
     {   /* where you are: the tag and the page dots at the right of the rule */
-        const char *tag = arpv ? "ARP" : editing ? "STEP" : GRP_N[ui.grp];
-        int np = editing || arpv ? 1 : eng_pages(c->eng, ui.grp), dots = np > 1;
+        const char *tag = scfg ? "SEQUENCER" : ui.view == V_SEQ && !editing ? "TAP A STEP" : cov ? "COMMON" : knv ? "KNOBS" : arpv ? "ARP" : editing ? "STEP" : ui.view == V_HOME ? "MIX" : GRP_N[ui.grp];
+        int np = editing || arpv || knv || cov || ui.view == V_SEQ || ui.view == V_HOME ? 1 : npages(ui.grp), dots = np > 1;
         int32_t xd = 237 - (dots ? np * 5 : 0), xt = xd - (dots ? 5 : 0) - tw(&FONT_XS, tag);
-        cv_rect(0, 5, xt - 5, 1, C_LINE);
+        {   /* the battery, at the left end of the rule: three bars; amber at one, red and blinking when it is empty; USB: plugged in */
+            int bat = plat_battery(), bars = bat == 4 ? 3 : bat < 0 ? 0 : bat;
+            uint16_t bc = bat == 4 ? C_HI : bat < 0 ? C_GRAY : bars >= 2 ? C_HI : bars == 1 ? C_AMB : ((ui.frame >> 4) & 1u) ? RGB(255, 90, 80) : C_GRAY;
+            cv_rect(2, 1, 18, 1, C_GRAY); cv_rect(2, 9, 18, 1, C_GRAY); cv_rect(2, 1, 1, 9, C_GRAY); cv_rect(19, 1, 1, 9, C_GRAY);
+            cv_rect(20, 4, 2, 3, C_GRAY);
+            for (i = 0; i < bars; i++)
+                cv_rect(4 + i * 5, 3, 4, 5, bc);
+            if (bat == 4)
+                cv_text(26, vc(&FONT_XS, 0, 11), &FONT_XS, "USB", C_GRAY);
+            cv_rect(bat == 4 ? 50 : 28, 5, xt - 5 - (bat == 4 ? 50 : 28), 1, C_LINE);
+        }
         cv_text(xt, vc(&FONT_XS, 0, 11), &FONT_XS, tag, C_HI);
         for (i = 0; dots && i < np; i++)
             cv_rect(xd + i * 5, 4, 3, 3, i == ui.page[ui.grp] ? C_HI : C_LINE);
@@ -707,11 +1311,43 @@ static void draw_knobs(void)
         float u = 0.0f;
         int bip = 0;
         val[0] = 0;
-        if (arpv) {
+        if (scfg) {
+            lab = SEQ_L[i];
+            seqcfg_text(c, i, val);
+            u = seqcfg_u(c, i);
+        } else if (ui.view == V_SEQ && !editing) {                 /* the step's controls, waiting for a step */
+            static const char *const DW[4] = {"NOTE", "VEL", "PROB", ""}, *const SW[4] = {"NOTE", "VEL", "LEN", "SLIDE"};
+            lab = (e->kind == EK_SYNTH ? SW : DW)[i];
+            if (!lab[0])
+                continue;
+            put_s(val, "-");
+            u = 0.0f;
+        } else if (cov) {
+            static const char *const CN[4] = {"Engine", "Volume", "Send 1", "Send 2"};
+            int t = ui.trk;
+            lab = CN[i];
+            if (i == 0) { put_s(val, eng_info(c->eng)->name); u = (float)c->eng / (float)(eng_count() - 1); }
+            else if (i == 1) { put_s(put_i(val, proj.set.level[t] * 100 / 127), "%"); u = (float)proj.set.level[t] / 127.0f; }
+            else { put_s(put_i(val, proj.set.send[i - 2][t] * 100 / 127), "%"); u = (float)proj.set.send[i - 2][t] / 127.0f; }
+        } else if (knv) {
+            const kslot_t *ks = &proj.set.knob[ui.ks];
+            static const char *const KN[4] = {"SLOT", "DOES", "TARGET", "POT"};
+            lab = KN[i];
+            if (i == 0) { put_s(val, KNOB_N[ui.ks]); u = (float)ui.ks / 3.0f; }
+            else if (i == 1) { assign_text(ui.ks, val); u = (float)assign_of(ks) / (float)(NASSIGN - 1); }
+            else if (ks->kind != KS_MACRO) continue;
+            else if (i == 2) { put_i(val, ui.kt + 1); u = (float)ui.kt / 3.0f; }
+            else {
+                const mtarget_t *mt = &proj.set.macro[ui.ks][ui.kt];
+                int e = proj.clip[mt->trk][dk_clip[mt->trk]].eng;
+                put_s(val, !mt->on ? "-" : mt->par == PIX_LEVEL ? "Level" : mt->par < eng_nparams(e) ? eng_param(e, mt->par)->name : "?");
+                u = mt->par == PIX_LEVEL ? 0.0f : (float)(mt->par + 1) / 24.0f;
+            }
+        } else if (arpv) {
             static const char *const AN[4] = {"MODE", "RATE", "GATE", "OCT"};
             int t = ui.trk;
             lab = AN[i];
-            if (i == 0) { put_s(val, ARP_N[proj.set.arp_mode[t]]); u = (float)proj.set.arp_mode[t] / 4.0f; }
+            if (i == 0) { put_s(val, ARP_N[proj.set.arp_mode[t]]); u = (float)proj.set.arp_mode[t] / (float)ARP_TRSP; }
             else if (i == 1) { put_s(val, ARP_R[proj.set.arp_rate[t]]); u = (float)proj.set.arp_rate[t] / 2.0f; }
             else if (i == 2) { char *q = put_i(val, proj.set.arp_gate[t]); put_s(q, "%"); u = (float)proj.set.arp_gate[t] / 100.0f; }
             else { put_i(val, proj.set.arp_oct[t]); u = (float)proj.set.arp_oct[t] / 3.0f; }
@@ -731,17 +1367,36 @@ static void draw_knobs(void)
             int pi = param_ix(i);
             if (pi < 0)
                 continue;
+            if (pi >= PIX_LFO && pi < PIX_LFO + NLFO) {
+                lab = LFO_L[pi - PIX_LFO];
+                lfo_text(c, pi - PIX_LFO, val);
+                u = lfo_u(c, pi - PIX_LFO);
+                goto draw_one;
+            }
+            if (pi == PIX_LEVEL) {
+                lab = "Level";
+                put_i(val, proj.set.level[ui.trk]);
+                u = (float)proj.set.level[ui.trk] / 127.0f;
+                goto draw_one;
+            }
             lab = eng_param(c->eng, pi)->name;
             eng_format(c->eng, pi, c->par[pi], val);
             u = (float)c->par[pi] / (float)(eng_param(c->eng, pi)->max ? eng_param(c->eng, pi)->max : 1);
         }
+    draw_one:
+        {
+        int grey = (arpv && i > 0 && !ARP_ON(ui.trk)) || (ui.view == V_SEQ && !editing && !scfg);       /* KEYS: the three arpeggiator controls do nothing */
         if (i)
             cv_rect(i * 60, 14, 1, 60, C_LINE);
-        text_c(cx, vc(&FONT_XS, 13, 10), &FONT_XS, lab, touched ? C_WHITE : C_GRAY);
-        arc(cx, 42, 18, u, C_LINE, tcol(ui.trk), bip);
-        text_c(cx, vc(&FONT_B, 62, 14), &FONT_B, val, touched ? C_WHITE : C_HI);
+        text_c(cx, vc(&FONT_XS, 13, 10), &FONT_XS, lab, grey ? C_LINE : touched ? C_WHITE : C_GRAY);
+        arc(cx, 42, 18, u, C_LINE, grey ? C_DIM : tcol(ui.trk), bip);
+        {
+            const felucca_font_t *vf = tw(&FONT_B, val) > 58 ? &FONT_XS : &FONT_B;     /* a long name in the smaller face */
+            text_c(cx, vc(vf, 62, 14), vf, val, grey ? C_DIM : touched ? C_WHITE : C_HI);
+        }
+        }
     }
-    if (!editing && !arpv && !eng_nparams(c->eng))
+    if (!editing && !arpv && !knv && !cov && ui.view != V_HOME && ui.view != V_SEQ && !eng_nparams(c->eng) && ui.grp != PG_EDIT)
         text_c(120, vc(&FONT_S, 30, 20), &FONT_S, "NO ENGINE ON THIS CLIP", C_GRAY);
     cv_commit(2, 0, KNOB_Y);
 }
@@ -761,7 +1416,7 @@ static void leds(void)
     if (dk_playing)
         b |= 1u << B_PLAY;
     if (ui.view == V_SEQ) b |= 1u << B_SEQ;
-    if (ui.view == V_HOME || ui.view == V_SCATTER) b |= 1u << B_HOME;
+    if (ui.view == V_HOME) b |= 1u << B_HOME;
     if (ui.view == V_GLO) b |= 1u << B_GLO;
     if (ui.view == V_ARP) b |= 1u << B_ARP;
     if (ui.view == V_REC) b |= 1u << B_REC;
@@ -777,6 +1432,20 @@ static void leds(void)
                 k |= m;
             else if (!dk_muted[t] && clip_has(&proj.clip[t][dk_clip[t]]))
                 kd |= m;
+        }
+        if (ui.view == V_KNOBS) {
+            const kslot_t *kk = &proj.set.knob[ui.ks];
+            k = kd = 0;
+            for (t = 0; t < NTRK; t++) {
+                if ((kk->kind == KS_FX || kk->kind == KS_MFX) && FX_HAS_MASK(slot_fx(kk))) {
+                    uint16_t mk = proj.set.fxmask[slot_fx(kk)];
+                    if (!mk)
+                        kd |= 1u << BLACK_K[t];
+                    else if ((mk >> t) & 1u)
+                        k |= 1u << BLACK_K[t];
+                } else if (kk->kind == KS_MACRO && proj.set.macro[ui.ks][ui.kt].on && proj.set.macro[ui.ks][ui.kt].trk == t)
+                    k |= 1u << BLACK_K[t];
+            }
         }
         if (ui.kprev & (1u << BLACK_K[10]))
             k |= 1u << BLACK_K[10];
@@ -798,7 +1467,7 @@ static void leds(void)
                         kd |= m;
                 }
             }
-        } else if (ui.view == V_SCATTER || ((ui.view == V_PARAM || ui.view == V_GLO) && dk_playing)) {
+        } else if ((ui.view == V_PARAM || ui.view == V_GLO) && dk_playing) {
             for (i = 0; i < 16; i++) {
                 uint32_t m = 1u << WHITE_K[i];
                 if (i < 8 ? dk_scat[ui.trk] == i + 1 : dk_scat_g == i - 7)
@@ -816,6 +1485,14 @@ static void leds(void)
             }
         }
     }
+    if (ui.view == V_ARP || ui.view == V_REC) {          /* the octave of the keyboard: both dim = usable; the one you moved to is full */
+        bd |= (1u << B_OCTDN) | (1u << B_OCTUP);
+        if (ui.oct > 0)
+            b |= 1u << B_OCTUP;
+        else if (ui.oct < 0)
+            b |= 1u << B_OCTDN;
+    } else if ((ui.view == V_SEQ && nsteps_page() > 1) || (ui.view == V_PARAM && npages(ui.grp) > 1))
+        bd |= (1u << B_OCTDN) | (1u << B_OCTUP);          /* OCT- / OCT+ page through the steps or the parameters */
     if (store_dirty())
         bd |= 1u << B_SAVE;                               /* SAVE glows: something is not saved */
     plat_glow(0);
@@ -832,8 +1509,15 @@ void ui_init(void)
     ui.trk = 0;
     ui.edit = -1;
     ui.press = -1;
-    ui.mdjf = 64;
-    ui.mcomp = 0;
+    ui.pot_ref = -1;
+    {   /* a knob left on the old compressor assignment (it is always on now) goes back to the standard one */
+        int k;
+        for (k = 0; k < NKNOB; k++)
+            if (proj.set.knob[k].kind == KS_FX && proj.set.knob[k].fx == FX_COMP) {
+                proj.set.knob[k].fx = FX_DELAY;
+                proj.set.knob[k].par = 0;
+            }
+    }
     ui.grp = PG_EDIT;
     fix_group();
 }

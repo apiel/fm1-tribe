@@ -1,0 +1,27 @@
+# a track's level: first knob of the EDIT page, and KNOB 1 on the CLIPS page
+expect level 100
+tap EDIT
+expect view 1
+expect grp 3
+expect page 0
+turn K1 -5
+expect level 90
+shot level_edit.png
+tap HOME
+expect view 2
+turn K1 3
+expect level 96
+shot level_home.png
+# another track keeps its own level
+tapkey b2
+expect level 100
+turn K1 -10
+expect level 80
+tapkey b0
+expect level 96
+# a track whose engine has no pots still has its level (track 10 has no engine)
+tapkey b9
+tap EDIT
+expect grp 3
+turn K1 -5
+expect level 90

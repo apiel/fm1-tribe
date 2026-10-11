@@ -1,0 +1,34 @@
+# GLO: the master FX type (what SELECT runs) and the master compressor, set in the list; the list scrolls
+tap GLO
+expect view 3
+expectselfx 0
+turn K1 1
+turn K1 1
+turn K1 1
+turn K1 1
+turn K2 1
+expectselfx 1
+shot glo_masterfx.png
+# SELECT is now the crush amount
+turn SELECT 5
+expectfx 3 0 10
+expectfx 2 0 0
+# the compressor rows: THRESH (95), RATIO (2), ATTACK, RELEASE, MAKEUP, MIX
+turn K1 1
+turn K2 -10
+expectcomp 0 75
+turn K1 1
+turn K2 1
+expectcomp 1 3
+turn K1 1
+turn K2 5
+expectcomp 2 90
+turn K1 1
+turn K1 1
+turn K2 -3
+expectcomp 4 6
+shot glo_comp.png
+turn K1 1
+turn K1 1
+turn K1 1
+shot glo_end.png

@@ -10,6 +10,7 @@ void clip_set_engine(clip_t *c, int eng)
     memset(c->par, 0, sizeof c->par);
     for (i = 0; i < n; i++)
         c->par[i] = (uint8_t)eng_default(eng, i);
+    c->lfo[LFO_TARGET] = 0;                          /* the LFO's target is a pot of the old engine */
 }
 
 void clip_init(clip_t *c, int eng)
@@ -23,6 +24,9 @@ void clip_init(clip_t *c, int eng)
         c->st[s].len = 3;
     }
     clip_set_engine(c, eng);
+    c->lfo[LFO_RATE] = 80;
+    c->lfo[LFO_SYNC] = 1;
+    c->lfo[LFO_RETRIG] = 1;
 }
 
 static int find(const char *n)
@@ -49,9 +53,28 @@ void project_defaults(void)
     proj.set.magic = 0x54524942u;
     proj.set.bpm_x10 = 1250;
     proj.set.master_vol = 100;
+    proj.set.knob[0].kind = KS_VOL;                          /* MASTER: the volume */
+    proj.set.knob[1].kind = KS_MFX; proj.set.knob[1].par = 0;                                   /* SELECT: the master FX (its type is in GLO) */
+    proj.set.knob[2].kind = KS_FX; proj.set.knob[2].fx = FX_FILTER; proj.set.knob[2].par = 0;    /* PRESETS: the DJ filter */
+    proj.set.knob[3].kind = KS_FX; proj.set.knob[3].fx = FX_FILTER; proj.set.knob[3].par = 1;    /* ALGORITHM: its resonance */
+    proj.set.selfx = FX_DRIVE - FX_DRIVE;
+    proj.set.comp[0] = 95;                                   /* the compressor, a gentle bus glue: -12 dB, */
+    proj.set.comp[1] = 2;                                    /* 2:1, */
+    proj.set.comp[2] = 80;                                   /* 8 ms attack, */
+    proj.set.comp[3] = 60;                                   /* 110 ms release, */
+    proj.set.comp[4] = 12;                                   /* +2 dB makeup, */
+    proj.set.comp[5] = 127;                                  /* all wet */
+    proj.set.fxv[FX_FILTER][0] = 64;                         /* middle: off */
+    proj.set.fxv[FX_FILTER][1] = 40;
+    proj.set.fxv[FX_DRIVE][1] = 127;
+    proj.set.fxv[FX_CRUSH][1] = 127;
+    proj.set.fxv[FX_RING][1] = 64;
+    proj.set.fxv[FX_DECIM][1] = 127;
+    proj.set.fxv[FX_VINYL][1] = 64;
     for (t = 0; t < NTRK; t++) {
         proj.set.level[t] = 100;
         proj.set.arp_gate[t] = 80;
+        proj.set.send[0][t] = proj.set.send[1][t] = 127;    /* the sends start open: the effect's own MIX is the amount */
         proj.set.arp_oct[t] = 1;
         proj.set.cur[t] = 0;
         for (c = 0; c < NCLIP; c++)

@@ -1,0 +1,27 @@
+# the battery: an icon at the left of the knob strip's rule (on every page that has the strip), and a row in GLO
+shot battery_3.png
+battery 2
+wait 100
+shot battery_2.png
+battery 1
+wait 100
+shot battery_1.png
+battery 0
+wait 100
+shot battery_0.png
+battery 4
+wait 100
+shot battery_usb.png
+battery -1
+wait 100
+shot battery_unknown.png
+battery 3
+# HOME has no second page now: pressing it again stays on the clips
+tap HOME
+expect view 2
+tap HOME
+expect view 2
+# GLO lists it as the last row
+tap GLO
+turn K1 -1
+shot battery_glo.png
