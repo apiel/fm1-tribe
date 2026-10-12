@@ -215,3 +215,8 @@ slide as on/off; kick level trimmed 0.25 (zicBox's drive leaves +-3). Nothing is
 - Removed: the DJ filter's track mask (DJ TRACKS row), the MACRO assignment, OFF, and the KNOBS page that existed for them. The DJ filter always acts on the
   whole mix; a knob does one of VOLUME, DJ FILTER, DJ RESO, FX1 AMOUNT, FX2 AMOUNT, BPM. GLO has 23 rows. The SEL page is view 6 now.
 - The settings record shrank (no masks or macros): settings saved by an earlier build are ignored once.
+
+## Decisions (round 17): tekno splash
+- The start-up screen is a free-party flyer: acid yellow-green on black, hazard tape top and bottom, TRIBE big and solid in that one colour (3x the font, a pixel
+  heavier), "S O U N D   S Y S T E M" under it, then the ten track squares, which stay in their ten colours and light up one after another, "10 TRACKS  ANY ENGINE"
+  and the credit line. Replaces the multicolour TRIBE letters of round 12. (Tried and dropped: a sliced, glitched title and a spiral: unreadable / not wanted.)
