@@ -8,9 +8,9 @@
  *
  *  - Resonators are TDF-II with delta-form denominators (drum808.h). Measured
  *    against 8W8: storing a1 = -2 cos(w) / a0 as a plain float biquad does puts
- *    the default kick 2.3e-3 off and the low tom at full tribey 3.5e-2 off; the
+ *    the default kick 2.3e-3 off and the low tom at full decay 3.5e-2 off; the
  *    delta form is 1.3e-4 and 2.2e-4.
- *  - Tribey multipliers a = exp(-1/(tau sr)) are 1 + expm1(), or literals rounded
+ *  - Decay multipliers a = exp(-1/(tau sr)) are 1 + expm1(), or literals rounded
  *    once from double: fm_expf's 6e-7 is 0.5 % of (1 - a) for a 0.2 s tau.
  *  - Pitches use a correctly rounded exp2 (float-float, set time only), so a tuned
  *    voice lands on the float 8W8's powf() gives; fm_powf is 1e-5.
@@ -430,7 +430,7 @@ static void bd_reset(d8_bd_t *v)
     bp_set(&v->bt, v->f0, BD_Q);
 }
 
-static void bd_trigger(d8_bd_t *v, float hz, float tribey_k, float tone, float attack, float accent_v)
+static void bd_trigger(d8_bd_t *v, float hz, float decay_k, float tone, float attack, float accent_v)
 {
     float w, raw, k, vr, t_hz;
     v->f0 = hz > 20.0f ? (hz < 400.0f ? hz : 400.0f) : 20.0f;
@@ -439,7 +439,7 @@ static void bd_trigger(d8_bd_t *v, float hz, float tribey_k, float tone, float a
     raw = 1.0f + w * w * 1.125e-4f;
     v->forward = raw;
     v->tune_trim = 1.210321549e+01f / raw;
-    k = clampf(tribey_k, 0.0f, 1.0f);
+    k = clampf(decay_k, 0.0f, 1.0f);
     vr = 500.0e3f * (k * 0.999f + 0.001f);
     v->loop_g = vr / (47.0e3f + vr);
     v->atk_amt = clampf(attack, 0.0f, 1.0f);
@@ -495,7 +495,7 @@ D8_TICK float bd_tick(d8_bd_t *v)
 #define SD_Q2 1.066003582e+01f
 #define SD_G1 6.039411765e+02f
 #define SD_G2 2.282727273e+02f
-#define SD_TRIBEY_DEF 0.850393713f                 /* 108/127, as the float division */
+#define SD_DECAY_DEF 0.850393713f                 /* 108/127, as the float division */
 
 static void sd_reset(d8_sd_t *v)
 {
@@ -511,10 +511,10 @@ static void sd_reset(d8_sd_t *v)
     v->quiet = 0;
 }
 
-static void sd_trigger(d8_sd_t *v, float ratio, float tribey01, float tone01, float snappy01, float accent_v)
+static void sd_trigger(d8_sd_t *v, float ratio, float decay01, float tone01, float snappy01, float accent_v)
 {
     float r = ratio > 0.05f ? (ratio < 8.0f ? ratio : 8.0f) : 0.05f;
-    float dq = 0.35f + 1.15f * clampf(tribey01, 0.0f, 1.0f);
+    float dq = 0.35f + 1.15f * clampf(decay01, 0.0f, 1.0f);
     float t = clampf(tone01, 0.0f, 1.0f) * (0.5f * FM_PI), dnorm;
     bp_set(&v->bt1, SD_F1 * r, SD_Q1 * dq);
     bp_set(&v->bt2, SD_F2 * r, SD_Q2 * dq);
@@ -522,8 +522,8 @@ static void sd_trigger(d8_sd_t *v, float ratio, float tribey01, float tone01, fl
     v->mix2 = fm_sin_pi(t);
     v->accent_v = clampf(accent_v, 1.0f, 20.0f);
     v->noise_env = clampf(snappy01, 0.0f, 1.0f) * v->accent_v * 0.25f;
-    dnorm = dq / (0.35f + 1.15f * SD_TRIBEY_DEF);
-    v->noise_tribey = d8_exp(-1.0f / (0.075f * dnorm * SR));
+    dnorm = dq / (0.35f + 1.15f * SD_DECAY_DEF);
+    v->noise_decay = d8_exp(-1.0f / (0.075f * dnorm * SR));
     v->gate = 44;
     v->active = 1;
     v->quiet = 0;
@@ -540,7 +540,7 @@ D8_TICK float sd_tick(d8_sd_t *v)
     s1 = bp_run(&v->bt1, vplus * SD_G1);
     s2 = bp_run(&v->bt2, vplus * SD_G2);
     shells = opamp_clip(s1 * v->mix1 + s2 * v->mix2, 40.0f, 1.0f / 40.0f);
-    v->noise_env *= v->noise_tribey;
+    v->noise_env *= v->noise_decay;
     n = rng_frand2(&v->rng);
     vca = (n > 0.0f ? n : 0.0f) * v->noise_env;
     noise = bq_run(&v->noise_hp, vca);
@@ -632,10 +632,10 @@ D8_TICK float tom_tick(d8_tom_t *v)
 #define CL_F 2.526332590e+03f
 #define CL_Q 1.431782106e+01f
 
-static void cl_trigger(d8_clave_t *v, float ratio, float tribey01, float accent_v)
+static void cl_trigger(d8_clave_t *v, float ratio, float decay01, float accent_v)
 {
     float r = ratio < 0.25f ? 0.25f : (ratio > 4.0f ? 4.0f : ratio);
-    float dd = clampf(tribey01, 0.0f, 1.0f);
+    float dd = clampf(decay01, 0.0f, 1.0f);
     float stretch = d8_exp2_cr(2.0f * dd - 1.0f);  /* 4^(d - 0.5) */
     bp_set(&v->bt, CL_F * r, CL_Q);
     v->g = 1.0f - (1.0f - 0.74f) / stretch;
@@ -679,9 +679,9 @@ static void ma_tune(d8_ma_t *v, float ratio)
     hp1_set(&v->hpb, 4600.0f * r > 12000.0f ? 12000.0f : 4600.0f * r);
 }
 
-static void ma_trigger(d8_ma_t *v, float ratio, float tribey_s, float attack01, float accent_v)
+static void ma_trigger(d8_ma_t *v, float ratio, float decay_s, float attack01, float accent_v)
 {
-    float t = tribey_s > 0.008f ? tribey_s : 0.008f;
+    float t = decay_s > 0.008f ? decay_s : 0.008f;
     float a = clampf(attack01, 0.0f, 1.0f) / MA_ATK_DEF;
     float atk = 0.0012f * a * a;
     ma_tune(v, ratio);
@@ -715,13 +715,13 @@ D8_TICK float ma_tick(d8_ma_t *v)
 static const d8ff_t k_pul_inc = {3.006253711e+04f, -2.567672927e-04f};   /* 2^(-22/12) 1.1 2^32 / sr */
 #define PUL_DUTY 3435973837u                      /* phase < 0.8 */
 
-static void rs_trigger(d8_rim_t *v, float hz, float tribey, float hpf, float lpf)
+static void rs_trigger(d8_rim_t *v, float hz, float decay, float hpf, float lpf)
 {
     d8_env_t *e = &v->env;
     e->start = 1.0f;
     e->count = 2;
     e->end[0] = 1.0f; e->dur[0] = 0.00272f; e->curve[0] = -42.0f;
-    e->end[1] = 0.0f; e->dur[1] = tribey;    e->curve[1] = -42.0f;
+    e->end[1] = 0.0f; e->dur[1] = decay;    e->curve[1] = -42.0f;
     e->seg = 0;                                   /* Env::rewind */
     e->level = e->start;
     e->done = 0;
@@ -768,9 +768,9 @@ D8_TICK float rs_tick(d8_rim_t *v)
 #define CP_F 8.743325448e+02f
 #define CP_Q 1.290994449e+00f
 
-static void cp_trigger(d8_cp_t *v, float ratio, float tribey)
+static void cp_trigger(d8_cp_t *v, float ratio, float decay)
 {
-    float dd = tribey < 0.05f ? 0.05f : (tribey > 4.0f ? 4.0f : tribey);
+    float dd = decay < 0.05f ? 0.05f : (decay > 4.0f ? 4.0f : decay);
     bp_set(&v->bp, CP_F * ratio, CP_Q);
     v->main_d = d8_exp(-1.0f / (0.0385f * dd * SR));
     v->floor_d = d8_exp(-1.0f / (0.330f * dd * SR));
@@ -922,10 +922,10 @@ static void cy_ratio(d8_cy_t *v, float r)
     bp_set(&v->sus2, 3265.0f * r / 1.0055f, 32.0f);
 }
 
-static void cy_trigger(d8_cy_t *v, float tribey_s, float accent_v)
+static void cy_trigger(d8_cy_t *v, float decay_s, float accent_v)
 {
     float a = accent_v / 8.0f;
-    float t = tribey_s > 0.1f ? tribey_s : 0.1f;
+    float t = decay_s > 0.1f ? decay_s : 0.1f;
     v->e1t = 8.0f * a;
     v->atk_c = D8_CY_ATK_C;
     v->d1 = (8.0f * a) / (t * SR);
@@ -1003,10 +1003,10 @@ static void hat_init(d8_hat_t *v, int mode)
     v->out_scale = mode == 1 ? 5.0f : 8.0f;
 }
 
-static void hat_trigger(d8_hat_t *v, float tribey_s, float accent_v)
+static void hat_trigger(d8_hat_t *v, float decay_s, float accent_v)
 {
     float a = accent_v / 8.0f;
-    float t = tribey_s > 0.02f ? tribey_s : 0.02f;
+    float t = decay_s > 0.02f ? decay_s : 0.02f;
     if (v->mode == 1) {
         v->lin_target = 8.0f * a;
         v->lin_level = 0.0f;
@@ -1097,10 +1097,10 @@ static void cb_ratio(d8_cb_t *v, float r)
     }
 }
 
-static void cb_trigger(d8_cb_t *v, float tribey_s, float accent_v)
+static void cb_trigger(d8_cb_t *v, float decay_s, float accent_v)
 {
     float a = accent_v / 8.0f;
-    float t = tribey_s > 0.05f ? tribey_s : 0.05f;
+    float t = decay_s > 0.05f ? decay_s : 0.05f;
     v->clank = 0.77f * a;
     v->body = 0.23f * a;
     v->clank_d = D8_CB_CLANK_D;
@@ -1198,7 +1198,7 @@ typedef struct { float min, max; uint8_t exp, def; } d8_spec_t;
 #define DST {0.0f, 6.0f, 0, 0}
 #define SND {0.0f, 1.0f, 0, 0}
 #define NON {0.0f, 1.0f, 0, 0}
-/*                       level tune  tribey                    drive dist rev  dly  x1                    x2 */
+/*                       level tune  decay                    drive dist rev  dly  x1                    x2 */
 static const d8_spec_t k_spec[D8S_NUM][D8P_NUM] = {
     [D8S_BD] = {LVL, TU12, {0.1f, 8.0f, 1, 87},     DRV, DST, NON, NON, {0.0f, 6.0f, 0, 42}, {0.0f, 1.0f, 0, 24}},
     [D8S_SD] = {LVL, TU12, {0.1f, 8.0f, 1, 108},    DRV, DST, SND, SND, {0.0f, 1.0f, 0, 89}, {0.0f, 1.0f, 0, 64}},
@@ -1261,40 +1261,40 @@ static const char *const k_clap_names[2] = {"CLAP", "MARAC"};
 #define P_REV {"Rev", 127, 0, 0}
 #define P_DLY {"Dly", 127, 0, 0}
 
-static const x0x_param_t k_p_bd[] = {PP("Level", 64), PP("Tone", 42), PP("Tribey", 87), PP("Tune", 64),
+static const x0x_param_t k_p_bd[] = {PP("Level", 64), PP("Tone", 42), PP("Decay", 87), PP("Tune", 64),
                                      PP("Attack", 24), P_DRIVE, P_DIST, P_REV, P_DLY, PP("Pan", 64)};   /* X0X: sends */
-static const d8_pmap_t k_m_bd[] = {{K_POT, D8P_LEVEL, 0}, {K_POT, D8P_X1, 0}, {K_POT, D8P_TRIBEY, 0},
+static const d8_pmap_t k_m_bd[] = {{K_POT, D8P_LEVEL, 0}, {K_POT, D8P_X1, 0}, {K_POT, D8P_DECAY, 0},
                                    {K_POT, D8P_TUNE, 0}, {K_POT, D8P_X2, 0}, {K_POT, D8P_DRIVE, 0},
                                    {K_POT, D8P_DIST, 0}, {K_POT, D8P_REV, 0}, {K_POT, D8P_DLY, 0}, {K_PAN, 0, 0}};
 static const x0x_param_t k_p_sd[] = {PP("Level", 64), PP("Tone", 64), PP("Snappy", 89), PP("Tune", 64),
-                                     PP("Tribey", 108), P_DRIVE, P_DIST, P_REV, P_DLY, PP("Pan", 64)};
+                                     PP("Decay", 108), P_DRIVE, P_DIST, P_REV, P_DLY, PP("Pan", 64)};
 static const d8_pmap_t k_m_sd[] = {{K_POT, D8P_LEVEL, 0}, {K_POT, D8P_X2, 0}, {K_POT, D8P_X1, 0},
-                                   {K_POT, D8P_TUNE, 0}, {K_POT, D8P_TRIBEY, 0}, {K_POT, D8P_DRIVE, 0},
+                                   {K_POT, D8P_TUNE, 0}, {K_POT, D8P_DECAY, 0}, {K_POT, D8P_DRIVE, 0},
                                    {K_POT, D8P_DIST, 0}, {K_POT, D8P_REV, 0}, {K_POT, D8P_DLY, 0}, {K_PAN, 0, 0}};
-static const x0x_param_t k_p_lt[] = {PP("Level", 64), PP("Tune", 64), PP("Tribey", 68), {"Sound", 1, 0, k_tom_names},
+static const x0x_param_t k_p_lt[] = {PP("Level", 64), PP("Tune", 64), PP("Decay", 68), {"Sound", 1, 0, k_tom_names},
                                      P_DRIVE, P_DIST, P_REV, P_DLY, PP("Pan", 64)};
-static const x0x_param_t k_p_mt[] = {PP("Level", 64), PP("Tune", 64), PP("Tribey", 56), {"Sound", 1, 0, k_tom_names},
+static const x0x_param_t k_p_mt[] = {PP("Level", 64), PP("Tune", 64), PP("Decay", 56), {"Sound", 1, 0, k_tom_names},
                                      P_DRIVE, P_DIST, P_REV, P_DLY, PP("Pan", 64)};
-static const x0x_param_t k_p_ht[] = {PP("Level", 64), PP("Tune", 64), PP("Tribey", 53), {"Sound", 1, 0, k_tom_names},
+static const x0x_param_t k_p_ht[] = {PP("Level", 64), PP("Tune", 64), PP("Decay", 53), {"Sound", 1, 0, k_tom_names},
                                      P_DRIVE, P_DIST, P_REV, P_DLY, PP("Pan", 64)};
-static const x0x_param_t k_p_rs[] = {PP("Level", 64), PP("Tune", 64), PP("Tribey", 40), {"Sound", 1, 0, k_rim_names},
+static const x0x_param_t k_p_rs[] = {PP("Level", 64), PP("Tune", 64), PP("Decay", 40), {"Sound", 1, 0, k_rim_names},
                                      P_DRIVE, P_DIST, P_REV, P_DLY, PP("Pan", 64)};
-static const d8_pmap_t k_m_sw[] = {{K_POT, D8P_LEVEL, 0}, {K_POT, D8P_TUNE, 0}, {K_POT, D8P_TRIBEY, 0},
+static const d8_pmap_t k_m_sw[] = {{K_POT, D8P_LEVEL, 0}, {K_POT, D8P_TUNE, 0}, {K_POT, D8P_DECAY, 0},
                                    {K_SWITCH, 0, 0}, {K_POT, D8P_DRIVE, 0}, {K_POT, D8P_DIST, 0},
                                    {K_POT, D8P_REV, 0}, {K_POT, D8P_DLY, 0}, {K_PAN, 0, 0}};
-static const x0x_param_t k_p_cp[] = {PP("Level", 64), PP("Tune", 64), PP("Tribey", 64), PP("Attack", 32),
+static const x0x_param_t k_p_cp[] = {PP("Level", 64), PP("Tune", 64), PP("Decay", 64), PP("Attack", 32),
                                      {"Sound", 1, 0, k_clap_names}, P_DRIVE, P_DIST, P_REV, P_DLY, PP("Pan", 64)};
-static const d8_pmap_t k_m_cp[] = {{K_POT, D8P_LEVEL, 0}, {K_POT, D8P_TUNE, 0}, {K_POT, D8P_TRIBEY, 0},
+static const d8_pmap_t k_m_cp[] = {{K_POT, D8P_LEVEL, 0}, {K_POT, D8P_TUNE, 0}, {K_POT, D8P_DECAY, 0},
                                    {K_FIXED, D8P_X1, D8S_MA}, {K_SWITCH, 0, 0}, {K_POT, D8P_DRIVE, 0},
                                    {K_POT, D8P_DIST, 0}, {K_POT, D8P_REV, 0}, {K_POT, D8P_DLY, 0}, {K_PAN, 0, 0}};
-static const x0x_param_t k_p_cb[] = {PP("Level", 64), PP("Tune", 64), PP("Tribey", 62), P_DRIVE, P_DIST, P_REV, P_DLY, PP("Pan", 64)};
-static const x0x_param_t k_p_ch[] = {PP("Level", 64), PP("Tune", 64), PP("Tribey", 47), P_DRIVE, P_DIST, P_REV, P_DLY, PP("Pan", 64)};
-static const d8_pmap_t k_m_tune_tribey[] = {{K_POT, D8P_LEVEL, 0}, {K_POT, D8P_TUNE, 0}, {K_POT, D8P_TRIBEY, 0},
+static const x0x_param_t k_p_cb[] = {PP("Level", 64), PP("Tune", 64), PP("Decay", 62), P_DRIVE, P_DIST, P_REV, P_DLY, PP("Pan", 64)};
+static const x0x_param_t k_p_ch[] = {PP("Level", 64), PP("Tune", 64), PP("Decay", 47), P_DRIVE, P_DIST, P_REV, P_DLY, PP("Pan", 64)};
+static const d8_pmap_t k_m_tune_decay[] = {{K_POT, D8P_LEVEL, 0}, {K_POT, D8P_TUNE, 0}, {K_POT, D8P_DECAY, 0},
                                            {K_POT, D8P_DRIVE, 0}, {K_POT, D8P_DIST, 0}, {K_POT, D8P_REV, 0},
                                            {K_POT, D8P_DLY, 0}, {K_PAN, 0, 0}};
-static const x0x_param_t k_p_cy[] = {PP("Level", 64), PP("Tribey", 70), PP("Tune", 64), P_DRIVE, P_DIST, P_REV, P_DLY, PP("Pan", 64)};
-static const x0x_param_t k_p_oh[] = {PP("Level", 64), PP("Tribey", 74), PP("Tune", 64), P_DRIVE, P_DIST, P_REV, P_DLY, PP("Pan", 64)};
-static const d8_pmap_t k_m_tribey_tune[] = {{K_POT, D8P_LEVEL, 0}, {K_POT, D8P_TRIBEY, 0}, {K_POT, D8P_TUNE, 0},
+static const x0x_param_t k_p_cy[] = {PP("Level", 64), PP("Decay", 70), PP("Tune", 64), P_DRIVE, P_DIST, P_REV, P_DLY, PP("Pan", 64)};
+static const x0x_param_t k_p_oh[] = {PP("Level", 64), PP("Decay", 74), PP("Tune", 64), P_DRIVE, P_DIST, P_REV, P_DLY, PP("Pan", 64)};
+static const d8_pmap_t k_m_decay_tune[] = {{K_POT, D8P_LEVEL, 0}, {K_POT, D8P_DECAY, 0}, {K_POT, D8P_TUNE, 0},
                                            {K_POT, D8P_DRIVE, 0}, {K_POT, D8P_DIST, 0}, {K_POT, D8P_REV, 0},
                                            {K_POT, D8P_DLY, 0}, {K_PAN, 0, 0}};
 /* (X0X: the hats' choke is the 909's, fixed: the closed hat cuts the open one) */
@@ -1305,8 +1305,8 @@ typedef struct { const x0x_param_t *p; const d8_pmap_t *m; uint8_t n; } d8_track
 #define TRK(p, m) {p, m, (uint8_t)(sizeof(p) / sizeof(p[0]))}
 static const d8_track_t k_tracks[D8_NUM + 1] = {
     TRK(k_p_bd, k_m_bd), TRK(k_p_sd, k_m_sd), TRK(k_p_lt, k_m_sw), TRK(k_p_mt, k_m_sw), TRK(k_p_ht, k_m_sw),
-    TRK(k_p_rs, k_m_sw), TRK(k_p_cp, k_m_cp), TRK(k_p_cb, k_m_tune_tribey), TRK(k_p_cy, k_m_tribey_tune),
-    TRK(k_p_oh, k_m_tribey_tune), TRK(k_p_ch, k_m_tune_tribey), TRK(k_p_kit, k_m_kit)};
+    TRK(k_p_rs, k_m_sw), TRK(k_p_cp, k_m_cp), TRK(k_p_cb, k_m_tune_decay), TRK(k_p_cy, k_m_decay_tune),
+    TRK(k_p_oh, k_m_decay_tune), TRK(k_p_ch, k_m_tune_decay), TRK(k_p_kit, k_m_kit)};
 
 /* the sound a track plays, by its switch */
 static int track_sound(const drum808_t *d, int t)
@@ -1443,7 +1443,7 @@ static float lane_hz(int s, float tune) { return d8_midicps(k_base_note[s] + tun
 void drum808_trigger(drum808_t *d, int track, float vel)
 {
     int s, lane;
-    float vgain, volts, soft, tune, tribey;
+    float vgain, volts, soft, tune, decay;
     const float *pv;
     const uint8_t *pot;
     if (track < 0 || track >= D8_NUM || !(vel > 0.0f))
@@ -1454,7 +1454,7 @@ void drum808_trigger(drum808_t *d, int track, float vel)
     pv = d->potv[s];
     pot = d->pot[s];
     tune = pv[D8P_TUNE];
-    tribey = pv[D8P_TRIBEY];
+    decay = pv[D8P_DECAY];
 
     /* 8W8's velocity line: a trigger voltage on the circuit lanes (4 V floor,
      * 7.3 V at full), the rest as gain */
@@ -1487,7 +1487,7 @@ void drum808_trigger(drum808_t *d, int track, float vel)
 
     switch (s) {
     case D8S_BD:
-        bd_trigger(&d->bd, lane_hz(s, tune), (float)pot[D8P_TRIBEY] / 127.0f, (float)pot[D8P_X1] / 127.0f,
+        bd_trigger(&d->bd, lane_hz(s, tune), (float)pot[D8P_DECAY] / 127.0f, (float)pot[D8P_X1] / 127.0f,
                    (float)pot[D8P_X2] / 127.0f, volts);
         d->lane[lane].hit = soft;
         break;
@@ -1495,47 +1495,47 @@ void drum808_trigger(drum808_t *d, int track, float vel)
         /* Tone: the 808 panel's (8W8 fixes it at the centre, 0.5 = pot 64) */
         int tp = pot[D8P_X2];
         float tone = tp <= 64 ? (float)tp * (1.0f / 128.0f) : 0.5f + (float)(tp - 64) * (0.5f / 63.0f);
-        sd_trigger(&d->sd, d8_exp2_cr(tune / 12.0f), (float)pot[D8P_TRIBEY] / 127.0f, tone,
+        sd_trigger(&d->sd, d8_exp2_cr(tune / 12.0f), (float)pot[D8P_DECAY] / 127.0f, tone,
                    (float)pot[D8P_X1] / 127.0f, volts);
         d->lane[lane].hit = soft;
         break;
     }
     case D8S_LT: case D8S_MT: case D8S_HT: case D8S_LC: case D8S_MC: case D8S_HC:
-        tom_trigger(&d->tom[lane - L_T0], s >= D8S_LC, lane_hz(s, tune), tribey, volts);
+        tom_trigger(&d->tom[lane - L_T0], s >= D8S_LC, lane_hz(s, tune), decay, volts);
         d->lane[lane].hit = soft;
         break;
     case D8S_RS:
-        rs_trigger(&d->rs, lane_hz(s, tune), tribey * 9.12f, d8_midicps(63.0f + tune), d8_midicps(118.0f + tune));
+        rs_trigger(&d->rs, lane_hz(s, tune), decay * 9.12f, d8_midicps(63.0f + tune), d8_midicps(118.0f + tune));
         break;
     case D8S_CL:
-        cl_trigger(&d->cl, d8_exp2_cr(tune / 12.0f), (float)pot[D8P_TRIBEY] / 127.0f, volts);
+        cl_trigger(&d->cl, d8_exp2_cr(tune / 12.0f), (float)pot[D8P_DECAY] / 127.0f, volts);
         d->lane[lane].hit = soft;
         break;
     case D8S_MA:
-        ma_trigger(&d->ma, d8_exp2_cr(tune / 12.0f), tribey, (float)pot[D8P_X1] / 127.0f, volts);
+        ma_trigger(&d->ma, d8_exp2_cr(tune / 12.0f), decay, (float)pot[D8P_X1] / 127.0f, volts);
         d->lane[lane].hit = soft;
         break;
     case D8S_CP:
-        cp_trigger(&d->cp, d8_exp2_cr(tune / 12.0f), tribey);
+        cp_trigger(&d->cp, d8_exp2_cr(tune / 12.0f), decay);
         break;
     case D8S_CB:
         bank_ratio(&d->bank, tune);
         cb_ratio(&d->cb, tune);
-        cb_trigger(&d->cb, tribey, volts);
+        cb_trigger(&d->cb, decay, volts);
         d->lane[lane].hit = soft;
         break;
     case D8S_CH:                                  /* hats and cymbal: velocity is a gain */
         bank_ratio(&d->bank, tune);
-        hat_trigger(&d->ch, tribey, 4.0f);
+        hat_trigger(&d->ch, decay, 4.0f);
         break;
     case D8S_OH:
         bank_ratio(&d->bank, tune);
-        hat_trigger(&d->oh, tribey, 4.0f);
+        hat_trigger(&d->oh, decay, 4.0f);
         break;
     default:                                      /* CY */
         bank_ratio(&d->bank, tune);
         cy_ratio(&d->cy, tune);
-        cy_trigger(&d->cy, tribey, 4.0f);
+        cy_trigger(&d->cy, decay, 4.0f);
         break;
     }
 }

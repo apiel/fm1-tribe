@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* KickWave and PotKick from zicBox (audio/engines/KickWave.h, PotKick.h), ported to C for the FM-1:
  * float only, fastmath.h instead of libm, the exponentials' coefficients computed when a pot moves
- * (not per sample), the pitch envelope kept as a tribeying exponential (pow(env, k) = exp(-k t)). */
+ * (not per sample), the pitch envelope kept as a decaying exponential (pow(env, k) = exp(-k t)). */
 #include <stdint.h>
 #include "mem.h"
 #include "kicks.h"
@@ -84,7 +84,7 @@ typedef struct {
     /* decoded */
     float freq, dur_samples, fm, drive, wave, h2, h3, skew, fold, phase, reson, crush, curve, pchshp;
     float click, clkdec, morph, swpshp, swpdpt, fmrat, fmsnap, wfold, boost;
-    float c_mod, c_fm, c_click;               /* per-sample tribey coefficients */
+    float c_mod, c_fm, c_click;               /* per-sample decay coefficients */
     /* voice */
     float vel, pitch_mult, cph, mph, menv, fmenv, clickenv, comp, svf_lp, svf_bp, fold_buf;
     float crush_ph, crush_hold, boost_x, boost_y;
@@ -106,7 +106,7 @@ static void decode(kick_t *k)
         k->drive = v[4] * 0.01f; k->wave = v[5] * 0.01f; k->h2 = v[6] * 0.01f; k->h3 = v[7] * 0.01f;
         k->skew = v[8] * 0.01f; k->fold = v[9] * 0.01f; k->phase = v[10] * 0.01f; k->reson = v[11] * 0.01f;
         k->crush = v[12] * 0.01f; k->curve = v[13] * 0.01f;
-        /* pitchEnv = menv^(1 + shape*5), menv tribeying with a 25 ms constant */
+        /* pitchEnv = menv^(1 + shape*5), menv decaying with a 25 ms constant */
         k->c_mod = fm_expf(-(1.0f + k->pchshp * 5.0f) / (SR * 0.025f));
     } else {
         k->freq = v[0]; k->dur_samples = v[1] * 0.001f * SR; k->click = 0.0f;        /* no click: v[2], v[3] stay as hidden pots */

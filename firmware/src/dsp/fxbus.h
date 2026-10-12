@@ -30,13 +30,13 @@
 #define FX_RV_APR_TOTAL (579 + 457)   /* X0X: the right side's allpasses */
 
 enum { FX_VOLUME, FX_DIST, FX_DRIVE, FX_COMP,
-       FX_RV_TRIBEY, FX_RV_TONE, FX_RV_HPF, FX_RV_LEVEL,
+       FX_RV_DECAY, FX_RV_TONE, FX_RV_HPF, FX_RV_LEVEL,
        FX_DL_TIME, FX_DL_FDBK, FX_DL_TONE, FX_DL_LEVEL,
        FX_DL_HPF, FX_DL_TYPE, FX_DL_WEAR, FX_DL_PING, FX_NPARAMS };
 
 struct fxbus {
     /* reverb */
-    float rv_tribey, rv_tone, rv_level;
+    float rv_decay, rv_tone, rv_level;
     d9_biquad_t rv_hp;
     int16_t comb[FX_RV_COMB_TOTAL];
     float ap[FX_RV_AP_TOTAL];

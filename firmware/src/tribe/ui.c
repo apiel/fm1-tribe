@@ -1034,11 +1034,11 @@ static void draw_common(void)
     put_s(put_s(fxl[0], "FX1 "), mx_name(proj.set.fxtype[0]));
     put_s(put_s(fxl[1], "FX2 "), mx_name(proj.set.fxtype[1]));
     cv_rect(2, 6, 6, 4, C_WHITE);
-    cv_text(10, vc(&FONT_XS, 2, 12), &FONT_XS, "VOLUME + LEVEL", C_GRAY);
-    cv_rect(110, 6, 3, 4, CS[0]);
-    cv_text(116, vc(&FONT_XS, 2, 12), &FONT_XS, fxl[0], C_GRAY);
-    cv_rect(176, 6, 3, 4, CS[1]);
-    cv_text(182, vc(&FONT_XS, 2, 12), &FONT_XS, fxl[1], C_GRAY);
+    cv_text(10, vc(&FONT_XS, 2, 12), &FONT_XS, "VOLUME", C_GRAY);
+    cv_rect(58, 6, 3, 4, CS[0]);
+    cv_text(64, vc(&FONT_XS, 2, 12), &FONT_XS, fxl[0], C_GRAY);
+    cv_rect(150, 6, 3, 4, CS[1]);
+    cv_text(156, vc(&FONT_XS, 2, 12), &FONT_XS, fxl[1], C_GRAY);
 }
 
 static void draw_text_screen(const char *a, const char *b2, uint16_t c)

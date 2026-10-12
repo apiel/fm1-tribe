@@ -90,7 +90,7 @@ int eng_group(int id, int i)
 {
     static const char *const hide[] = {"Rev", "Dly", "Pan", "Accent", "Veloc", "Volume", "Click", "ClkDec", 0};
     static const char *const fx[] = {"Drive", "Dist", "DrvTyp", "Crush", "Fold", "Wfold", "Reson", "Boost", 0};
-    static const char *const env[] = {"Attack", "Tribey", "P.Dpth", "Pitch", "AccDec", "EnvMod", "Slide", "Tail",
+    static const char *const env[] = {"Attack", "Decay", "P.Dpth", "Pitch", "AccDec", "EnvMod", "Slide", "Tail",
                                       "PchShp", "SwpShp", "SwpDpt", "Curve", "FMSnap", "Dur", 0};
     static const char *const lfo[] = {"LfoRt", "LfoDpt", "LfoShp", "LfoTgt", 0};
     const x0x_param_t *p = eng_param(id, i);

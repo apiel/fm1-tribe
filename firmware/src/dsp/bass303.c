@@ -3,7 +3,7 @@
  *
  * Reference: schwung-303 src/dsp/open303/rosic_Open303.{h,cpp} (getSample, triggerNote,
  * slideToNote, calculateEnvModScalerAndOffset), rosic_TeeBeeFilter.h (TB_303 mode),
- * rosic_AnalogEnvelope / TribeyEnvelope / LeakyIntegrator / OnePoleFilter / BiquadFilter,
+ * rosic_AnalogEnvelope / DecayEnvelope / LeakyIntegrator / OnePoleFilter / BiquadFilter,
  * rosic_MipMappedWaveTable.cpp (fillWithSaw303 / fillWithSquare303), src/dsp/plugin.cpp
  * (pot ranges) and src/dsp/drive.h (Soft / RAT). */
 #include "bass303.h"
@@ -22,7 +22,7 @@ static const x0x_param_t params[BASS303_NPARAMS] = {
     { "Cutoff", 127, 64, 0 },        /* 314 .. 2394 Hz, exponential */
     { "Reso", 127, 64, 0 },          /* 0 .. 100 % */
     { "EnvMod", 127, 64, 0 },        /* 0 .. 100 % */
-    { "Tribey", 127, 64, 0 },         /* 200 .. 2000 ms, exponential (stock 303 range) */
+    { "Decay", 127, 64, 0 },         /* 200 .. 2000 ms, exponential (stock 303 range) */
     { "Accent", 127, 64, 0 },        /* 0 .. 100 % */
     { "Wave", 1, 0, wave_names },
     { "Tune", 127, 64, 0 },          /* A4 = 440 + (pot - 64) * 0.625 Hz: 400 .. 479.4 */
@@ -171,8 +171,8 @@ void bass303_set(bass303_t *b, int i, int v)
     case BASS303_RESO:                                         /* TeeBeeFilter::setResonance */
         b->reso = (1.0f - fm_expf(-3.0f * n)) * (1.0f / 0.950212932f);
         break;
-    case BASS303_TRIBEY:                                        /* applied at the next note */
-        b->tribey_c = rc_coeff(200.0f * fm_exp2f(n * 3.321928095f), BASS303_SR);
+    case BASS303_DECAY:                                        /* applied at the next note */
+        b->decay_c = rc_coeff(200.0f * fm_exp2f(n * 3.321928095f), BASS303_SR);
         break;
     case BASS303_ACCDEC:
         b->accdec_c = rc_coeff(30.0f + 2970.0f * n, BASS303_SR);
@@ -320,7 +320,7 @@ void bass303_init(bass303_t *b)
         bass303_set(b, i, params[i].def);
 
     b->osc_freq = b->slew_y = 440.0f;
-    b->env_c = b->tribey_c;
+    b->env_c = b->decay_c;
     env_tables(b);
     b->env_y = 0.0f;
     b->idle = 1;
@@ -333,10 +333,10 @@ static void set_accent_state(bass303_t *b, int accent)
 {
     if (accent) {
         b->accent_gain = b->accent;
-        b->env_c = b->accdec_c;          /* setMainEnvTribey(accentTribey) */
+        b->env_c = b->accdec_c;          /* setMainEnvDecay(accentDecay) */
     } else {
         b->accent_gain = 0.0f;
-        b->env_c = b->tribey_c;
+        b->env_c = b->decay_c;
     }
     b->amp_acc = accent != 0;            /* release: accentAmpRelease 50 ms, normal 1 ms */
     env_tables(b);
@@ -544,7 +544,7 @@ static void run(bass303_t *b, float *out, int n)
         b->rc1_y = b->rc1_pw[m] * b->rc1_y + b->g1[m] * e0;    /* RC followers of it */
         b->rc2_y = b->rc2_pw[m] * b->rc2_y + (acc > 0.0f ? b->g2[m] * e0 : 0.0f);
         b->slew_y = osc_freq + b->slew_pw[m] * (b->slew_y - osc_freq);
-        if (b->amp_trig) {                                     /* attack 0: 1, then tribey */
+        if (b->amp_trig) {                                     /* attack 0: 1, then decay */
             b->amp_y = amp_pw[m - 1];
             b->amp_trig = 0;
         } else {
@@ -692,7 +692,7 @@ void bass303_render(bass303_t *b, float *out, int n)
     if (b->drv_type != BASS303_DRV_OFF && b->drv_amt > 0.0f)
         drive_block(b, out, n);
 
-    /* states that tribey toward zero while the engine still runs (the idle hold-off, where the
+    /* states that decay toward zero while the engine still runs (the idle hold-off, where the
      * amp is exactly 0): flushed once per block, before they can reach denormals */
     b->dc.x1 = fm_flush(b->dc.x1);
     b->dc.x2 = fm_flush(b->dc.x2);

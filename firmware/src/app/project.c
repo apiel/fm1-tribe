@@ -374,8 +374,8 @@ static int load_arrange1(void)
 
 /* ---- load, save ----------------------------------------------------------------------------- */
 
-/* the 909 SD gained TRIBEY at pot 3: what was 3.. (LEVEL, DRIVE, DIST, REV, DLY, PAN) moves up one,
- * the knobs' motion with it, and TRIBEY takes its default (9W9's 340 ms) */
+/* the 909 SD gained DECAY at pot 3: what was 3.. (LEVEL, DRIVE, DIST, REV, DLY, PAN) moves up one,
+ * the knobs' motion with it, and DECAY takes its default (9W9's 340 ms) */
 static void sound_rev1(void)
 {
     uint8_t *sd = proj.sound.v[T_909][DR_SD];
@@ -469,7 +469,7 @@ int project_load(void)
     }
     if (proj.arr.song.len > NSONG)
         proj.arr.song.len = NSONG;
-    if (sound_ok && proj.set.snd_rev < 1)             /* saved before the 909 SD's TRIBEY: its pots move up one */
+    if (sound_ok && proj.set.snd_rev < 1)             /* saved before the 909 SD's DECAY: its pots move up one */
         sound_rev1();
     if (sound_ok && proj.set.snd_rev < 2)             /* before the one-knob COMP, FILTER, TAPE */
         sound_rev2();

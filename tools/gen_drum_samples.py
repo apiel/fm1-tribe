@@ -28,13 +28,13 @@ SAMPLES = [("x0x_smp_hh", "hh.wav"), ("x0x_smp_ride", "ride.wav"), ("x0x_smp_cra
 
 # 9W9's EXP pot ranges (er99_pots.h). One table per distinct (min, max).
 EXP_RANGES = [
-    ("BD_TRIBEY", 100.0, 4000.0), ("BD_PITCH", 0.43, 4.7), ("DRIVE", 0.85, 12.0),
+    ("BD_DECAY", 100.0, 4000.0), ("BD_PITCH", 0.43, 4.7), ("DRIVE", 0.85, 12.0),
     ("SD_TUNE", 130.0, 320.0), ("SD_TONE", 300.0, 4000.0),
-    ("LT_TUNE", 50.0, 90.0), ("LT_TRIBEY", 80.0, 2600.0),
-    ("MT_TUNE", 80.0, 125.0), ("MT_TRIBEY", 70.0, 2200.0),
-    ("HT_TUNE", 110.0, 170.0), ("HT_TRIBEY", 60.0, 2000.0),
+    ("LT_TUNE", 50.0, 90.0), ("LT_DECAY", 80.0, 2600.0),
+    ("MT_TUNE", 80.0, 125.0), ("MT_DECAY", 70.0, 2200.0),
+    ("HT_TUNE", 110.0, 170.0), ("HT_DECAY", 60.0, 2000.0),
     ("RS_TUNE", 150.0, 300.0), ("CP_TUNE", 650.0, 1400.0), ("CP_TAIL", 120.0, 1000.0),
-    ("OH_TRIBEY", 20.0, 1200.0), ("CH_TRIBEY", 15.0, 300.0), ("CY_TRIBEY", 100.0, 3000.0),
+    ("OH_DECAY", 20.0, 1200.0), ("CH_DECAY", 15.0, 300.0), ("CY_DECAY", 100.0, 3000.0),
     ("SMP_PITCH", 0.25, 4.0), ("FX_HPF", 30.0, 800.0),
 ]
 

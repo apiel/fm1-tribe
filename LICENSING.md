@@ -1,8 +1,8 @@
-# X0X licensing
+# TRIBE licensing
 
-X0X is free software under the GNU General Public License, version 3 only
-(`GPL-3.0-only`, full text in `LICENSE`). It is a fork of Felucca and keeps Felucca's
-licence. If you distribute X0X, or firmware derived from it, you must give your
+TRIBE is free software under the GNU General Public License, version 3 only
+(`GPL-3.0-only`, full text in `LICENSE`). It is a fork of [X0X](https://github.com/charlesvestal/fm1-x0x), which is a fork of Felucca, and keeps their
+licence. If you distribute TRIBE, or firmware derived from it, you must give your
 recipients its complete corresponding source under the same licence.
 
 ## Where the code comes from
@@ -18,7 +18,9 @@ recipients its complete corresponding source under the same licence.
 | TB-3PO (`seq/tb3po*`) | ported from [schwung-tb3po](https://github.com/charlesvestal/schwung-tb3po), itself a port of the Phazerville Hemisphere Suite `TB_3PO` applet (djphazer and contributors) | GPL-3.0 |
 | Break generator (`dsp/breaks*`) | ported from [schwung-breakbeat](https://github.com/mestela/schwung-breakbeat) (BB Gen) by mestela, **used with the author's permission** (that repository carries no licence file) | GPL-3.0-only here, by permission |
 | The idea of a browser emulator for FM-1 firmware (`web/emu/`) | [Groove OS](https://www.groove-os.com/) by Peter Gombos, whose site runs its firmware in the browser; no code from it | credit only |
-| Everything else in `firmware/src/{app,dsp,seq}`, `host/`, `tests/` | X0X | GPL-3.0-only |
+| Kick engines KICK W and KICK P (`firmware/src/tribe/kicks.c`) and the scatter effects (`firmware/src/tribe/scatter.c`) | ported from [zicBox](https://github.com/apiel/zicBox) (apiel: zicModKick, `audio/Scatter.h`) | GPL-3.0 |
+| X0X's application layer (`firmware/src/{app,dsp,seq}`, `host/`) | [X0X](https://github.com/charlesvestal/fm1-x0x) by Charles Vestal | GPL-3.0-only |
+| TRIBE: the ten tracks, clips, sends and master effects, the UI and the save log (`firmware/src/tribe/`), `tests/`, `web/emu/`, the site and the manual | TRIBE | GPL-3.0-only |
 
 No recorded breaks are in this tree or in the default firmware: the built-in break loops are
 generated at build time by X0X's own 909 code. `tools/import_breaks.py`,
@@ -44,9 +46,9 @@ permission concerns those assets only, so it is not needed here.
 
 "Felucca" and "Hügelton Instruments" are names of Hügelton Instruments. "M-VAVE" and
 "FM-1" are trademarks of their respective owners. TR-808, TR-909 and TB-303 are
-trademarks of Roland Corporation, used only to describe what the parts emulate. X0X is
+trademarks of Roland Corporation, used only to describe what the parts emulate. TRIBE is
 independent firmware; it is not affiliated with, endorsed by or supported by any of them.
 
 ## Radio
 
-X0X never enables the Bluetooth / Wi-Fi radio of the hardware.
+TRIBE never enables the Bluetooth / Wi-Fi radio of the hardware.

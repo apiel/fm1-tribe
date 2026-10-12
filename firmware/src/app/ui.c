@@ -492,7 +492,7 @@ static const char *pref_name(pref_t r)
         return MIXN[r.b][r.c];
     if (r.kind == R_ENG && r.a == T_FX) {               /* the page says which effect: the knob, what */
         switch (r.c) {
-        case FX_RV_TRIBEY: return "TRIBEY";
+        case FX_RV_DECAY: return "DECAY";
         case FX_RV_TONE: case FX_DL_TONE: return "TONE";
         case FX_DL_TIME: return "TIME";
         case FX_DL_FDBK: return "FEEDBACK";
@@ -776,7 +776,7 @@ static void build_pages(void)
         } else if (is_303()) {
             pg_grp = GR_SOUND;
             add_page("TONE", PR(R_ENG, T_303, b, BASS303_CUTOFF), PR(R_ENG, T_303, b, BASS303_RESO),
-                     PR(R_ENG, T_303, b, BASS303_ENVMOD), PR(R_ENG, T_303, b, BASS303_TRIBEY));
+                     PR(R_ENG, T_303, b, BASS303_ENVMOD), PR(R_ENG, T_303, b, BASS303_DECAY));
             add_page("VOICE", PR(R_ENG, T_303, b, BASS303_ACCENT), PR(R_ENG, T_303, b, BASS303_WAVE),
                      PR(R_ENG, T_303, b, BASS303_DRIVE), PR(R_ENG, T_303, b, BASS303_SLIDE));
             more(PR(R_ENG, T_303, b, BASS303_TUNE));
@@ -798,7 +798,7 @@ static void build_pages(void)
                  PR(R_GEN, b, 0, G_MUT));
         break;
     case V_FX:                                         /* (each part's sends: MIX's PARTS) */
-        add_page("REVERB", PR(R_ENG, T_FX, 0, FX_RV_TRIBEY), PR(R_ENG, T_FX, 0, FX_RV_TONE), NONE, NONE);
+        add_page("REVERB", PR(R_ENG, T_FX, 0, FX_RV_DECAY), PR(R_ENG, T_FX, 0, FX_RV_TONE), NONE, NONE);
         add_page("DELAY", PR(R_ENG, T_FX, 0, FX_DL_TIME), PR(R_ENG, T_FX, 0, FX_DL_FDBK),
                  PR(R_ENG, T_FX, 0, FX_DL_TONE), PR(R_TAPE, 0, 0, 0));
         more(PR(R_ENG, T_FX, 0, FX_RV_HPF));
@@ -3255,7 +3255,7 @@ static void draw_fx(int band)
         {
             char t2[20];
             put_s(put_i(put_s(t, "FEEDBACK "), proj.sound.v[T_FX][0][FX_DL_FDBK] * 100 / 127), "%");
-            put_i(put_s(t2, "REVERB "), proj.sound.v[T_FX][0][FX_RV_TRIBEY] * 100 / 127);
+            put_i(put_s(t2, "REVERB "), proj.sound.v[T_FX][0][FX_RV_DECAY] * 100 / 127);
             segs(4, 24, &FONT_S, C_GRAY, 18, t, t2, 0, 0);
             (void)q;
         }

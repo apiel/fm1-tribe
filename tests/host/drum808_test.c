@@ -27,22 +27,22 @@ static char worst_name[96];
 
 typedef struct { const char *name; int ref, track, sw; const char *id; const char *pots[8]; } snd_t;
 static const snd_t k_snd[16] = {
-    {"BD", SC808_BD, D8_BD, 0, "bd", {"tune", "attack", "tribey", "tone", "drive", "level", 0}},
-    {"SD", SC808_SD, D8_SD, 0, "sd", {"tune", "tribey", "snappy", "drive", "level", "rev", "dly", 0}},
-    {"LT", SC808_LT, D8_LT, 0, "lt", {"tune", "tribey", "drive", "level", "rev", "dly", 0}},
-    {"MT", SC808_MT, D8_MT, 0, "mt", {"tune", "tribey", "drive", "level", "rev", "dly", 0}},
-    {"HT", SC808_HT, D8_HT, 0, "ht", {"tune", "tribey", "drive", "level", "rev", "dly", 0}},
-    {"LC", SC808_LC, D8_LT, 1, "lc", {"tune", "tribey", "drive", "level", "rev", "dly", 0}},
-    {"MC", SC808_MC, D8_MT, 1, "mc", {"tune", "tribey", "drive", "level", "rev", "dly", 0}},
-    {"HC", SC808_HC, D8_HT, 1, "hc", {"tune", "tribey", "drive", "level", "rev", "dly", 0}},
-    {"RS", SC808_RS, D8_RS, 0, "rs", {"tune", "tribey", "drive", "level", "rev", "dly", 0}},
-    {"CL", SC808_CL, D8_RS, 1, "cl", {"tune", "tribey", "drive", "level", "rev", "dly", 0}},
-    {"MA", SC808_MA, D8_CP, 1, "ma", {"tune", "attack", "tribey", "drive", "level", "rev", "dly", 0}},
-    {"CP", SC808_CP, D8_CP, 0, "cp", {"tune", "tribey", "drive", "level", "rev", "dly", 0}},
-    {"CB", SC808_CB, D8_CB, 0, "cb", {"tune", "tribey", "drive", "level", "rev", "dly", 0}},
-    {"CH", SC808_CH, D8_CH, 0, "ch", {"tune", "tribey", "drive", "level", "rev", "dly", 0}},
-    {"OH", SC808_OH, D8_OH, 0, "oh", {"tune", "tribey", "drive", "level", "rev", "dly", 0}},
-    {"CY", SC808_CY, D8_CY, 0, "cy", {"tune", "tribey", "drive", "level", "rev", "dly", 0}},
+    {"BD", SC808_BD, D8_BD, 0, "bd", {"tune", "attack", "decay", "tone", "drive", "level", 0}},
+    {"SD", SC808_SD, D8_SD, 0, "sd", {"tune", "decay", "snappy", "drive", "level", "rev", "dly", 0}},
+    {"LT", SC808_LT, D8_LT, 0, "lt", {"tune", "decay", "drive", "level", "rev", "dly", 0}},
+    {"MT", SC808_MT, D8_MT, 0, "mt", {"tune", "decay", "drive", "level", "rev", "dly", 0}},
+    {"HT", SC808_HT, D8_HT, 0, "ht", {"tune", "decay", "drive", "level", "rev", "dly", 0}},
+    {"LC", SC808_LC, D8_LT, 1, "lc", {"tune", "decay", "drive", "level", "rev", "dly", 0}},
+    {"MC", SC808_MC, D8_MT, 1, "mc", {"tune", "decay", "drive", "level", "rev", "dly", 0}},
+    {"HC", SC808_HC, D8_HT, 1, "hc", {"tune", "decay", "drive", "level", "rev", "dly", 0}},
+    {"RS", SC808_RS, D8_RS, 0, "rs", {"tune", "decay", "drive", "level", "rev", "dly", 0}},
+    {"CL", SC808_CL, D8_RS, 1, "cl", {"tune", "decay", "drive", "level", "rev", "dly", 0}},
+    {"MA", SC808_MA, D8_CP, 1, "ma", {"tune", "attack", "decay", "drive", "level", "rev", "dly", 0}},
+    {"CP", SC808_CP, D8_CP, 0, "cp", {"tune", "decay", "drive", "level", "rev", "dly", 0}},
+    {"CB", SC808_CB, D8_CB, 0, "cb", {"tune", "decay", "drive", "level", "rev", "dly", 0}},
+    {"CH", SC808_CH, D8_CH, 0, "ch", {"tune", "decay", "drive", "level", "rev", "dly", 0}},
+    {"OH", SC808_OH, D8_OH, 0, "oh", {"tune", "decay", "drive", "level", "rev", "dly", 0}},
+    {"CY", SC808_CY, D8_CY, 0, "cy", {"tune", "decay", "drive", "level", "rev", "dly", 0}},
 };
 
 /* a port parameter by its (case-insensitive) name on a track */
@@ -384,7 +384,7 @@ int main(int argc, char **argv)
             }
         drum808_init(&port);
         drum808_set(&port, D8_LT, port_index(D8_LT, "Sound"), 1);
-        if (drum808_get(&port, D8_LT, port_index(D8_LT, "Tribey")) != 58) { printf("  conga keeps its own Tribey  FAIL\n"); bad++; }
+        if (drum808_get(&port, D8_LT, port_index(D8_LT, "Decay")) != 58) { printf("  conga keeps its own Decay  FAIL\n"); bad++; }
         n_fail += bad;
         printf("  %d tracks + kit: names <= 6, labels <= 5, defaults, set/get, per-sound pots: %s\n", D8_NUM, bad ? "FAIL" : "ok");
     }

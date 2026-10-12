@@ -1,9 +1,9 @@
 #!/bin/bash
 # FM-1 rescue: one command that puts M-VAVE's stock firmware back on an FM-1 stuck in a crash loop.
-#   bash -c "$(curl -fsSL https://raw.githubusercontent.com/charlesvestal/fm1-x0x/main/tools/fm1_rescue.sh)"
+#   bash -c "$(curl -fsSL https://raw.githubusercontent.com/apiel/fm1-tribe/main/tools/fm1_rescue.sh)"
 set -e
 DIR="$HOME/fm1-rescue"
-RAW="https://raw.githubusercontent.com/charlesvestal/fm1-x0x/main/tools"
+RAW="https://raw.githubusercontent.com/apiel/fm1-tribe/main/tools"
 STOCK=db1642b2b6fa5c2cccb11ffd13878068bb28601678d3644049f99dc40e7edb8a
 echo
 echo "=== FM-1 rescue ==="

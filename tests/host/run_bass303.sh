@@ -34,7 +34,7 @@ void *ref_create(void)
     r->e.setSampleRate(44100.0);
     r->d.prepare(44100.0);
     /* plugin.cpp apply_devil_mods() with the switch off */
-    r->e.setAmpTribey(1230.0); r->e.setAccentTribey(200.0); r->e.setFeedbackHighpass(150.0);
+    r->e.setAmpDecay(1230.0); r->e.setAccentDecay(200.0); r->e.setFeedbackHighpass(150.0);
     r->e.setNormalAttack(3.0); r->e.setSlideTime(60.0); r->e.setTanhShaperDrive(36.9);
     return r;
 }
@@ -47,7 +47,7 @@ void ref_set(void *p, int i, int pot)
     case 0: r->e.setCutoff(linToExp(n, 0, 1, 314.0, 2394.0)); break;
     case 1: r->e.setResonance(linToLin(n, 0, 1, 0.0, 100.0)); break;
     case 2: r->e.setEnvMod(linToLin(n, 0, 1, 0.0, 100.0)); break;
-    case 3: r->e.setTribey(linToExp(n, 0, 1, 200.0, 2000.0)); break;
+    case 3: r->e.setDecay(linToExp(n, 0, 1, 200.0, 2000.0)); break;
     case 4: r->e.setAccent(linToLin(n, 0, 1, 0.0, 100.0)); break;
     case 5: r->e.setWaveform(pot ? 1.0 : 0.0); break;
     case 6: r->e.setTuning(440.0 + (pot - 64) * 0.625); break;
@@ -55,7 +55,7 @@ void ref_set(void *p, int i, int pot)
     case 8: r->damt = (float)n; break;
     case 9: r->dtype = pot; if (pot) r->d.set_model(pot - 1); break;
     case 10: r->e.setSlideTime(linToLin(n, 0, 1, 2.0, 360.0)); break;
-    case 11: r->e.setAccentTribey(linToLin(n, 0, 1, 30.0, 3000.0)); break;
+    case 11: r->e.setAccentDecay(linToLin(n, 0, 1, 30.0, 3000.0)); break;
     }
 }
 /* the port's note API in MIDI terms: velocity >= 100 is accent, an overlapping note slides */

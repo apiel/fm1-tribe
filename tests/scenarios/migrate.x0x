@@ -1,5 +1,5 @@
 # A project saved by X0X 0.10 (tests/fixtures/v1_store.bin: 16 patterns of 32 steps, 32-step lanes,
-# the 909 SD before its TRIBEY) loads into 64 steps and 32 patterns as it was, and saves packed.
+# the 909 SD before its DECAY) loads into 64 steps and 32 patterns as it was, and saves packed.
 storeload tests/fixtures/v1_store.bin
 wait 100
 # pattern 1: BD on steps 1 and 32, the 303's note on step 1, nothing past 32
@@ -10,7 +10,7 @@ expect hit0.0.32 0
 expect hit0.0.63 0
 expect gate0.0 1
 expect gate0.32 0
-# the SD's pots moved up one for TRIBEY (its default, 41): LEVEL (100, turned to 105 recording), PAN 30
+# the SD's pots moved up one for DECAY (its default, 41): LEVEL (100, turned to 105 recording), PAN 30
 expect sound0.1.3 41
 expect sound0.1.4 105
 expect sound0.1.9 30

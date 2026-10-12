@@ -740,7 +740,7 @@ void engine_render(int32_t *out_lr, uint32_t n)
         if (i & 1u)
             eng_scope[eng_scope_w++ & (SCOPE_N - 1u)] = (int16_t)((out_l[i] + out_r[i]) * 16383.5f);
     }
-    for (p = 0; p < NPARTS; p++) {                      /* meters: peak hold, ~300 ms tribey at the UI */
+    for (p = 0; p < NPARTS; p++) {                      /* meters: peak hold, ~300 ms decay at the UI */
         uint32_t q = (uint32_t)(fm_minf(part_peak[p], 1.0f) * 32767.0f);
         if (q > eng_peak[p])
             eng_peak[p] = (uint16_t)q;

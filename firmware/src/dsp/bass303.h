@@ -4,7 +4,7 @@
  * from davemollen/dm-Rat, GPL-3.0).
  *
  * What is the same as schwung-303's engine: the signal path and every constant of Open303's
- * getSample() - pitch slew, the tribey envelope with its two RC followers, the measured
+ * getSample() - pitch slew, the decay envelope with its two RC followers, the measured
  * env-mod mapping, the TB_303-mode TeeBeeFilter (mystran & kunn coefficients) with its
  * feedback highpass, the amp envelope, the 200 Hz de-clicker, and the allpass / highpass /
  * notch after the filter - and the pot-to-physical ranges of plugin.cpp.
@@ -26,7 +26,7 @@
  *    and the envelopes (closed form, once per block). Filter states are cleared on the way
  *    in, as Open303's own triggerNote() does after idle (schwung-303 never idles).
  *  - Only the four Devilfish controls that fit the panel are exposed (slide time, accent
- *    tribey); the others stay at the stock values plugin.cpp uses with Devilfish off.
+ *    decay); the others stay at the stock values plugin.cpp uses with Devilfish off.
  *
  * Every instance is self-contained (no mutable static state): two can run side by side. */
 #pragma once
@@ -65,7 +65,7 @@
 
 /* parameter indices (pages of four: the UI shows KNOB 1-4) */
 enum {
-    BASS303_CUTOFF, BASS303_RESO, BASS303_ENVMOD, BASS303_TRIBEY,     /* page 1 */
+    BASS303_CUTOFF, BASS303_RESO, BASS303_ENVMOD, BASS303_DECAY,     /* page 1 */
     BASS303_ACCENT, BASS303_WAVE, BASS303_TUNE, BASS303_VOLUME,      /* page 2 */
     BASS303_DRIVE, BASS303_DRVTYPE, BASS303_SLIDE, BASS303_ACCDEC,   /* page 3 */
     BASS303_NPARAMS
@@ -86,7 +86,7 @@ typedef struct bass303 {
     float accent;            /* 0..1 */
     float tuning;            /* A4, Hz */
     float amp_scaler;        /* volume, linear */
-    float tribey_c, accdec_c; /* main-envelope multipliers for normal / accented notes */
+    float decay_c, accdec_c; /* main-envelope multipliers for normal / accented notes */
     float slew_c;            /* pitch slew-limiter coefficient */
     int wave;                /* 0 saw, 1 square */
     int drv_type;
@@ -120,7 +120,7 @@ typedef struct bass303 {
     float c_inc, c_b0, c_k, c_g2, c_a;
     float osc_freq, slew_y;
     float phase;             /* oscillator phase in turns, 0..1 */
-    float env_c, env_y;      /* main (filter) tribey envelope */
+    float env_c, env_y;      /* main (filter) decay envelope */
     float rc1_y, rc2_y;
     float accent_gain;
     float amp_y;             /* amp envelope */

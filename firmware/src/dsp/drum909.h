@@ -20,15 +20,15 @@
 
 enum { DR_BD, DR_SD, DR_LT, DR_MT, DR_HT, DR_RS, DR_CP, DR_CH, DR_OH, DR_CR, DR_RD, DR_NUM, DR_KIT = DR_NUM };
 
-#define DR_MAX_PARAMS 11         /* most params any voice (or the kit) has (X0X: + PAN, the SD's TRIBEY, the BD's sends) */
+#define DR_MAX_PARAMS 11         /* most params any voice (or the kit) has (X0X: + PAN, the SD's DECAY, the BD's sends) */
 #define DR_NZ_HIST 256           /* noise history kept across blocks (filter warm-up) */
 #define DR_NZ_BUF (DR_NZ_HIST + 2 * 256)
 
 /* BD and SD: 9W9's er99_bt_t */
 typedef struct {
     /* panel values (engineering units) */
-    float tune, sweep_depth, sweep_time, tribey, attack, click_tone, level;
-    float tune2, osc2_mix, snappy, noise_tribey, noise_hp, amp_hold, pitch_mod;
+    float tune, sweep_depth, sweep_time, decay, attack, click_tone, level;
+    float tune2, osc2_mix, snappy, noise_decay, noise_hp, amp_hold, pitch_mod;
     float drive;
     int32_t dist_type;
     d9_shape_t shape;
@@ -54,7 +54,7 @@ typedef struct {
 } d9_tom_t;
 
 typedef struct {
-    float tune, tune2, res, tribey, noise_mix, drive, level, accent;
+    float tune, tune2, res, decay, noise_mix, drive, level, accent;
     int32_t dist_type;
     d9_shape_t shape;
     d9_biquad_t bp1, bp2, hp;
@@ -64,7 +64,7 @@ typedef struct {
 } d9_rim_t;
 
 typedef struct {
-    float tune, res, spread, burst_tribey, tail_tribey, tail_level, drive, level, accent;
+    float tune, res, spread, burst_decay, tail_decay, tail_level, drive, level, accent;
     int32_t dist_type;
     d9_shape_t shape;
     d9_biquad_t bp, hp;
@@ -75,7 +75,7 @@ typedef struct {
 } d9_clap_t;
 
 typedef struct {
-    float tribey, volume, pitch, drive;
+    float decay, volume, pitch, drive;
     int32_t dist_type;
     d9_shape_t shape;
     const int16_t *buf;

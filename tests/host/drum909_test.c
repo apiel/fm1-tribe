@@ -52,23 +52,23 @@ static const int ref_trig[DR_NUM] = { 0, 1, 2, 3, 4, 5, 6, 8, 7, 10, 9 };
 static const char *const vname[DR_NUM + 1] = { "BD", "SD", "LT", "MT", "HT", "RS", "CP", "CH", "OH", "CR", "RD", "KIT" };
 
 /* 9W9 keys for each port parameter, in the port's order; 0: X0X's own (the BD's sends, the SD's
- * TRIBEY), which 9W9 does not have (the PANs are skipped by name) */
+ * DECAY), which 9W9 does not have (the PANs are skipped by name) */
 static const char *const dkeys[DR_NUM + 1][DR_MAX_PARAMS] = {
-    { "bd_c_tune", "bd_c_attack", "bd_c_tribey", "bd_c_level", "bd_c_sweep_depth", "bd_c_pitch_mod", "bd_c_drive", "bd_c_dist_type", 0, 0 },
-    { "sd_c_tune", "sd_c_noise_tribey", "sd_c_snappy", 0, "sd_c_level", "sd_c_drive", "sd_c_dist_type", "sd_c_rev", "sd_c_dly" },
-    { "lt_c_tune", "lt_c_tribey", "lt_c_level", "lt_c_attack", "lt_c_drive", "lt_c_dist_type", "lt_c_rev", "lt_c_dly" },
-    { "mt_c_tune", "mt_c_tribey", "mt_c_level", "mt_c_attack", "mt_c_drive", "mt_c_dist_type", "mt_c_rev", "mt_c_dly" },
-    { "ht_c_tune", "ht_c_tribey", "ht_c_level", "ht_c_attack", "ht_c_drive", "ht_c_dist_type", "ht_c_rev", "ht_c_dly" },
+    { "bd_c_tune", "bd_c_attack", "bd_c_decay", "bd_c_level", "bd_c_sweep_depth", "bd_c_pitch_mod", "bd_c_drive", "bd_c_dist_type", 0, 0 },
+    { "sd_c_tune", "sd_c_noise_decay", "sd_c_snappy", 0, "sd_c_level", "sd_c_drive", "sd_c_dist_type", "sd_c_rev", "sd_c_dly" },
+    { "lt_c_tune", "lt_c_decay", "lt_c_level", "lt_c_attack", "lt_c_drive", "lt_c_dist_type", "lt_c_rev", "lt_c_dly" },
+    { "mt_c_tune", "mt_c_decay", "mt_c_level", "mt_c_attack", "mt_c_drive", "mt_c_dist_type", "mt_c_rev", "mt_c_dly" },
+    { "ht_c_tune", "ht_c_decay", "ht_c_level", "ht_c_attack", "ht_c_drive", "ht_c_dist_type", "ht_c_rev", "ht_c_dly" },
     { "rs_volume", "rs_tune", "rs_saturation", "rs_dist_type", "rs_rev", "rs_dly" },
-    { "hc_volume", "hc_tune", "hc_tribey", "hc_drive", "hc_dist_type", "hc_rev", "hc_dly" },
-    { "chh_tribey", "chh_volume", "chh_pitch", "chh_drive", "chh_dist_type", "chh_rev", "chh_dly" },
-    { "ohh_tribey", "ohh_volume", "ohh_pitch", "ohh_drive", "ohh_dist_type", "ohh_rev", "ohh_dly" },
-    { "cr_pitch", "cr_volume", "cr_tribey", "cr_drive", "cr_dist_type", "cr_rev", "cr_dly" },
-    { "rc_pitch", "rc_volume", "rc_tribey", "rc_drive", "rc_dist_type", "rc_rev", "rc_dly" },
+    { "hc_volume", "hc_tune", "hc_decay", "hc_drive", "hc_dist_type", "hc_rev", "hc_dly" },
+    { "chh_decay", "chh_volume", "chh_pitch", "chh_drive", "chh_dist_type", "chh_rev", "chh_dly" },
+    { "ohh_decay", "ohh_volume", "ohh_pitch", "ohh_drive", "ohh_dist_type", "ohh_rev", "ohh_dly" },
+    { "cr_pitch", "cr_volume", "cr_decay", "cr_drive", "cr_dist_type", "cr_rev", "cr_dly" },
+    { "rc_pitch", "rc_volume", "rc_decay", "rc_drive", "rc_dist_type", "rc_rev", "rc_dly" },
     { "accent", "vel_depth" },
 };
 static const char *const fkeys[FX_NPARAMS] = {
-    "volume", "master_dist", "master_drive", "master_comp", "rev_tribey", "rev_tone", "rev_hpf", "rev_level",
+    "volume", "master_dist", "master_drive", "master_comp", "rev_decay", "rev_tone", "rev_hpf", "rev_level",
     "dly_time", "dly_fdbk", "dly_tone", "dly_level", "dly_hpf", 0, 0,
 };
 
@@ -221,7 +221,7 @@ static void voice_cases(void)
             const x0x_param_t *p = drum909_param(v, i);
             const int sends = !strcmp(p->name, "Rev") || !strcmp(p->name, "Dly");
             if (!strcmp(p->name, "Pan") || !dkeys[v][i])
-                continue;                       /* X0X's (stereo, the BD's sends, the SD's TRIBEY): 9W9 has none */
+                continue;                       /* X0X's (stereo, the BD's sends, the SD's DECAY): 9W9 has none */
             if (p->max == 127) {
                 static const int pots[3] = { 0, 64, 127 };
                 for (int k = 0; k < 3; ++k) {
@@ -266,7 +266,7 @@ static void fx_cases(void)
     static const int pots[3] = { 0, 64, 127 };
     const int sd = DR_SD, rs = DR_RS;
     printf("\n== send reverb (SD and CP sends 127; each reverb pot 0/64/127) ==\n");
-    for (int i = FX_RV_TRIBEY; i <= FX_RV_LEVEL; ++i)
+    for (int i = FX_RV_DECAY; i <= FX_RV_LEVEL; ++i)
         for (int k = 0; k < 3; ++k) {
             const set_t s[3] = { { 0, DR_SD, pidx(DR_SD, "Rev"), 127 }, { 0, DR_CP, pidx(DR_CP, "Rev"), 127 },
                                  { 1, 0, i, pots[k] } };
@@ -360,9 +360,9 @@ static void check_tables(void)
         }
         ref_free(ref);
         static const char *const ek[X0X_EXP_COUNT] = {
-            "bd_c_tribey", "bd_c_pitch_mod", "bd_c_drive", "sd_c_tune", "sd_c_noise_tribey", "lt_c_tune", "lt_c_tribey",
-            "mt_c_tune", "mt_c_tribey", "ht_c_tune", "ht_c_tribey", "rs_tune", "hc_tune", "hc_tribey",
-            "ohh_tribey", "chh_tribey", "rc_tribey", "ohh_pitch", "rev_hpf",
+            "bd_c_decay", "bd_c_pitch_mod", "bd_c_drive", "sd_c_tune", "sd_c_noise_decay", "lt_c_tune", "lt_c_decay",
+            "mt_c_tune", "mt_c_decay", "ht_c_tune", "ht_c_decay", "rs_tune", "hc_tune", "hc_decay",
+            "ohh_decay", "chh_decay", "rc_decay", "ohh_pitch", "rev_hpf",
         };
         for (int t = 0; t < X0X_EXP_COUNT; ++t)
             for (int p = 0; p < 128; ++p) {

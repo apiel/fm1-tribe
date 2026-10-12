@@ -1,13 +1,13 @@
 <!doctype html>
 <!-- SPDX-License-Identifier: GPL-3.0-only
      Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
-     X0X: Felucca's installer page (web/index_pkg.html), branded for X0X, English first, no editor.
+     TRIBE: Felucca's installer page (web/index_pkg.html), branded for TRIBE, English first, no editor.
      tools/make_pages.py inlines fm1pkg.js and fm1ota.js and the package's metadata. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>X0X installer</title>
+<title>TRIBE installer</title>
 <style>
   :root { --bg: #fff; --fg: #000; --dim: #777; }
   @media (prefers-color-scheme: dark) {
@@ -36,8 +36,8 @@
 <body>
 <main>
   <button class="lang" id="lang"></button>
-  <a class="home" href="../">X0X</a>
-  <h1>Install X0X</h1>
+  <a class="home" href="../">TRIBE</a>
+  <h1>Install TRIBE</h1>
   <p data-t="intro"></p>
   <p data-t="warn"></p>
   <p class="small" data-t="direct"></p>
@@ -60,10 +60,10 @@
   </ol>
   <p><button id="stockgo" disabled data-t="stockinstall"></button></p>
   <p><a href="../manual/" style="color:inherit" data-t="manual"></a></p>
-  <p class="small">X0X is built on Felucca by Leo Kuroshita (@kurogedelic), <a href="https://hugelton.com" target="_blank" rel="noopener" style="color:inherit">Hügelton Instruments</a>,
-    with the 909 from 9W9 and ER-99, the 808 from 8W8, the 303 from schwung-303 (Open303), TB-3PO, and BB Gen's break generator. The manual's Credits list them all.<br>
+  <p class="small">TRIBE is built on Felucca by Leo Kuroshita (@kurogedelic), <a href="https://hugelton.com" target="_blank" rel="noopener" style="color:inherit">Hügelton Instruments</a>,
+    and X0X by Charles Vestal, with the 909 from 9W9 and ER-99, the 808 from 8W8, the 303 from schwung-303 (Open303) and the kicks from zicBox. The manual's Credits list them all.<br>
     Fonts: Barlow Semi Condensed and Terminus (SIL OFL 1.1). M-VAVE and FM-1 are trademarks of their respective owners.<br>
-    <span data-t="license"></span> <a href="https://github.com/charlesvestal/fm1-x0x" target="_blank" rel="noopener" style="color:inherit">github.com/charlesvestal/fm1-x0x</a></p>
+    <span data-t="license"></span> <a href="https://github.com/apiel/fm1-tribe" target="_blank" rel="noopener" style="color:inherit">github.com/apiel/fm1-tribe</a></p>
 </main>
 <script type="module">
 /*LIB*/
@@ -74,14 +74,14 @@ const TEXT = {
     warn: "書き込み中は USB を抜かないでください。",
     install: "インストール", other: "English",
     manual: "マニュアル（英語）",
-    untested: "X0X はベータ版です。FM-1 で動作しますが、全パートを同時に密に鳴らすと処理が追いつかないことがあります。",
+    untested: "TRIBE はベータ版です。FM-1 で動作しますが、全パートを同時に密に鳴らすと処理が追いつかないことがあります。",
     direct: "USB ケーブルはパソコンに直接つないでください。Probe や Transporter などの機材は不要です。",
     brick: "万一 FM-1 が起動しなくなった場合は、Mac から標準ファームウェアに戻せます:",
     bricklink: "起動しない FM-1 の復旧（マニュアル）",
     beta: "これはベータ版で、不安定な場合があります。このカスタムファームウェアを使ったことで FM-1 が壊れたり不具合が起きたりしても、作者は一切の責任を負いません。自己責任でお使いください。",
     back: "公式ファームウェアに戻すには、このページ下の「純正ファームウェアに戻す」か、M-VAVE 公式のアップデーター M-UPGRADE（Downloads → PC Software → M-UPGRADE）を使います。",
     stockh: "純正ファームウェアに戻す",
-    stockwhy: "M-VAVE の FM-1 V15 を、X0X（またはそのセーフモード）から同じ USB ケーブルで書き込みます。X0X で保存したパターンは消えることがあります。",
+    stockwhy: "M-VAVE の FM-1 V15 を、TRIBE（またはそのセーフモード）から同じ USB ケーブルで書き込みます。TRIBE で保存したパターンは消えることがあります。",
     stock1: "M-VAVE の FM-1 V15 をダウンロード:",
     stock2: "ダウンロードしたファイルを選ぶ:",
     stock3: "FM-1 を USB で接続し、下のボタンを押す。",
@@ -109,14 +109,14 @@ const TEXT = {
     warn: "Do not unplug the USB cable while writing.",
     install: "Install", other: "日本語",
     manual: "The manual",
-    untested: "X0X is a beta. It runs on the FM-1, but every part playing a dense pattern at once can still overload it.",
+    untested: "TRIBE is a beta. It runs on the FM-1, but ten tracks of dense 303s can still overload it.",
     direct: "Connect the USB cable directly to the computer. No probe or Transporter is needed.",
     brick: "If the FM-1 no longer starts, a Mac can put the stock firmware back:",
     bricklink: "recovering an FM-1 that won't start (manual)",
     beta: "This is a beta and may be unstable. The author accepts no responsibility if your FM-1 is damaged or misbehaves because of this custom firmware. Use it at your own risk.",
     back: "To go back to the official firmware, use \"Back to the stock firmware\" below, or M-VAVE's own updater, M-UPGRADE (Downloads → PC Software → M-UPGRADE).",
     stockh: "Back to the stock firmware",
-    stockwhy: "This writes M-VAVE's own FM-1 V15 back, from X0X (or its safe mode, or Felucca) over the same USB cable. Patterns saved in X0X may be lost.",
+    stockwhy: "This writes M-VAVE's own FM-1 V15 back, from TRIBE (or its safe mode, or Felucca) over the same USB cable. Patterns saved in TRIBE may be lost.",
     stock1: "Download M-VAVE's FM-1 V15:",
     stock2: "Choose the file you downloaded:",
     stock3: "Connect the FM-1 by USB and press the button below.",
@@ -140,7 +140,7 @@ const TEXT = {
     license: "GPL-3.0, no warranty. Source:",
   },
 };
-let lang = "en";                                 /* X0X: English first (the manual is English); 日本語 is a click away */
+let lang = "en";                                 /* TRIBE: English first (the manual is English); 日本語 is a click away */
 const t = (k) => TEXT[lang][k];
 let lastKey = null, lastArg = "";
 function applyLang() {
@@ -168,7 +168,7 @@ window.addEventListener("beforeunload", (e) => { if (writing) { e.preventDefault
     const pkg = new Uint8Array(await r.arrayBuffer());
     if (productOf(pkg) !== meta.product) { sayK("badpkg"); return; }
     image = logicalImage(pkg);
-    say(`X0X ${meta.version}`);
+    say(`TRIBE ${meta.version}`);
     $("go").disabled = false;
   } catch (e) { sayK("loadfail", e.message); }
 })();

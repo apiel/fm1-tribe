@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 SRC = Path(__file__).resolve().parents[1]
-PART_COLOURS = {"909": "#e8860f", "808": "#e0483e", "303A": "#4fae3a", "303B": "#2e9bd6", "BREAK": "#a066e0"}
+PART_COLOURS = {}
 
 CSS = """
 :root {
@@ -164,12 +164,12 @@ def convert(md):
                 i += 1
             out.append(f'<div class="callout"><p>{inline(" ".join(para))}</p></div>')
             continue
-        if ln.startswith("# "):                         # the title; X0X's own a way home (the site's root)
+        if ln.startswith("# "):                         # the title; TRIBE's own a way home (the site's root)
             t = ln[2:].strip()
-            if t == "X0X":
-                out.append('<h1><a class="home" href="../">X0X</a></h1>')
+            if t == "TRIBE":
+                out.append('<h1><a class="home" href="../">TRIBE</a></h1>')
             else:
-                out.append(f'<a class="home" href="../">X0X</a>\n<h1>{inline(t)}</h1>')
+                out.append(f'<a class="home" href="../">TRIBE</a>\n<h1>{inline(t)}</h1>')
         elif ln.startswith("## "):
             t = ln[3:].strip()
             m = re.match(r"(\d+)\. (.+)", t)
@@ -238,10 +238,10 @@ def main():
     dst = Path(args[1]) if len(args) > 1 else SRC / "docs" / "manual.html"
     md = src.read_text()
     h1 = re.search(r"^# (.+)$", md, re.M)
-    title, what = ("X0X Manual", "The manual") if not h1 or h1.group(1) == "X0X" else (f"X0X: {h1.group(1)}", h1.group(1))
+    title, what = ("TRIBE Manual", "The manual") if not h1 or h1.group(1) == "TRIBE" else (f"TRIBE: {h1.group(1)}", h1.group(1))
     body = convert(md)
     page = (f"<title>{html.escape(title)}</title>\n"
-            f'<meta name="description" content="{html.escape(what)} for X0X, groovebox firmware for the M-VAVE FM-1.">\n'
+            f'<meta name="description" content="{html.escape(what)} for TRIBE, groovebox firmware for the M-VAVE FM-1.">\n'
             '<link rel="preconnect" href="https://fonts.googleapis.com">\n'
             '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n'
             '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600&'

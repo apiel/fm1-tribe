@@ -36,7 +36,7 @@ static const fx_pspec_t fx_p[FX_NPARAMS] = {
     [FX_DIST]     = { { "Dist", 7, 0, fx_dist_names }, CV_SW, 0, 0.0f, 0.0f },
     [FX_DRIVE]    = { { "Drive", 127, 41, 0 }, CV_EXP, X0X_EXP_DRIVE, 0.0f, 0.0f },
     [FX_COMP]     = { { "Comp", 127, 0, 0 }, CV_LIN, 0, 0.0f, 1.0f },
-    [FX_RV_TRIBEY] = { { "RvDec", 127, 73, 0 }, CV_LIN, 0, 0.2f, 0.93f },
+    [FX_RV_DECAY] = { { "RvDec", 127, 73, 0 }, CV_LIN, 0, 0.2f, 0.93f },
     [FX_RV_TONE]  = { { "RvTone", 127, 57, 0 }, CV_LIN, 0, 0.0f, 1.0f },
     [FX_RV_HPF]   = { { "RvHPF", 127, 62, 0 }, CV_EXP, X0X_EXP_FX_HPF, 0.0f, 0.0f },
     [FX_RV_LEVEL] = { { "RvLvl", 127, 85, 0 }, CV_LIN, 0, 0.0f, 1.2f },
@@ -91,7 +91,7 @@ static void fx_apply(fxbus_t *f, int i, float v)
     case FX_DIST: f->dist_mode = (int32_t)v; break;
     case FX_DRIVE: f->drive = v; break;
     case FX_COMP: f->comp = v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v); fx_comp_prep(f); break;
-    case FX_RV_TRIBEY: f->rv_tribey = v; break;
+    case FX_RV_DECAY: f->rv_decay = v; break;
     case FX_RV_TONE: f->rv_tone = v; break;
     case FX_RV_HPF: d9_biquad_set(&f->rv_hp, D9_HP, v, 0.7071f); break;
     case FX_RV_LEVEL: f->rv_level = v; break;
@@ -145,7 +145,7 @@ void fxbus_init(fxbus_t *f, int16_t *dly_buf, int dly_len)
     f->dbuf = dly_buf;
     f->dlen = dly_len;
 
-    f->rv_tribey = 0.62f; f->rv_tone = 0.45f; f->rv_level = 0.8f;
+    f->rv_decay = 0.62f; f->rv_tone = 0.45f; f->rv_level = 0.8f;
     d9_biquad_set(&f->rv_hp, D9_HP, 150.0f, 0.7071f);
     f->rv_quiet = FX_RV_QUIET;
 
@@ -186,7 +186,7 @@ static void fx_reverb(fxbus_t *f, const float *in, float *out, float *out_r, int
             return;                         /* silent in, silent lines: 0 out */
     }
     const float damp = 0.75f - f->rv_tone * 0.55f;
-    const float fb = f->rv_tribey;
+    const float fb = f->rv_decay;
     const float lvl = f->rv_level;
     int16_t *cb[4];
     cb[0] = f->comb;

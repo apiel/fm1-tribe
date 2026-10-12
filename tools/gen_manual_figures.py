@@ -3,10 +3,10 @@
 """The manual's figures, drawn (no photographs: M-VAVE's and Felucca's are not ours to use):
 
   docs/img/fm1-panel.svg   the FM-1 front panel, with the firmware's real screen in it
-  docs/img/fm1-keys.svg    the key bed: what the black and white keys do in X0X
+  docs/img/fm1-keys.svg    the key bed: what the black and white keys do in TRIBE
   docs/img/screen-*.png    screenshots from the simulator (2x, nearest neighbour)
 
-  tools/gen_manual_figures.py [TOUR_DIR]      (default build/scenarios/tour: run the tour first)
+  tools/gen_manual_figures.py [SHOT_DIR]      (default build/scen: run tests/run_tests.sh first; tests/scenarios/manual.tribe takes the shots)
 
 The panel layout follows the FM-1: two knob pairs and the octave buttons on the left, the
 screen in the middle, four knobs and two rows of six buttons on the right, and the keys below:
@@ -25,11 +25,11 @@ FONT = "'Barlow Semi Condensed', 'Arial Narrow', Arial, sans-serif"
 BODY, TRAY, KEY_W, KEY_B, KNOB, BTN, LABEL = "#3a3d42", "#26282c", "#d9dadc", "#c9cacd", "#1f2124", "#2e3135", "#e8e8ea"
 WHITE_N = 16
 BLACK_AFTER = [0, 1, 2, 4, 5, 7, 8, 9, 11, 12, 14]          # black key k sits after white key BLACK_AFTER[k]
-SHOTS = {"t01_909.png": "screen-909.png", "t04_303a.png": "screen-303.png", "t10_home.png": "screen-home.png",
-         "t08_break.png": "screen-break.png", "t14_mix_pump.png": "screen-mix.png", "t15_list.png": "screen-list.png",
-         "t19_ask.png": "screen-ask.png", "t02_909_readout.png": "screen-readout.png", "t06_tb3po.png": "screen-tb3po.png",
-         "t12_fx.png": "screen-fx.png", "t17_global.png": "screen-global.png"}
-SONG_SHOTS = {"s04_song_playing.png": "screen-song.png", "s05_motion.png": "screen-motion.png"}   # build/scenarios/song
+SHOTS = {"m_seq.png": "screen-seq.png", "m_step.png": "screen-step.png", "m_fx.png": "screen-fx.png", "m_env.png": "screen-env.png",
+         "m_edit.png": "screen-edit.png", "m_scatter.png": "screen-scatter.png", "m_303.png": "screen-303.png", "m_lfo.png": "screen-lfo.png",
+         "m_clips.png": "screen-clips.png", "m_sel.png": "screen-sel.png", "m_arp.png": "screen-arp.png", "m_rec.png": "screen-rec.png",
+         "m_seqcfg.png": "screen-seqcfg.png", "m_glo.png": "screen-glo.png", "m_glo_fx.png": "screen-glo-fx.png", "m_save.png": "screen-save.png",
+         "splash_c.png": "screen-splash.png"}
 
 
 def png_data_uri(path, scale=1):
@@ -100,11 +100,11 @@ def panel(screen_png):
     s = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" role="img" '
          f'aria-label="The FM-1 front panel, each control labelled with what it does">', STYLE,
          f'<rect x="4" y="4" width="{W - 8}" height="{H - 8}" rx="44" fill="{BODY}"/>',
-         knob(105, 92, 24, "MASTER", "Volume"), knob(215, 92, 24, "SELECT", "Page"),
-         knob(105, 210, 24, "PRESETS", "Pattern"), knob(215, 210, 24, "ALGORITHM", "Part"),
+         knob(105, 92, 24, "MASTER", "Set in GLO"), knob(215, 92, 24, "SELECT", "Set in GLO"),
+         knob(105, 210, 24, "PRESETS", "Set in GLO"), knob(215, 210, 24, "ALGORITHM", "Set in GLO"),
          f'<rect x="58" y="284" width="210" height="58" rx="14" fill="{TRAY}"/>',
          button(72, 294, 82, 38, "OCT-"), button(170, 294, 82, 38, "OCT+"),
-         what(113, 362, "16 steps back"), what(211, 362, "16 steps fwd"),
+         what(113, 362, "Page / octave -"), what(211, 362, "Page / octave +"),
          f'<rect x="300" y="44" width="236" height="236" rx="26" fill="#111214"/>',
          f'<image x="318" y="62" width="200" height="200" href="{png_data_uri(screen_png)}" style="image-rendering:pixelated"/>']
     for i in range(4):
@@ -112,9 +112,9 @@ def panel(screen_png):
     s.append(what(766, 136, "The page's four values"))
     s.append(f'<rect x="568" y="146" width="400" height="236" rx="18" fill="{TRAY}"/>')
     # each button: what it does, in a word or two (the details: the manual's table)
-    top = [("FX", "Effects"), ("SEL", "List all"), ("ENV", "Hold:|accent"), ("LFO", "Mixer"), ("EDIT", "Sound"),
-           ("GLO", "Settings")]
-    bot = [("HOME", "Pattern,|song"), ("SAVE", "Save,|hold: copy"), ("ARP", "TB-3PO"), ("SEQ", "Steps"),
+    top = [("FX", "Effects"), ("SEL", "Engine, mix"), ("ENV", "Envelope"), ("LFO", "LFO"), ("EDIT", "Sound"),
+           ("GLO", "Global")]
+    bot = [("HOME", "Clips"), ("SAVE", "Save"), ("ARP", "Keys, arp"), ("SEQ", "Steps|hold: config"),
            (("PLAY", "STOP"), "Play"), ("REC", "Record")]
     for i in range(6):
         x = 582 + i * 63
@@ -126,34 +126,31 @@ def panel(screen_png):
         if bot[i][1]:
             s.append(what(x + 27, 330, bot[i][1]))
     s.append(keybed(36, 400, W - 72, h=270))
-    s.append(what(W / 2, 696, "Black keys: drum tracks, break slices, part mutes, mixer channels   ·   "
-                              "White keys: steps (on HOME, patterns)"))
+    s.append(what(W / 2, 696, "Black keys: the ten tracks (the last: MUTE)   ·   White keys: steps, clips, scatter FX or notes"))
     s.append("</svg>")
     return "".join(s)
 
 
 def keymap():
     W, H = 1000, 330
-    names909 = ["BD", "SD", "LT", "MT", "HT", "RS", "CP", "CH", "OH", "CR", "RD"]
     s = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" role="img" '
-         f'aria-label="The keys in X0X: black keys 1 to 11 are drum tracks or break slices, white keys 1 to 16 are steps">',
+         f'aria-label="The keys in TRIBE: black keys 1 to 10 select the tracks, the eleventh mutes; white keys 1 to 16 are steps, clips or scatter effects">',
          STYLE, f'<rect x="0" y="0" width="{W}" height="{H}" rx="28" fill="{BODY}"/>',
-         keybed(20, 20, W - 40, white_label=lambda i: str(i + 1), black_label=lambda k: str(k + 1),
-                black_sub=lambda k: names909[k], white_sub=lambda i: "step", h=250),
-         f'<text x="40" y="306" class="cap">BLACK KEYS: 909 TRACKS (808, BREAK SLICES, HOME MUTES)   ·   WHITE KEYS: STEPS (HOME: PATTERNS)</text>',
+         keybed(20, 20, W - 40, white_label=lambda i: str(i + 1), black_label=lambda k: str(k + 1) if k < 10 else "M",
+                black_sub=lambda k: "track" if k < 10 else "mute", white_sub=lambda i: "step", h=250),
+         f'<text x="40" y="306" class="cap">BLACK KEYS: THE TEN TRACKS, THE LAST ONE IS MUTE   ·   WHITE KEYS: STEPS (CLIPS PAGE: CLIPS)</text>',
          "</svg>"]
     return "".join(s)
 
 
 def main():
-    tour = Path(sys.argv[1]) if len(sys.argv) > 1 else SRC / "build" / "scenarios" / "tour"
+    shots = Path(sys.argv[1]) if len(sys.argv) > 1 else SRC / "build" / "scen"
     OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / "fm1-panel.svg").write_text(panel(tour / "t01_909.png"))
+    (OUT / "fm1-panel.svg").write_text(panel(shots / "m_seq.png"))
     (OUT / "fm1-keys.svg").write_text(keymap())
-    for d, shots in ((tour, SHOTS), (tour.parent / "song", SONG_SHOTS)):
-        for src, dst in shots.items():
-            Image.open(d / src).convert("RGB").resize((480, 480), Image.NEAREST).save(OUT / dst, optimize=True)
-    print(f"figures in {OUT}: fm1-panel.svg, fm1-keys.svg, {len(SHOTS) + len(SONG_SHOTS)} screenshots")
+    for src, dst in SHOTS.items():
+        Image.open(shots / src).convert("RGB").resize((480, 480), Image.NEAREST).save(OUT / dst, optimize=True)
+    print(f"figures in {OUT}: fm1-panel.svg, fm1-keys.svg, {len(SHOTS)} screenshots")
 
 
 if __name__ == "__main__":

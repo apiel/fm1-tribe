@@ -136,7 +136,7 @@ extern volatile uint32_t dk_gstep;
 extern volatile uint8_t dk_tphase[NTRK];                 /* how far into its current step each track is, 0..255 (REC rounds with it) */
 extern volatile uint8_t dk_next[NTRK];                   /* the step each track plays next */
 extern volatile uint8_t dk_bound[NTRK];                  /* the engine each track really holds (differs from the clip's when its voice is taken) */
-extern volatile uint16_t dk_peak[NTRK];                 /* Q15, tribeying (UI) */
+extern volatile uint16_t dk_peak[NTRK];                 /* Q15, decaying (UI) */
 extern volatile uint8_t dk_hit[NTRK];                   /* last trigger's velocity, the UI lets it fall */
 
 /* ------------------------------------------- ISR side (engines.c, engine.c) --- */

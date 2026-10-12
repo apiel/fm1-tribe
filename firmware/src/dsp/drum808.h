@@ -10,7 +10,7 @@
  * ELEVEN TRACKS, sixteen sounds, the way the TR-808 itself does it: LT/MT/HT
  * each switch Tom / Conga, RS switches Rim / Claves and CP switches Clap /
  * Maracas. Every one of the sixteen sounds keeps its own pots (a conga keeps its
- * conga tribey when the switch goes back to tom), and a track's knobs edit the
+ * conga decay when the switch goes back to tom), and a track's knobs edit the
  * sound its switch selects. CH cuts OH (kit Choke switch, as 8W8).
  *
  * Mono, 44.1 kHz, C99, float, no libm, no allocation. Idle voices cost nothing;
@@ -35,7 +35,7 @@ enum { D8_BD, D8_SD, D8_LT, D8_MT, D8_HT, D8_RS, D8_CP, D8_CB, D8_CY, D8_OH, D8_
 enum { D8S_BD, D8S_SD, D8S_LT, D8S_MT, D8S_HT, D8S_LC, D8S_MC, D8S_HC,
        D8S_RS, D8S_CL, D8S_MA, D8S_CP, D8S_CB, D8S_CH, D8S_OH, D8S_CY, D8S_NUM };
 /* per-sound pot slots */
-enum { D8P_LEVEL, D8P_TUNE, D8P_TRIBEY, D8P_DRIVE, D8P_DIST, D8P_REV, D8P_DLY,
+enum { D8P_LEVEL, D8P_TUNE, D8P_DECAY, D8P_DRIVE, D8P_DIST, D8P_REV, D8P_DLY,
        D8P_X1, D8P_X2, D8P_NUM };   /* X1/X2: BD tone/attack, SD snappy/tone, MA attack */
 
 /* ---- DSP primitives ---------------------------------------------------- */
@@ -66,7 +66,7 @@ typedef struct {
 } d8_bd_t;
 
 typedef struct {
-    float mix1, mix2, accent_v, noise_env, noise_tribey, shp;
+    float mix1, mix2, accent_v, noise_env, noise_decay, shp;
     d8_bp_t bt1, bt2;
     d8_bq_t noise_hp, out_hp;
     d8_rng_t rng;

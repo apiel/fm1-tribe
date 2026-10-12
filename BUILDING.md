@@ -1,4 +1,4 @@
-# Building X0X
+# Building TRIBE
 
 The build makes three files in `build/`:
 
@@ -6,7 +6,7 @@ The build makes three files in `build/`:
 | --- | --- |
 | `x0x.bin` | the firmware app |
 | `loader/ota.bin` | the update loader |
-| `x0x.fwsc` | the installable package (app + loader) |
+| `tribe.fwsc` | the installable package (app + loader) |
 
 ## Prerequisites (macOS)
 
@@ -41,7 +41,7 @@ On Linux x86-64 the toolchain runs natively and Docker is not needed.
 `JIELI_TOOLCHAIN` and `AC79_SDK` override the default locations
 (`~/.jieli/toolchain`, `~/fw-AC79_AIoT_SDK`).
 
-`./build.sh --release 0.1-beta` makes a release build; the package is `build/x0x-0.1-beta.fwsc`.
+`./build.sh --release 0.1-beta` makes a release build; the package is `build/tribe-0.1-beta.fwsc`.
 
 On macOS with podman instead of Docker, put a `docker` script that runs `exec podman "$@"` first
 on your PATH. `X0X_JOBS` (default 4) limits parallel compiles: a podman machine drops
@@ -50,12 +50,9 @@ connections when many containers start at once.
 Build option: `X0X_CDC=1` adds Felucca's USB serial function (off by default: one plain
 MIDI interface).
 
-The build also generates `build/gen/`: the font, the 909's samples and tables
-(`tools/gen_drum_samples.py`), and the built-in break loops, rendered by the 909 port on the
-host (`tools/gen_builtin_break.sh`, needs a host `cc`). Opt-in, `X0X_BREAK_BANK=DIR` builds
-the break bank from one-bar WAVs instead (`tools/import_breaks.py` makes such a folder from
-BB Gen's samples, in `build/breaks/`); see README.md, Breaks. It fails if a soft-double routine is
-linked (a `double` crept in) and checks the image, RAM and pool sizes.
+The build also generates `build/gen/`: the font, and the 909's samples and tables
+(`tools/gen_drum_samples.py`). It fails if a soft-double routine is linked (a `double` crept in)
+and checks the image, RAM and pool sizes.
 
 ## Tests
 
@@ -63,26 +60,27 @@ linked (a `double` crept in) and checks the image, RAM and pool sizes.
 tests/run_tests.sh
 ```
 
-Runs, on the build machine: the maths library against libm; the sequencer and TB-3PO
-(against schwung-tb3po, from `../schwung-tb3po` or `TB3PO_REF`); each engine against its
-original (9W9, 8W8, schwung-303, BB Gen — the scripts in `tests/host/` say where they look
-for those sources); flash storage; Felucca's update-path tests against `build/x0x.fwsc`
-(the loader test needs `AC79_SDK`); and the whole app in the simulator
-(`tests/scenarios/*.x0x`), with its screenshots and audio in `build/scenarios/`.
+Runs the whole app in the host simulator (`tests/scenarios/*.tribe`: buttons, keys, knobs, with the
+screenshots and audio in `build/scen/`), the flash log under power cuts, the master effects, the sends,
+the scatter effects and the sequencer clock against reference renders, and, when Emscripten is
+installed, the browser build in node.
 
-`host/build_host.sh` builds the simulator alone; `build/host/x0x_host SCRIPT OUTDIR` runs one
-script (the command list is at the top of `host/x0x_host.c`).
+`host/build_host.sh` builds the simulator alone; `build/host/tribe_host SCRIPT OUTDIR` runs one
+script (the command list is at the top of `host/tribe_host.c`).
+
+The browser emulator needs Emscripten: `source ~/emsdk/emsdk_env.sh && ./run_emu.sh` builds it and
+serves it on <http://localhost:8000>.
 
 ## Install
 
-X0X's web installer is <https://charlesvestal.github.io/fm1-x0x/install/> (Felucca's, at
-hugelton.github.io, installs Felucca). To install your own build, use the command line, or a local
-copy of the site (below).
+TRIBE's web installer is <https://apiel.github.io/fm1-tribe/install/>. To install your own build, use
+the command line, or a local copy of the site (below).
 
 From the command line (needs `pip3 install mido python-rtmidi`):
 
 ```
-python3 tools/fm1_install.py build/x0x.fwsc
+tools/flash.sh --build            # build, and check that the FM-1 answers: writes nothing
+tools/flash.sh --yes              # install build/tribe.fwsc
 python3 tools/fm1_install.py --info          # identity of the connected FM-1
 ```
 
@@ -90,8 +88,9 @@ Or, to install your own build from the web installer, make a local copy of the s
 (Web MIDI needs a secure context):
 
 ```
-./build.sh --release 0.1-beta                     # the site wants a release build (identity FM-1_9XY)
-python3 tools/make_pages.py build/x0x-0.1-beta.fwsc 0.1-beta build/pages
+./build.sh --release 0.1-beta                     # the site wants a release build (identity FM-1_9XXYYZZ)
+sh web/emu/build.sh                               # the emulator (Emscripten)
+python3 tools/make_pages.py build/tribe-0.1-beta.fwsc 0.1-beta build/pages
 cd build/pages && python3 -m http.server 8000
 # open http://localhost:8000/install/
 ```
@@ -100,11 +99,21 @@ Installing firmware is at your own risk. If the FM-1 no longer starts but reache
 update mode (4C4A:8057 on USB), `tools/fm1_rescue.sh` puts stock V15 back from a Mac (docs/MANUAL.md,
 Troubleshooting); otherwise recovery needs [FM-1-transporter](https://github.com/kurogedelic/FM-1-transporter).
 
+## The manual and the site
+
+The manual is `docs/MANUAL.md`, what's new is `docs/NEW.md`. Their screenshots come from the simulator:
+
+```
+tests/run_tests.sh                  # tests/scenarios/manual.tribe takes the shots into build/scen/
+python3 tools/gen_manual_figures.py # -> docs/img (the panel and key drawings, the screenshots)
+```
+
 ## Publishing a release
 
-1. `./build.sh --release X.Y-beta` (the identity, FM-1_9XY, is what the installers check).
-2. `tools/publish_pages.sh X.Y-beta`: builds the site (landing page, web installer, manual,
+1. `./build.sh --release X.Y-beta` (the identity, FM-1_9XXYYZZ, is what the installers check).
+2. `tools/publish_pages.sh X.Y-beta`: builds the site (landing page, emulator, web installer, manual,
    firmware) with `tools/make_pages.py` and pushes it to the `gh-pages` branch, which GitHub
-   Pages serves at <https://charlesvestal.github.io/fm1-x0x/>.
-3. `gh release create vX.Y-beta build/x0x-X.Y-beta.fwsc --prerelease` for the command-line
+   Pages serves at <https://apiel.github.io/fm1-tribe/>. In the repository's Settings > Pages, the
+   source is "Deploy from a branch": `gh-pages`, folder `/ (root)`.
+3. `gh release create vX.Y-beta build/tribe-X.Y-beta.fwsc --prerelease` for the command-line
    download.

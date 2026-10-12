@@ -1,0 +1,73 @@
+# the manual's screenshots (tools/gen_manual_figures.py copies them into docs/img): a playing project, one page after the other
+tapkey b0
+tap PLAY
+wait 1500
+shot m_seq.png
+# a held step: its knobs (note, velocity, probability)
+holdkey w4 600
+shot m_step.png
+tap FX
+shot m_fx.png
+tap ENV
+shot m_env.png
+tap EDIT
+shot m_edit.png
+# the scatter keys: while it plays, the second row of keys is the scatter FX
+key w1 down
+wait 250
+shot m_scatter.png
+key w1 up
+wait 100
+# the 303 and its LFO
+tapkey b5
+tap SEQ
+holdkey w3 600
+shot m_303.png
+tap LFO
+turn K3 40
+turn K1 1
+wait 400
+shot m_lfo.png
+# the clips: the grid of 16 clips for each track
+tap HOME
+tapkey w2
+wait 300
+shot m_clips.png
+# SEL: engine, volume and the two sends of every track
+tapkey b3
+tap SEL
+turn K3 15
+turn K4 8
+tapkey b5
+turn K3 25
+turn K1 1
+wait 800
+shot m_sel.png
+# ARP and REC: the keyboard plays the track
+tap ARP
+shot m_arp.png
+tap REC
+shot m_rec.png
+# SEQ held: the sequencer's config
+tap SEQ
+press SEQ
+wait 600
+shot m_seqcfg.png
+release SEQ
+# GLO: the top, then FX 1 and FX 2
+tap GLO
+shot m_glo.png
+turn K1 1
+turn K1 1
+turn K1 1
+turn K1 1
+turn K1 1
+turn K1 1
+turn K1 1
+shot m_glo_fx.png
+# SAVE: a change to save, and the pick
+tap SEQ
+tapkey w7
+tap SAVE
+shot m_save.png
+tap SEQ

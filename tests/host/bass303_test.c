@@ -557,7 +557,7 @@ int main(int argc, char **argv)
         static const int notes[] = { 48, 72, 84 };
         float *r1 = malloc(sizeof(float) * FS), *p1 = malloc(sizeof(float) * FS);
         int w, k;
-        printf("  alias floor (inharmonic > 500 Hz), sustained note, cutoff/tribey max, reso/envmod 0:\n");
+        printf("  alias floor (inharmonic > 500 Hz), sustained note, cutoff/decay max, reso/envmod 0:\n");
         for (w = 0; w < 2; w++)
             for (k = 0; k < 3; k++) {
                 setting_t st = { "alias", { 127, 0, 0, 127, 0, 0, 64, 102, 0, 1, 21, 7 }, 0 };
