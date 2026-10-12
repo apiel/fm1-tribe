@@ -15,6 +15,7 @@ a DJ filter, the effects or the tempo.
 | **[Web installer](https://apiel.github.io/fm1-tribe/install/)** | Flash your FM-1 from Chrome or Edge over USB. Nothing to install on the computer. Can put the stock firmware back. |
 | **[Manual](https://apiel.github.io/fm1-tribe/manual/)** | Getting started, every page and every parameter. |
 | **[What's new](https://apiel.github.io/fm1-tribe/new/)** | The release notes. |
+| **[Discord](https://discord.gg/fzHTbjh6x)** | Questions, bugs, music: the fm1-tribe channel. |
 | [Site](https://apiel.github.io/fm1-tribe/) | All of the above in one place. |
 
 Installing firmware is at your own risk; TRIBE is a beta.

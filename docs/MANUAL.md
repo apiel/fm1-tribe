@@ -377,6 +377,8 @@ before it ends to cancel.
 **Calibration:** if a button or knob does the wrong thing, hold OCT- and OCT+ while you switch
 the FM-1 on. The screen then asks you to press each button and turn each knob in turn.
 
+**Questions and bugs:** join the [fm1-tribe Discord](https://discord.gg/fzHTbjh6x) or [open an issue](https://github.com/apiel/fm1-tribe/issues).
+
 **It's crackling or cutting out:** look at CPU in GLO while everything plays. Ten tracks of 303s
 and kicks is a lot for the FM-1; turn tracks to NONE or to simpler engines if the peak reaches 100%.
 

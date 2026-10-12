@@ -87,6 +87,7 @@ M-VAVE's own firmware back. Installing is at your own risk.</div>
   <div class="card"><strong><a href="install/">Install v__VERSION__</a> <a class="new" href="new/">What's new?</a></strong><span>From Chrome or Edge, with the FM-1 connected by USB. Nothing to install on the computer.</span></div>
   <a href="manual/"><strong>Manual</strong><span>Getting started in a few steps, then every page, every effect and every parameter.</span></a>
   <a href="firmware/__PKG__"><strong>Download __PKG__</strong><span>For the command-line installer: <code>python3 tools/fm1_install.py __PKG__</code></span></a>
+  <a href="https://discord.gg/fzHTbjh6x"><strong>Discord</strong><span>Join the fm1-tribe channel: questions, bugs, and what you make with it.</span></a>
   <a href="__REPO__"><strong>Source</strong><span>GitHub, GPL-3.0. A fork of X0X, built on Felucca by Hügelton Instruments.</span></a>
 </nav>
 <p class="small">To go back to the official firmware, use M-VAVE's updater, M-UPGRADE, from
