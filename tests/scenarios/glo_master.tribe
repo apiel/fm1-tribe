@@ -1,16 +1,83 @@
-# GLO: the master FX type (what SELECT runs: only that one is active) and the master compressor; the list scrolls
+# GLO: volume, DJ filter, reso, FX 1 and FX 2 (type, amount, parameter), the four knobs, the master compressor; the list scrolls
 tap GLO
 expect view 3
-expectselfx 0
+# VOLUME is the MASTER knob while that is the volume: the row says so and does not change
 turn K1 1
 turn K2 1
-expectselfx 1
-shot glo_masterfx.png
-# SELECT is now the crush amount, and the drive does nothing (it is skipped: its amount stays 0 here and, set, it would not run)
-turn SELECT 5
-expectfx 3 0 10
-expectfx 2 0 0
-# the compressor rows: THRESH (95), RATIO (2), ATTACK, RELEASE, MAKEUP, MIX start at the 7th row
+expectvol 90
+# DJ filter and resonance are rows of their own (the middle is off)
+turn K1 1
+expectdj 0 64
+turn K2 -5
+expectdj 0 54
+turn K1 1
+turn K2 4
+expectdj 1 48
+# FX2 TYPE: starts as the reverb; stepping on skips the delay (FX 1 is the delay: one buffer each), wraps at both ends
+turn K1 1
+expectfxtype 0 1
+turn K1 1
+turn K1 1
+turn K1 1
+expectfxtype 1 0
+turn K2 1
+expectfxtype 1 2
+turn K2 -1
+expectfxtype 1 0
+turn K2 -1
+expectfxtype 1 8
+turn K2 1
+expectfxtype 1 0
+# FX2 AMOUNT and PARAM are numbers
+turn K1 1
+turn K2 1
+expectfxamt 1 102
+turn K1 1
+turn K2 1
+expectfxpar 1 66
+shot glo_fx2.png
+# FX1: PARAM, AMOUNT, then TYPE (delay -> drive)
+turn K1 -1
+turn K1 -1
+turn K1 -1
+turn K2 5
+expectfxpar 0 60
+turn K1 -1
+turn K2 -3
+expectfxamt 0 94
+turn K1 -1
+turn K2 1
+expectfxtype 0 2
+shot glo_fx1.png
+# the VOLUME row counts once MASTER is given another job (the MASTER KNOB row is the eleventh)
+turn K1 1
+turn K1 1
+turn K1 1
+turn K1 1
+turn K1 1
+turn K1 1
+turn K2 1
+expectknob 0 1
+turn K1 -1
+turn K1 -1
+turn K1 -1
+turn K1 -1
+turn K1 -1
+turn K1 -1
+turn K1 -1
+turn K1 -1
+turn K1 -1
+turn K2 -10
+expectvol 70
+# the compressor rows: THRESH (95), RATIO (2), ATTACK, RELEASE, MAKEUP, MIX
+turn K1 1
+turn K1 1
+turn K1 1
+turn K1 1
+turn K1 1
+turn K1 1
+turn K1 1
+turn K1 1
 turn K1 1
 turn K1 1
 turn K1 1
@@ -18,19 +85,4 @@ turn K1 1
 turn K1 1
 turn K2 -10
 expectcomp 0 75
-turn K1 1
-turn K2 1
-expectcomp 1 3
-turn K1 1
-turn K2 5
-expectcomp 2 90
-turn K1 1
-turn K1 1
-turn K2 -3
-expectcomp 4 6
 shot glo_comp.png
-turn K1 1
-turn K1 1
-turn K1 1
-shot glo_end.png
-# GLO has no ENGINE and no VOLUME row any more: the rows are TEMPO, MASTER FX, four knobs, six compressor rows, CLIPS, CPU, BATTERY

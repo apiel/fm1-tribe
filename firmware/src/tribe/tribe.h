@@ -55,19 +55,15 @@ typedef struct {
     uint8_t rate, dir, swing;           /* the sequencer's config for this clip: SR_*, SD_*, swing 0..127 (all zero = 1/16, forward, straight) */
 } clip_t;
 
-/* the master knobs: MASTER (a pot), SELECT, PRESETS, ALGORITHM (encoders). Each is a volume, one parameter of an
- * effect, or a macro that moves up to four track parameters. */
-/* FILTER .. VINYL work on the mix (or on the tracks of a mask); DELAY and REVERB are the sends' returns; COMP is reserved (the master
- * compressor is in the settings, always on, edited in GLO). The master FX of the SELECT knob is one of DRIVE .. VINYL, chosen in GLO. */
-enum { FX_NONE, FX_FILTER, FX_DRIVE, FX_CRUSH, FX_RING, FX_DECIM, FX_VINYL, FX_COMP, FX_DELAY, FX_REVERB, NFX };
-#define FX_HAS_MASK(fx) ((fx) >= FX_FILTER && (fx) <= FX_VINYL)    /* these can be limited to tracks; the others work on the mix */
-#define NSELFX 5                         /* the choices for the master FX: FX_DRIVE + 0 .. 4 */
-enum { KS_NONE, KS_VOL, KS_FX, KS_MACRO, KS_MFX };   /* KS_MFX: the master FX chosen in GLO (par 0 or 1 of it) */
+/* the master knobs: MASTER (a pot), SELECT, PRESETS, ALGORITHM (encoders). Each one does one of the jobs below. The jobs are the settings: the GLO menu has a row for each, so a knob is only a shortcut. */
+enum { KS_VOL, KS_DJ, KS_RESO, KS_FX1, KS_FX2, KS_BPM, NKS };
+/* FX 1 and FX 2: two master effects every track can send to (SEL page). Each is one of these; AMT is its return level, PARAM its
+ * own parameter (feedback, room size, drive, bit depth, ...). */
+enum { MX_REVERB, MX_DELAY, MX_DRIVE, MX_DIST, MX_FUZZ, MX_WAVE, MX_CRUSH, MX_DECIM, MX_RING, NMX };
+#define MX_STATEFUL(t) ((t) == MX_REVERB || (t) == MX_DELAY)     /* one buffer each: only one of FX 1 / FX 2 can be one of these */
 #define NKNOB 4
-#define NMACRO 4
-#define PIX_LEVEL 100                   /* a macro target that is a track's LEVEL, not an engine pot */
-typedef struct { uint8_t kind, fx, par, rsv; } kslot_t;
-typedef struct { uint8_t trk, par, inv, on; } mtarget_t;
+#define PIX_LEVEL 100                   /* a parameter slot that is a track's LEVEL, not an engine pot */
+typedef struct { uint8_t kind, rsv; } kslot_t;
 
 typedef struct {
     uint32_t magic;
@@ -76,14 +72,12 @@ typedef struct {
     uint8_t cur[NTRK];                  /* the clip each track starts on */
     uint8_t master_vol, rsv[3];
     uint8_t arp_mode[NTRK], arp_rate[NTRK], arp_gate[NTRK], arp_oct[NTRK];   /* ARP: keys up down updn rand trsp; 1/16 1/8 1/4; % of the step; octaves */
-    uint8_t selfx;                      /* which effect the master FX knob runs: 0 .. NSELFX - 1 (FX_DRIVE + selfx) */
+    uint8_t fxtype[2];                  /* what FX 1 and FX 2 are: MX_* */
+    uint8_t fxamt[2], fxpar[2];         /* their return level and their own parameter, 0..127 */
+    uint8_t dj[2];                      /* the DJ filter: cutoff (64 = off, LP left, HP right) and resonance, 0..127 */
     uint8_t comp[6];                    /* the master compressor, always on: THRESH RATIO ATTACK RELEASE MAKEUP MIX (master.h pots) */
     uint8_t send[2][NTRK];              /* each track's send to the delay (0) and the reverb (1), 0..127 */
     kslot_t knob[NKNOB];
-    uint8_t mval[NKNOB];                /* a macro's value */
-    uint8_t fxv[NFX][2];                /* each effect's two parameters, 0..127 */
-    uint16_t fxmask[NFX];               /* the tracks an effect acts on (bit t); 0 = the whole mix */
-    mtarget_t macro[NKNOB][NMACRO];
 } dsettings_t;
 
 typedef struct {
@@ -101,15 +95,16 @@ void clip_init(clip_t *c, int eng);     /* an empty clip with the engine's defau
 void clip_set_engine(clip_t *c, int eng);   /* the engine and its default pots; the steps stay */
 
 /* ------------------------------------------------------- the master effects --- */
-const char *mfx_name(int fx);
-int mfx_nparams(int fx);
-const char *mfx_pname(int fx, int p);
-void mfx_format(int fx, int p, int v, char *buf);
-int mfx_active(int fx, const uint8_t v[2]);
+const char *mx_name(int type);
+const char *mx_pname(int type);                              /* its PARAM, in a word */
+void mx_format(int type, int v, char *buf);                  /* PARAM in text, <= 7 chars */
+void dj_format(int v, char *buf);                            /* the DJ filter: LP 40, OFF, HP 12 */
+int dj_active(const uint8_t dj[2]);
 typedef struct { float a, b, c, d, hold; int32_t cnt; float gp; uint32_t rng; } mfxs_t;
-void mfx_run(int fx, mfxs_t *s, float *x, int n, const uint8_t v[2]);
-void mfx_send_idle(int fx);
-void mfx_send_run(int fx, float *x, int n, const uint8_t v[2], float spl);   /* DELAY, REVERB: the send bus in, only the wet out (x 'return level') */
+void dj_run(mfxs_t *s, float *x, int n, const uint8_t dj[2]);
+/* FX 1 / FX 2: the send bus in, only the wet out (times AMT). s is the slot's state (unused by the reverb and the delay: one buffer each) */
+void mx_run(int type, mfxs_t *s, float *x, int n, int amt, int par, float spl);
+void mx_idle(int type);
 
 /* -------------------------------------------------------------- engine --- */
 void ui_say(const char *a, const char *b);
@@ -162,4 +157,8 @@ void eng_render_all(float *buf, int off, int n);   /* buf[trk * 256 + off ...] *
 int store_load(void);                   /* fills proj from the flash log; returns the records found (0: nothing saved yet) */
 int store_save(int trk, int clip);      /* trk < 0: every changed clip + settings; else that clip. Records written, or < 0 */
 void store_poll(void);                  /* call once a frame: finds changed clips, one a frame */
+int store_clip_dirty(int trk, int clip);   /* does this clip differ from what was saved? */
+int store_set_dirty(void);              /* the settings (GLO; not the MASTER knob's volume) */
+int store_save_set(void);               /* only the settings: 1 saved, 0 unchanged, < 0 error */
+int store_revert(int trk, int clip);    /* the clip back to its saved state: 1, or 0 when it was never saved */
 int store_dirty(void);                  /* clips (and settings) changed since the last save */

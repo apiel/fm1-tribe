@@ -12,16 +12,18 @@
 #include "../app/plat.h"
 #include "scatter.h"
 
-enum { V_SEQ, V_PARAM, V_HOME, V_GLO, V_ARP, V_REC, V_KNOBS, V_COMMON, NVIEWS };
-static const char *const VIEW_N[NVIEWS] = {"SEQ", "PARAM", "CLIPS", "GLO", "ARP", "REC", "KNOBS", "MIX"};
+enum { V_SEQ, V_PARAM, V_HOME, V_GLO, V_ARP, V_REC, V_COMMON, NVIEWS };
+static const char *const VIEW_N[NVIEWS] = {"SEQ", "PARAM", "CLIPS", "GLO", "ARP", "REC", "MIX"};
 static const char *const ARP_N[6] = {"KEYS", "UP", "DOWN", "UPDN", "RAND", "TRSP"};
 #define ARP_ON(t) (proj.set.arp_mode[t] >= 1 && proj.set.arp_mode[t] <= 4)   /* an arpeggio mode (not KEYS, not TRSP) */
 #define ARP_TRSP 5
 static const char *const ARP_R[3] = {"1/16", "1/8", "1/4"};
 static const char *const GRP_N[NPG] = {"FX", "ENV", "LFO", "EDIT"};
 static const uint8_t GRP_BTN[NPG] = {B_FX, B_ENV, B_LFO, B_EDIT};
-enum { G_TEMPO, G_MFX, G_K0, G_K1, G_K2, G_K3, G_COMP0, G_COMP5 = G_COMP0 + 5, G_CLIPS, G_CPU, G_BAT, NGLO };
-static const char *const GLO_N[NGLO] = {"TEMPO", "MASTER FX", "MASTER KNOB", "SELECT KNOB", "PRESETS KNOB", "ALGO KNOB", "COMP THRESH",
+enum { G_TEMPO, G_VOL, G_DJ, G_RESO, G_FX1, G_FX1A, G_FX1P, G_FX2, G_FX2A, G_FX2P, G_K0, G_K1, G_K2, G_K3, G_COMP0,
+       G_COMP5 = G_COMP0 + 5, G_CLIPS, G_CPU, G_BAT, NGLO };
+static const char *const GLO_N[NGLO] = {"TEMPO", "VOLUME", "DJ FILTER", "DJ RESO", "FX1 TYPE", "FX1 AMOUNT", "FX1 PARAM", "FX2 TYPE",
+                                         "FX2 AMOUNT", "FX2 PARAM", "MASTER KNOB", "SELECT KNOB", "PRESETS KNOB", "ALGO KNOB", "COMP THRESH",
                                          "COMP RATIO", "COMP ATTACK", "COMP RELEASE", "COMP MAKEUP", "COMP MIX", "CLIPS", "CPU", "BATTERY"};
 #define GLO_COMP0 G_COMP0              /* the compressor rows: GLO_COMP0 .. +5 (settings.comp[]) */
 
@@ -43,13 +45,12 @@ static struct {
     uint32_t press_t;
     int8_t oct;                          /* the keyboard's octave offset, -2..2 */
     uint8_t glo, gtop;                   /* GLO: the item, and the first row on screen */
-    uint8_t ks, kt;                      /* KNOBS page: the slot, and the macro target on it */
     int16_t pot_ref;                     /* MASTER as a control: where the pot was when it was last used */
     uint8_t pot_armed;
     uint32_t bprev, kprev, used;
     uint8_t cfg, seq_hold;               /* SEQ held: the sequencer's config page, until it is let go */
     uint32_t seq_t0;
-    uint8_t save_pending;                /* SAVE is down and nothing else was done with it */
+    uint8_t save_mode;                   /* SAVE was pressed: the track keys / GLO pick what to save, SAVE again saves it all, anything else leaves */
     uint8_t held_note[NKEYS];            /* live note of a held key + 1 */
     uint8_t held_trk[NKEYS];
     uint8_t held_scat[NKEYS];            /* scatter slot of a held key + 1 */
@@ -289,108 +290,84 @@ static void turn_step(int slot, int d)
 }
 
 /* ---------------------------------------------------------------- the master knobs --- */
-#define NASSIGN 11
-static const struct { uint8_t kind, fx, par; } ASSIGN[NASSIGN] = {
-    {KS_NONE, 0, 0}, {KS_VOL, 0, 0}, {KS_FX, FX_FILTER, 0}, {KS_FX, FX_FILTER, 1}, {KS_FX, FX_DELAY, 0}, {KS_FX, FX_DELAY, 1},
-    {KS_FX, FX_REVERB, 0}, {KS_FX, FX_REVERB, 1}, {KS_MACRO, 0, 0}, {KS_MFX, 0, 0}, {KS_MFX, 0, 1}};
+#define NASSIGN NKS
+static const char *const ASSIGN_N[NKS] = {"VOLUME", "DJ FILTER", "DJ RESO", "FX1 AMOUNT", "FX2 AMOUNT", "BPM"};
 static const char *const KNOB_N[NKNOB] = {"MASTER", "SELECT", "PRESETS", "ALGO"};
 
-static int sel_fx(void) { return FX_DRIVE + (proj.set.selfx < NSELFX ? proj.set.selfx : 0); }
-static int slot_fx(const kslot_t *k) { return k->kind == KS_MFX ? sel_fx() : k->fx; }
-
-static int assign_of(const kslot_t *k)
-{
-    int i;
-    for (i = 0; i < NASSIGN; i++)
-        if (ASSIGN[i].kind == k->kind && (k->kind != KS_FX || ASSIGN[i].fx == k->fx) && ((k->kind != KS_FX && k->kind != KS_MFX) || ASSIGN[i].par == k->par))
-            return i;
-    return 0;
-}
-static void assign_text(int slot, char *b)
-{
-    const kslot_t *k = &proj.set.knob[slot];
-    char *q;
-    if (k->kind == KS_VOL)
-        put_s(b, "VOLUME");
-    else if (k->kind == KS_MACRO)
-        put_s(b, "MACRO");
-    else if (k->kind == KS_FX || k->kind == KS_MFX) {
-        q = put_s(b, mfx_name(slot_fx(k)));
-        if (mfx_nparams(slot_fx(k)) > 1) {
-            *q++ = ' ';
-            put_s(q, mfx_pname(slot_fx(k), k->par));
-        }
-    } else
-        put_s(b, "OFF");
-}
+static int assign_of(const kslot_t *k) { return k->kind < NKS ? k->kind : 0; }
+static void assign_text(int slot, char *b) { put_s(b, ASSIGN_N[assign_of(&proj.set.knob[slot])]); }
 /* the next / previous thing a knob can do */
 static void assign_step(int slot, int dir)
 {
     kslot_t *k = &proj.set.knob[slot];
-    int a = (assign_of(k) + NASSIGN + (dir > 0 ? 1 : -1)) % NASSIGN;
-    k->kind = ASSIGN[a].kind;
-    k->fx = ASSIGN[a].fx;
-    k->par = ASSIGN[a].par;
+    k->kind = (uint8_t)((assign_of(k) + NASSIGN + (dir > 0 ? 1 : -1)) % NASSIGN);
     ui.pot_ref = -1;                                       /* MASTER: re-arm, so the new assignment does not jump */
 }
-/* does the knob's job have details to set (a macro's targets, the tracks an effect acts on)? */
-static int slot_detail(int slot)
+/* the settings byte a job is (the GLO rows are the same bytes: a knob is a shortcut to a row) */
+static uint8_t *kind_ptr(int kind)
 {
-    const kslot_t *k = &proj.set.knob[slot];
-    return k->kind == KS_MACRO || ((k->kind == KS_FX || k->kind == KS_MFX) && FX_HAS_MASK(slot_fx(k)));
+    switch (kind) {
+    case KS_VOL: return &proj.set.master_vol;
+    case KS_DJ: return &proj.set.dj[0];
+    case KS_RESO: return &proj.set.dj[1];
+    case KS_FX1: return &proj.set.fxamt[0];
+    case KS_FX2: return &proj.set.fxamt[1];
+    default: return 0;
+    }
+}
+static uint8_t *glo_ptr(int row)
+{
+    switch (row) {
+    case G_VOL: return &proj.set.master_vol;
+    case G_DJ: return &proj.set.dj[0];
+    case G_RESO: return &proj.set.dj[1];
+    case G_FX1A: return &proj.set.fxamt[0];
+    case G_FX1P: return &proj.set.fxpar[0];
+    case G_FX2A: return &proj.set.fxamt[1];
+    case G_FX2P: return &proj.set.fxpar[1];
+    default: return 0;
+    }
+}
+static void bpm_text(char *b)
+{
+    char *q = put_i(b, proj.set.bpm_x10 / 10);
+    put_s(q, ".");
+    put_i(q + 1, proj.set.bpm_x10 % 10);
+}
+static void tempo_set(int x10) { dk_bpm(x10 < 300 ? 300 : x10 > 3000 ? 3000 : x10); }
+
+/* FX 1 / FX 2: the next type. The reverb and the delay have one buffer each, so the other slot's is skipped */
+static void fxtype_step(int i, int d)
+{
+    int v = proj.set.fxtype[i] < NMX ? proj.set.fxtype[i] : 0, other = proj.set.fxtype[i ^ 1], n;
+    for (n = 0; n < NMX; n++) {
+        v = (v + NMX + (d > 0 ? 1 : -1)) % NMX;
+        if (!(MX_STATEFUL(v) && v == other))
+            break;
+    }
+    proj.set.fxtype[i] = (uint8_t)v;
 }
 
 static int knob_value(int slot)
 {
-    const kslot_t *k = &proj.set.knob[slot];
-    return k->kind == KS_VOL ? proj.set.master_vol : (k->kind == KS_FX || k->kind == KS_MFX) ? proj.set.fxv[slot_fx(k)][k->par & 1] : k->kind == KS_MACRO ? proj.set.mval[slot] : 0;
+    int kind = assign_of(&proj.set.knob[slot]);
+    const uint8_t *p = kind_ptr(kind);
+    return p ? *p : kind == KS_BPM ? (proj.set.bpm_x10 - 300) * 127 / 2700 : 0;
 }
 static void knob_text(int slot, char *b)             /* the value, in its own unit */
 {
-    const kslot_t *k = &proj.set.knob[slot];
-    if (k->kind == KS_FX || k->kind == KS_MFX)
-        mfx_format(slot_fx(k), k->par, knob_value(slot), b);
-    else if (k->kind == KS_NONE)
-        put_s(b, "-");
+    int kind = assign_of(&proj.set.knob[slot]);
+    if (kind == KS_DJ)
+        dj_format(knob_value(slot), b);
+    else if (kind == KS_BPM)
+        bpm_text(b);
     else
         put_s(put_i(b, knob_value(slot) * 100 / 127), "%");
 }
 
-static void macro_apply(int slot)
+static void knob_say(int slot)
 {
-    int i, v = proj.set.mval[slot];
-    for (i = 0; i < NMACRO; i++) {
-        const mtarget_t *m = &proj.set.macro[slot][i];
-        int val = m->inv ? 127 - v : v;
-        if (!m->on || m->trk >= NTRK)
-            continue;
-        if (m->par == PIX_LEVEL)
-            proj.set.level[m->trk] = (uint8_t)val;
-        else {
-            int e = proj.clip[m->trk][dk_clip[m->trk]].eng;
-            if (m->par < eng_nparams(e)) {
-                int mx = eng_param(e, m->par)->max;
-                dk_set(m->trk, m->par, val * mx / 127);
-            }
-        }
-    }
-}
-
-/* set a knob's value (0..127), and say it */
-static void knob_set(int slot, int v)
-{
-    kslot_t *k = &proj.set.knob[slot];
     char b[24], *q;
-    v = v < 0 ? 0 : v > 127 ? 127 : v;
-    if (k->kind == KS_VOL)
-        proj.set.master_vol = (uint8_t)v;
-    else if (k->kind == KS_FX || k->kind == KS_MFX)
-        proj.set.fxv[slot_fx(k)][k->par & 1] = (uint8_t)v;
-    else if (k->kind == KS_MACRO) {
-        proj.set.mval[slot] = (uint8_t)v;
-        macro_apply(slot);
-    } else
-        return;
     assign_text(slot, b);
     q = b + (int)tw_len(b);
     *q++ = ' ';
@@ -398,9 +375,30 @@ static void knob_set(int slot, int v)
     say(b, 0);
 }
 
+/* set a knob's value (0..127), and say it */
+static void knob_set(int slot, int v)
+{
+    int kind = assign_of(&proj.set.knob[slot]);
+    uint8_t *p = kind_ptr(kind);
+    v = v < 0 ? 0 : v > 127 ? 127 : v;
+    if (p)
+        *p = (uint8_t)v;
+    else if (kind == KS_BPM)
+        tempo_set(300 + v * 2700 / 127);                  /* the pot: 30 .. 300 */
+    else
+        return;
+    knob_say(slot);
+}
+
 static void knob_turn(int slot, int d)
 {
-    if (proj.set.knob[slot].kind != KS_NONE && !(slot == 0 && proj.set.knob[0].kind == KS_VOL))
+    int kind = assign_of(&proj.set.knob[slot]);
+    if (slot == 0 && kind == KS_VOL)
+        return;
+    if (kind == KS_BPM) {                                   /* an encoder: a whole BPM a detent */
+        tempo_set(proj.set.bpm_x10 + d * 10);
+        knob_say(slot);
+    } else
         knob_set(slot, knob_value(slot) + d * 2);
 }
 
@@ -490,32 +488,32 @@ static void key_note(int k, int down)
     }
 }
 
+static void save_say(int n, const char *what)
+{
+    char buf[24];
+    if (n < 0)
+        say("SAVE FAILED", 0);
+    else if (!n)
+        say("UNCHANGED", 0);
+    else
+        say(put_s(buf, what), 0);
+}
+
+/* does track t's clip on screen differ from what was saved? */
+static int trk_dirty(int t) { return store_clip_dirty(t, dk_clip[t]); }
+
 static void key_down(int k)
 {
     int w = WHITE_OF[k], b = BLACK_OF[k];
     uint32_t now = plat_ms();
-    if (ui.view == V_ARP || ui.view == V_REC) {
-        key_note(k, 1);
+    if (ui.save_mode) {                                 /* a track key saves that track's clip on screen; any other key leaves */
+        if (b >= 0 && b < NTRK && trk_dirty(b))
+            save_say(store_save(b, dk_clip[b]), "CLIP SAVED");
+        ui.save_mode = 0;
         return;
     }
-    if (b >= 0 && ui.view == V_KNOBS) {                 /* the tracks an effect is limited to / a macro target's track */
-        kslot_t *kk = &proj.set.knob[ui.ks];
-        if ((kk->kind == KS_FX || kk->kind == KS_MFX) && FX_HAS_MASK(slot_fx(kk))) {
-            uint16_t *mk = &proj.set.fxmask[slot_fx(kk)];
-            *mk = b == 10 ? 0 : (uint16_t)(*mk ^ (1u << b));            /* the MUTE key: back to the whole mix */
-            if (*mk == 0x3FFu)
-                *mk = 0;
-        } else if (kk->kind == KS_MACRO) {
-            mtarget_t *m = &proj.set.macro[ui.ks][ui.kt];
-            if (b == 10 || (m->on && m->trk == b))
-                m->on = 0;
-            else {
-                m->trk = (uint8_t)b;
-                m->on = 1;
-                if (m->par != PIX_LEVEL && m->par >= eng_nparams(proj.clip[b][dk_clip[b]].eng))
-                    m->par = PIX_LEVEL;
-            }
-        }
+    if (ui.view == V_ARP || ui.view == V_REC) {
+        key_note(k, 1);
         return;
     }
     if (b >= 0) {
@@ -552,15 +550,8 @@ static void key_down(int k)
         break;
     }
     case V_HOME:
-        if (ui.bprev & (1u << B_SAVE)) {                /* SAVE held: save that clip, do not launch it */
-            int n = store_save(ui.trk, w);
-            ui.save_pending = 0;
-            if (n < 0)
-                say("SAVE FAILED", 0);
-            else
-                say(n ? "CLIP SAVED" : "CLIP UNCHANGED", 0);
-            break;
-        }
+        if (w != dk_clip[ui.trk] && store_clip_dirty(ui.trk, w))   /* loading a clip that was changed and not saved: it comes back as it was */
+            store_revert(ui.trk, w);
         dk_launch(ui.trk, w, dk_queued[ui.trk] == w);   /* again on the queued clip: now */
         break;
     case V_PARAM:
@@ -620,6 +611,25 @@ static void save_all(void)
 static void button_down(int b)
 {
     int g;
+    if (ui.save_mode) {                                 /* SAVE: GLO saves the settings, SAVE again everything, any other button leaves */
+        if (b == B_GLO) {
+            int n = store_save_set();
+            save_say(n, "GLO SAVED");
+            ui.save_mode = 0;
+            return;
+        }
+        ui.save_mode = 0;
+        if (b == B_SAVE) {
+            save_all();
+            return;
+        }
+    } else if (b == B_SAVE) {
+        if (store_dirty() || store_set_dirty())
+            ui.save_mode = 1;
+        else
+            say("NOTHING TO SAVE", 0);
+        return;
+    }
     switch (b) {
     case B_PLAY:
         dk_play(!dk_playing);
@@ -655,22 +665,9 @@ static void button_down(int b)
         ui.view = V_GLO;
         break;
     case B_SAVE:
-        ui.save_pending = 1;                            /* on release: save what changed (or SAVE + a clip key: that clip) */
         break;
     case B_SEL:
-        if (ui.view == V_GLO && ui.glo >= G_K0 && ui.glo <= G_K3) {     /* a knob's row: its details (a macro's targets, an effect's tracks) */
-            if (slot_detail(ui.glo - G_K0)) {
-                ui.ks = (uint8_t)(ui.glo - G_K0);
-                ui.kt = 0;
-                ui.view = V_KNOBS;
-            } else
-                say("NOTHING MORE TO SET", 0);
-        } else if (ui.view == V_KNOBS && proj.set.knob[ui.ks].kind == KS_MACRO) {
-            mtarget_t *m = &proj.set.macro[ui.ks][ui.kt];
-            m->inv = (uint8_t)!m->inv;                      /* SEL: turn the target upside down */
-            say(m->inv ? "TARGET INVERTED" : "TARGET NORMAL", 0);
-        } else
-            ui.view = ui.view == V_COMMON ? V_SEQ : V_COMMON;        /* SEL: what every engine has: engine, volume, the two sends */
+        ui.view = V_COMMON;                                           /* SEL: what every engine has: engine, volume, the two sends */
         break;
     case B_OCTDN: case B_OCTUP: {
         int d = b == B_OCTUP ? 1 : -1;
@@ -712,10 +709,6 @@ static void input(void)
     for (i = 0; i < NKEYS; i++)
         if ((kd >> i) & 1u)
             key_down(i);
-    if ((ui.bprev & ~b & (1u << B_SAVE)) && ui.save_pending) {          /* SAVE let go with nothing else done */
-        ui.save_pending = 0;
-        save_all();
-    }
     ui.bprev = b;
     ui.kprev = k;
     if (ui.press >= 0 && (ui.kprev >> WHITE_K[ui.press & 15]) & 1u && plat_ms() - ui.press_t > 350u) {
@@ -735,11 +728,15 @@ static void input(void)
                 ui.glo = (uint8_t)((ui.glo + NGLO + (d > 0 ? 1 : -1)) % NGLO);
             else if (i == 1) {
                 if (ui.glo == G_TEMPO) {
-                    int v = proj.set.bpm_x10 + d * 10;
-                    dk_bpm(v < 300 ? 300 : v > 3000 ? 3000 : v);
-                } else if (ui.glo == G_MFX) {                   /* which effect the master FX knob runs; only that one is on */
-                    int v = proj.set.selfx + (d > 0 ? 1 : -1);
-                    proj.set.selfx = (uint8_t)(v < 0 ? 0 : v >= NSELFX ? NSELFX - 1 : v);
+                    tempo_set(proj.set.bpm_x10 + d * 10);
+                } else if (ui.glo == G_VOL && proj.set.knob[0].kind == KS_VOL) {
+                    say("VOLUME = MASTER KNOB", 0);          /* the pot is the volume: this row only counts when it is not */
+                } else if (glo_ptr(ui.glo)) {                   /* a number: the volume, the DJ filter, a send effect's amount or parameter */
+                    uint8_t *gp = glo_ptr(ui.glo);
+                    int v = *gp + d * 2;
+                    *gp = (uint8_t)(v < 0 ? 0 : v > 127 ? 127 : v);
+                } else if (ui.glo == G_FX1 || ui.glo == G_FX2) {  /* what FX 1 / FX 2 is */
+                    fxtype_step(ui.glo == G_FX2, d);
                 } else if (ui.glo >= G_K0 && ui.glo <= G_K3) {  /* what a knob does */
                     assign_step(ui.glo - G_K0, d);
                 } else if (ui.glo >= GLO_COMP0 && ui.glo < GLO_COMP0 + 6) {      /* the master compressor */
@@ -763,22 +760,6 @@ static void input(void)
             }
             ui.touched = (int8_t)i;
             ui.touch_until = plat_ms() + 900u;
-        } else if (ui.view == V_KNOBS) {
-            kslot_t *k = &proj.set.knob[ui.ks];
-            mtarget_t *m = &proj.set.macro[ui.ks][ui.kt];
-            if (i == 0)
-                ui.ks = (uint8_t)((ui.ks + NKNOB + (d > 0 ? 1 : -1)) % NKNOB);
-            else if (i == 1)                               /* what the knob does */
-                assign_step(ui.ks, d);
-            else if (k->kind == KS_MACRO && i == 2)
-                ui.kt = (uint8_t)((ui.kt + NMACRO + (d > 0 ? 1 : -1)) % NMACRO);
-            else if (k->kind == KS_MACRO && i == 3) {      /* the target's pot: LEVEL, then the engine's, in order */
-                int e = proj.clip[m->trk][dk_clip[m->trk]].eng, n = eng_nparams(e) + 1;
-                int pos = (m->par == PIX_LEVEL ? 0 : m->par + 1) + d;
-                pos = pos < 0 ? 0 : pos >= n ? n - 1 : pos;
-                m->par = pos == 0 ? PIX_LEVEL : (uint8_t)(pos - 1);
-                m->on = 1;
-            }
         } else if (ui.view == V_ARP) {
             int t = ui.trk, v;
             if (i > 0 && !ARP_ON(t))
@@ -1019,48 +1000,12 @@ static void draw_scatter(void)
     }
 }
 
-static void mask_text(uint16_t mk, char *b)
-{
-    int t;
-    char *q = b;
-    if (!mk) {
-        put_s(b, "ALL TRACKS");
-        return;
-    }
-    for (t = 0; t < NTRK; t++)
-        if ((mk >> t) & 1u) {
-            if (q != b)
-                *q++ = ' ';
-            *q++ = 'T';
-            q = put_i(q, t + 1);
-        }
-}
-static void macro_text(const mtarget_t *m, char *b)
-{
-    char *q;
-    if (!m->on) {
-        put_s(b, "-");
-        return;
-    }
-    q = put_s(b, "T");
-    q = put_i(q, m->trk + 1);
-    *q++ = ' ';
-    if (m->par == PIX_LEVEL)
-        q = put_s(q, "Level");
-    else {
-        int e = proj.clip[m->trk][dk_clip[m->trk]].eng;
-        q = put_s(q, m->par < eng_nparams(e) ? eng_param(e, m->par)->name : "?");
-    }
-    if (m->inv)
-        put_s(q, " INV");
-}
-
 /* the COMMON page: every track as a column. The wide bar is the live level (a meter, after the volume and the mute); the white tick across it is the
  * volume; the two thin bars beside it are the sends. The selected track sits on a lighter ground. */
 static void draw_common(void)
 {
     int t;
-    char b[4];
+    char b[4], fxl[2][16];
     static const uint16_t CS[2] = {RGB(255, 184, 70), RGB(100, 200, 255)};
     for (t = 0; t < NTRK; t++) {
         int x = t * 24 + 1, sel = t == ui.trk, h, lv, y;
@@ -1081,55 +1026,14 @@ static void draw_common(void)
         put_i(b, t + 1);
         text_c(x + 10, vc(&FONT_B, 112, 14), &FONT_B, b, sel ? C_WHITE : C_GRAY);
     }
+    put_s(put_s(fxl[0], "FX1 "), mx_name(proj.set.fxtype[0]));
+    put_s(put_s(fxl[1], "FX2 "), mx_name(proj.set.fxtype[1]));
     cv_rect(2, 6, 6, 4, C_WHITE);
     cv_text(10, vc(&FONT_XS, 2, 12), &FONT_XS, "VOLUME + LEVEL", C_GRAY);
     cv_rect(110, 6, 3, 4, CS[0]);
-    cv_text(116, vc(&FONT_XS, 2, 12), &FONT_XS, "FX1 DELAY", C_GRAY);
+    cv_text(116, vc(&FONT_XS, 2, 12), &FONT_XS, fxl[0], C_GRAY);
     cv_rect(176, 6, 3, 4, CS[1]);
-    cv_text(182, vc(&FONT_XS, 2, 12), &FONT_XS, "FX2 REVERB", C_GRAY);
-}
-
-static void draw_knobs_page(void)
-{
-    int i;
-    char b[32];
-    const kslot_t *k = &proj.set.knob[ui.ks];
-    for (i = 0; i < NKNOB; i++) {
-        int y = 3 + i * 21, on = ui.ks == i;
-        char v[12];
-        if (on)
-            box(0, y - 1, 240, 20, RGB(40, 40, 48));
-        cv_text(6, vc(&FONT_S, y, 18), &FONT_S, KNOB_N[i], on ? C_WHITE : C_GRAY);
-        assign_text(i, b);
-        cv_text(84, vc(&FONT_B, y, 18), &FONT_B, b, on ? C_HI : C_WHITE);
-        knob_text(i, v);
-        text_r(234, vc(&FONT_S, y, 18), &FONT_S, v, on ? C_WHITE : C_GRAY);
-    }
-    cv_rect(0, 90, 240, 1, C_LINE);
-    if (k->kind == KS_FX || k->kind == KS_MFX) {
-        int fx = slot_fx(k);
-        if (fx == FX_DELAY || fx == FX_REVERB)
-            put_s(b, "THE RETURN");
-        else if (!FX_HAS_MASK(fx))
-            put_s(b, "THE WHOLE MIX");
-        else
-            mask_text(proj.set.fxmask[fx], b);
-        cv_text(6, vc(&FONT_XS, 94, 14), &FONT_XS, fx == FX_DELAY || fx == FX_REVERB ? "FED BY EACH TRACK'S SEND (SEL)" : k->kind == KS_MFX ? (FX_HAS_MASK(fx) ? "THE MASTER FX (TYPE IN GLO): TRACKS (BLACK KEYS)" : "THE MASTER FX (TYPE IN GLO)") : !FX_HAS_MASK(fx) ? "ON" : "TRACKS (BLACK KEYS)", C_GRAY);
-        cv_text(6, vc(&FONT_B, 112, 18), &FONT_B, b, C_AMB);
-    } else if (k->kind == KS_MACRO) {
-        for (i = 0; i < NMACRO; i++) {
-            int y = 93 + i * 11;
-            if (ui.kt == i)
-                box(0, y, 240, 11, RGB(40, 40, 48));
-            put_i(b, i + 1);
-            cv_text(6, vc(&FONT_XS, y, 11), &FONT_XS, b, C_GRAY);
-            macro_text(&proj.set.macro[ui.ks][i], b);
-            cv_text(24, vc(&FONT_XS, y, 11), &FONT_XS, b, proj.set.macro[ui.ks][i].on ? C_WHITE : C_GRAY);
-        }
-    } else if (k->kind == KS_VOL)
-        cv_text(6, vc(&FONT_B, 100, 18), &FONT_B, "THE MASTER VOLUME", C_AMB);
-    else
-        cv_text(6, vc(&FONT_B, 100, 18), &FONT_B, "NOTHING ASSIGNED", C_GRAY);
+    cv_text(182, vc(&FONT_XS, 2, 12), &FONT_XS, fxl[1], C_GRAY);
 }
 
 static void draw_text_screen(const char *a, const char *b2, uint16_t c)
@@ -1165,12 +1069,18 @@ static void comp_text(int j, char *b)
 static void glo_text(int i, char *v)
 {
     v[0] = 0;
-    if (i == G_TEMPO) {
-        char *q = put_i(v, proj.set.bpm_x10 / 10);
-        put_s(q, ".");
-        put_i(q + 1, proj.set.bpm_x10 % 10);
-    } else if (i == G_MFX)
-        put_s(v, mfx_name(sel_fx()));
+    if (i == G_TEMPO)
+        bpm_text(v);
+    else if (i == G_VOL && proj.set.knob[0].kind == KS_VOL)
+        put_s(v, "MASTER KNOB");
+    else if (i == G_DJ)
+        dj_format(proj.set.dj[0], v);
+    else if (i == G_FX1 || i == G_FX2)
+        put_s(v, mx_name(proj.set.fxtype[i == G_FX2]));
+    else if (i == G_FX1P || i == G_FX2P)
+        mx_format(proj.set.fxtype[i == G_FX2P], *glo_ptr(i), v);
+    else if (glo_ptr(i))
+        put_s(put_i(v, *glo_ptr(i) * 100 / 127), "%");
     else if (i >= G_K0 && i <= G_K3)
         assign_text(i - G_K0, v);
     else if (i >= GLO_COMP0 && i < GLO_COMP0 + 6)
@@ -1191,7 +1101,7 @@ static void glo_text(int i, char *v)
 static void draw_glo(void)
 {
     int i, rows = 7;
-    char v[24];
+    char v[24], lab[24];
     if (ui.glo < ui.gtop)
         ui.gtop = ui.glo;
     if (ui.glo >= ui.gtop + rows)
@@ -1200,7 +1110,11 @@ static void draw_glo(void)
         int y = 3 + (i - ui.gtop) * 19, on = ui.glo == i;
         if (on)
             box(0, y - 1, 236, 18, RGB(40, 40, 48));
-        cv_text(10, vc(&FONT_B, y, 16), &FONT_B, GLO_N[i], on ? C_WHITE : C_GRAY);
+        if (i == G_FX1P || i == G_FX2P)                     /* its parameter's own name: FX1 FDBK, FX2 SIZE, ... */
+            put_s(put_s(put_s(lab, "FX"), i == G_FX1P ? "1 " : "2 "), mx_pname(proj.set.fxtype[i == G_FX2P]));
+        else
+            put_s(lab, GLO_N[i]);
+        cv_text(10, vc(&FONT_B, y, 16), &FONT_B, lab, on ? C_WHITE : C_GRAY);
         glo_text(i, v);
         text_r(230, vc(&FONT_B, y, 16), &FONT_B, v, on ? C_HI : C_GRAY);
     }
@@ -1256,7 +1170,6 @@ static void draw_main(void)
     case V_PARAM: draw_param(); draw_scatter(); break;
     case V_HOME: draw_home(); break;
     case V_GLO: draw_glo(); break;
-    case V_KNOBS: draw_knobs_page(); break;
     case V_COMMON: draw_common(); break;
     default: {                                          /* ARP / KEYS / REC: the keyboard plays the track */
         int lo = 53 + 12 * ui.oct, steady = ui.view == V_ARP && ARP_ON(ui.trk) && !dk_playing;
@@ -1291,6 +1204,15 @@ static void draw_main(void)
         break;
     }
     }
+    if (ui.save_mode) {                                  /* the SAVE pick stays up until something is picked */
+        box(8, 28, 224, 82, C_BLACK);
+        cv_rect(8, 28, 224, 1, C_HI);
+        cv_rect(8, 109, 224, 1, C_HI);
+        text_c(120, vc(&FONT_B, 34, 20), &FONT_B, "SAVE", C_HI);
+        text_c(120, vc(&FONT_S, 58, 16), &FONT_S, "PICK A TRACK OR GLO", C_WHITE);
+        text_c(120, vc(&FONT_S, 80, 16), &FONT_S, "SAVE AGAIN = SAVE ALL", C_AMB);
+        text_c(120, vc(&FONT_XS, 98, 12), &FONT_XS, "ANY OTHER KEY CANCELS", C_GRAY);
+    }
     cv_commit_rect(1, 0, MAIN_Y);
 
 }
@@ -1300,11 +1222,11 @@ static void draw_knobs(void)
     int i;
     const clip_t *c = cur_clip();
     const tribe_eng_t *e = eng_info(c->eng);
-    int editing = ui.view == V_SEQ && ui.edit >= 0, arpv = ui.view == V_ARP, knv = ui.view == V_KNOBS, cov = ui.view == V_COMMON, scfg = ui.cfg;
+    int editing = ui.view == V_SEQ && ui.edit >= 0, arpv = ui.view == V_ARP, cov = ui.view == V_COMMON, scfg = ui.cfg;
     cv_begin(240, KNOB_H, C_BLACK);
     {   /* where you are: the tag and the page dots at the right of the rule */
-        const char *tag = ui.view == V_GLO ? "GLO" : ui.view == V_REC ? "REC" : scfg ? "SEQUENCER" : ui.view == V_SEQ && !editing ? "TAP A STEP" : cov ? "COMMON" : knv ? "KNOBS" : arpv ? "ARP" : editing ? "STEP" : ui.view == V_HOME ? "MIX" : GRP_N[ui.grp];
-        int np = editing || arpv || knv || cov || ui.view == V_SEQ || ui.view == V_HOME || ui.view == V_GLO || ui.view == V_REC ? 1 : npages(ui.grp), dots = np > 1;
+        const char *tag = ui.view == V_GLO ? "GLO" : ui.view == V_REC ? "REC" : scfg ? "SEQUENCER" : ui.view == V_SEQ && !editing ? "TAP A STEP" : cov ? "COMMON" : arpv ? "ARP" : editing ? "STEP" : ui.view == V_HOME ? "MIX" : GRP_N[ui.grp];
+        int np = editing || arpv || cov || ui.view == V_SEQ || ui.view == V_HOME || ui.view == V_GLO || ui.view == V_REC ? 1 : npages(ui.grp), dots = np > 1;
         int32_t xd = 237 - (dots ? np * 5 : 0), xt = xd - (dots ? 5 : 0) - tw(&FONT_XS, tag);
         {   /* the battery, at the left end of the rule: three bars; amber at one, red and blinking when it is empty; USB: plugged in */
             int bat = plat_battery(), bars = bat == 4 ? 3 : bat < 0 ? 0 : bat;
@@ -1339,10 +1261,6 @@ static void draw_knobs(void)
                 lab = "Edit";
                 glo_text(ui.glo, val);
                 u = 0.5f;
-            } else if (i == 2 && ui.glo >= G_K0 && ui.glo <= G_K3 && slot_detail(ui.glo - G_K0)) {
-                lab = "SEL";                               /* the button: this knob's details */
-                put_s(val, "MORE");
-                u = 1.0f;
             } else
                 continue;
             goto draw_one;
@@ -1365,20 +1283,6 @@ static void draw_knobs(void)
             if (i == 0) { put_s(val, eng_info(c->eng)->name); u = (float)c->eng / (float)(eng_count() - 1); }
             else if (i == 1) { put_s(put_i(val, proj.set.level[t] * 100 / 127), "%"); u = (float)proj.set.level[t] / 127.0f; }
             else { put_s(put_i(val, proj.set.send[i - 2][t] * 100 / 127), "%"); u = (float)proj.set.send[i - 2][t] / 127.0f; }
-        } else if (knv) {
-            const kslot_t *ks = &proj.set.knob[ui.ks];
-            static const char *const KN[4] = {"SLOT", "DOES", "TARGET", "POT"};
-            lab = KN[i];
-            if (i == 0) { put_s(val, KNOB_N[ui.ks]); u = (float)ui.ks / 3.0f; }
-            else if (i == 1) { assign_text(ui.ks, val); u = (float)assign_of(ks) / (float)(NASSIGN - 1); }
-            else if (ks->kind != KS_MACRO) continue;
-            else if (i == 2) { put_i(val, ui.kt + 1); u = (float)ui.kt / 3.0f; }
-            else {
-                const mtarget_t *mt = &proj.set.macro[ui.ks][ui.kt];
-                int e = proj.clip[mt->trk][dk_clip[mt->trk]].eng;
-                put_s(val, !mt->on ? "-" : mt->par == PIX_LEVEL ? "Level" : mt->par < eng_nparams(e) ? eng_param(e, mt->par)->name : "?");
-                u = mt->par == PIX_LEVEL ? 0.0f : (float)(mt->par + 1) / 24.0f;
-            }
         } else if (arpv) {
             static const char *const AN[4] = {"MODE", "RATE", "GATE", "OCT"};
             int t = ui.trk;
@@ -1432,7 +1336,7 @@ static void draw_knobs(void)
         }
         }
     }
-    if (!editing && !arpv && !knv && !cov && ui.view != V_HOME && ui.view != V_SEQ && !eng_nparams(c->eng) && ui.grp != PG_EDIT)
+    if (!editing && !arpv && !cov && ui.view != V_HOME && ui.view != V_SEQ && !eng_nparams(c->eng) && ui.grp != PG_EDIT)
         text_c(120, vc(&FONT_S, 30, 20), &FONT_S, "NO ENGINE ON THIS CLIP", C_GRAY);
     cv_commit(2, 0, KNOB_Y);
 }
@@ -1472,20 +1376,6 @@ static void leds(void)
                 k |= m;
             else if (!dk_muted[t] && clip_has(&proj.clip[t][dk_clip[t]]))
                 kd |= m;
-        }
-        if (ui.view == V_KNOBS) {
-            const kslot_t *kk = &proj.set.knob[ui.ks];
-            k = kd = 0;
-            for (t = 0; t < NTRK; t++) {
-                if ((kk->kind == KS_FX || kk->kind == KS_MFX) && FX_HAS_MASK(slot_fx(kk))) {
-                    uint16_t mk = proj.set.fxmask[slot_fx(kk)];
-                    if (!mk)
-                        kd |= 1u << BLACK_K[t];
-                    else if ((mk >> t) & 1u)
-                        k |= 1u << BLACK_K[t];
-                } else if (kk->kind == KS_MACRO && proj.set.macro[ui.ks][ui.kt].on && proj.set.macro[ui.ks][ui.kt].trk == t)
-                    k |= 1u << BLACK_K[t];
-            }
         }
         if (ui.kprev & (1u << BLACK_K[10]))
             k |= 1u << BLACK_K[10];
@@ -1535,6 +1425,16 @@ static void leds(void)
         bd |= (1u << B_OCTDN) | (1u << B_OCTUP);          /* OCT- / OCT+ page through the steps or the parameters */
     if (store_dirty())
         bd |= 1u << B_SAVE;                               /* SAVE glows: something is not saved */
+    if (ui.save_mode) {          /* SAVE: only what can be saved blinks (the tracks whose clip changed, GLO); SAVE at half = everything */
+        b = bd = 0;
+        k = kd = 0;
+        bd |= 1u << B_SAVE;
+        if (blink && store_set_dirty())
+            b |= 1u << B_GLO;
+        for (t = 0; t < NTRK; t++)
+            if (blink && trk_dirty(t))
+                k |= 1u << BLACK_K[t];
+    }
     plat_glow(0);
     plat_buttons_dim(bd & ~b);
     plat_keys_dim(kd & ~k);
@@ -1550,18 +1450,9 @@ void ui_init(void)
     ui.edit = -1;
     ui.press = -1;
     ui.pot_ref = -1;
-    {   /* a knob left on an assignment that no longer exists goes to what replaced it: drive .. vinyl are the master FX now, the compressor has no knob */
-        int k;
-        for (k = 0; k < NKNOB; k++) {
-            kslot_t *ks = &proj.set.knob[k];
-            if (ks->kind == KS_FX && ks->fx >= FX_DRIVE && ks->fx <= FX_VINYL) {
-                proj.set.selfx = (uint8_t)(ks->fx - FX_DRIVE);
-                ks->kind = KS_MFX;
-            } else if (ks->kind == KS_FX && ks->fx == FX_COMP) {
-                ks->fx = FX_DELAY;
-                ks->par = 0;
-            }
-        }
+    {   /* the MASTER knob's volume is not saved: it starts where the pot is */
+        int pos = (int)(fm_sqrtf((float)plat_master() * 256.0f) * (1.0f / 8.0f));
+        proj.set.master_vol = (uint8_t)(pos > 127 ? 127 : pos);
     }
     ui.grp = PG_EDIT;
     fix_group();

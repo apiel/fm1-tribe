@@ -2,11 +2,10 @@
 /* The master effects and the volume rule: an effect at its neutral value, or limited to tracks that are silent, leaves the
  * 303 track's audio bit-for-bit as it was; otherwise it changes it, and the output stays finite.
  *   mfx_test base FILE                    the plain track
- *   mfx_test FX V0 V1 MASK same|diff FILE  one effect, compared with FILE
- *   mfx_test vol KNOBKIND MASTERVOL same|quieter FILE
- *   mfx_test send FX V0 V1 SEND same|diff FILE   the 303 track's send to the delay (FX 5) or the reverb (FX 6)
+ *   mfx_test dj CUTOFF RESO same|diff FILE   the DJ filter (settings.dj) on the mix
+ *   mfx_test vol KNOBKIND (0 = volume, 1 = anything else) MASTERVOL same|quieter FILE
+ *   mfx_test send SLOT TYPE AMT PAR SEND same|diff FILE   FX 1 / FX 2 (SLOT 0 / 1) set to TYPE (MX_*); the 303 track's send to it
  *   mfx_test comp J V same|diff FILE            a compressor pot (settings.comp[J]) set to V
- *   mfx_test excl FX V0 V1 same FILE          an effect that the master FX is not set to is skipped
  *   mfx_test trans SEMITONES same|diff FILE   the 303 track transposed live (ARP > TRSP)
  *   mfx_test lfo SHAPE RATE DEPTH TARGET SYNC RETRIG same|diff FILE   the 303 clip's LFO */
 #include <stdio.h>
@@ -47,9 +46,9 @@ int main(int argc, char **argv)
     int i, bad = 0;
     double d = 0, ra = 0, rb = 0;
     project_defaults();
-    {   int t;                                   /* the real default is closed sends; the effect tests open them (the send test sets its own) */
+    {   int t;                                   /* the sends are closed by default; the send test opens the 303 track's */
         for (t = 0; t < NTRK; t++)
-            proj.set.send[0][t] = proj.set.send[1][t] = 127;
+            proj.set.send[0][t] = proj.set.send[1][t] = 0;
     }
     if (argc < 3)
         return 2;
@@ -65,10 +64,12 @@ int main(int argc, char **argv)
     } else if (!strcmp(argv[1], "trans")) {
         g_trans = atoi(argv[2]);
     } else if (!strcmp(argv[1], "send")) {
-        int fx = atoi(argv[2]);
-        proj.set.fxv[fx][0] = (uint8_t)atoi(argv[3]);
-        proj.set.fxv[fx][1] = (uint8_t)atoi(argv[4]);
-        proj.set.send[fx - FX_DELAY][5] = (uint8_t)atoi(argv[5]);
+        int sl = atoi(argv[2]) & 1;
+        proj.set.fxtype[sl ^ 1] = MX_DRIVE;          /* the other slot is out of the way (and not the same delay / reverb) */
+        proj.set.fxtype[sl] = (uint8_t)atoi(argv[3]);
+        proj.set.fxamt[sl] = (uint8_t)atoi(argv[4]);
+        proj.set.fxpar[sl] = (uint8_t)atoi(argv[5]);
+        proj.set.send[sl][5] = (uint8_t)atoi(argv[6]);
     } else if (!strcmp(argv[1], "lfo")) {
         clip_t *c = &proj.clip[5][0];
         c->lfo[LFO_SHAPE] = (uint8_t)atoi(argv[2]);
@@ -80,16 +81,9 @@ int main(int argc, char **argv)
     } else if (!strcmp(argv[1], "vol")) {
         proj.set.knob[0].kind = (uint8_t)atoi(argv[2]);
         proj.set.master_vol = (uint8_t)atoi(argv[3]);
-    } else if (!strcmp(argv[1], "excl")) {          /* excl FX V0 V1: an effect that is not the selected master FX does nothing */
-        proj.set.fxv[atoi(argv[2])][0] = (uint8_t)atoi(argv[3]);
-        proj.set.fxv[atoi(argv[2])][1] = (uint8_t)atoi(argv[4]);
-    } else {
-        if (atoi(argv[1]) >= FX_DRIVE && atoi(argv[1]) <= FX_VINYL)
-            proj.set.selfx = (uint8_t)(atoi(argv[1]) - FX_DRIVE);      /* the effect under test is the master FX
-        */
-        proj.set.fxv[atoi(argv[1])][0] = (uint8_t)atoi(argv[2]);
-        proj.set.fxv[atoi(argv[1])][1] = (uint8_t)atoi(argv[3]);
-        proj.set.fxmask[atoi(argv[1])] = (uint16_t)atoi(argv[4]);
+    } else if (!strcmp(argv[1], "dj")) {
+        proj.set.dj[0] = (uint8_t)atoi(argv[2]);
+        proj.set.dj[1] = (uint8_t)atoi(argv[3]);
     }
     f = fopen(argv[argc - 1], "rb");
     if (!f || fread(a, sizeof a[0], N * 256, f) != N * 256)

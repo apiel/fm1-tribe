@@ -516,9 +516,9 @@ int main(int argc, char **argv)
         } else if (!strcmp(a[0], "expectled")) {         /* expectled BTN STATE: 0 off, 1 dim, 2 lit */
             int b = find_name(BTN_N, NB, a[1]), got = b < 0 ? -1 : (lit_btn >> b) & 1u ? 2 : (dim_btn >> b) & 1u ? 1 : 0;
             if (got != atoi(a[2])) { fprintf(stderr, "line %d: led %s is %d, not %s\n", line, a[1], got, a[2]); fails++; }
-        } else if (!strcmp(a[0], "expectselfx")) {       /* expectselfx N: the master FX type (0 drive, 1 crush, 2 ring, 3 decim, 4 vinyl) */
-            int got = proj.set.selfx;
-            if (got != atoi(a[1])) { fprintf(stderr, "line %d: master fx type is %d, not %s\n", line, got, a[1]); fails++; }
+        } else if (!strcmp(a[0], "expectfxtype")) {      /* expectfxtype N TYPE: what FX 1 / FX 2 (N 0 / 1) is (0 reverb 1 delay 2 drive 3 dist 4 fuzz 5 wave 6 crush 7 decim 8 ring) */
+            int got = proj.set.fxtype[atoi(a[1]) & 1];
+            if (got != atoi(a[2])) { fprintf(stderr, "line %d: fx %s is type %d, not %s\n", line, a[1], got, a[2]); fails++; }
         } else if (!strcmp(a[0], "expectcomp")) {       /* expectcomp J VALUE: a compressor pot (thresh ratio attack release makeup mix) */
             int got = proj.set.comp[atoi(a[1]) % 6];
             if (got != atoi(a[2])) { fprintf(stderr, "line %d: comp %s is %d, not %s\n", line, a[1], got, a[2]); fails++; }
@@ -534,12 +534,15 @@ int main(int argc, char **argv)
                 fprintf(stderr, "line %d: step %s is note %d len %d (wanted %s, len %s..%s)\n", line, a[1], st->note, st->len, a[2], a[3], a[4]);
                 fails++;
             }
-        } else if (!strcmp(a[0], "expectfx")) {           /* expectfx FX PAR VALUE: an effect's parameter */
-            int got = proj.set.fxv[atoi(a[1]) % NFX][atoi(a[2]) & 1];
-            if (got != atoi(a[3])) { fprintf(stderr, "line %d: fx %s.%s is %d, not %s\n", line, a[1], a[2], got, a[3]); fails++; }
-        } else if (!strcmp(a[0], "expectmask")) {       /* expectmask FX MASK */
-            int got = proj.set.fxmask[atoi(a[1]) % NFX];
-            if (got != atoi(a[2])) { fprintf(stderr, "line %d: mask of fx %s is %d, not %s\n", line, a[1], got, a[2]); fails++; }
+        } else if (!strcmp(a[0], "expectfxamt") || !strcmp(a[0], "expectfxpar")) {   /* expectfxamt N VALUE: FX 1 / FX 2's return level (expectfxpar: its own parameter) */
+            int got = a[0][8] == 'a' ? proj.set.fxamt[atoi(a[1]) & 1] : proj.set.fxpar[atoi(a[1]) & 1];
+            if (got != atoi(a[2])) { fprintf(stderr, "line %d: %s %s is %d, not %s\n", line, a[0], a[1], got, a[2]); fails++; }
+        } else if (!strcmp(a[0], "expectdj")) {          /* expectdj IDX VALUE: the DJ filter's cutoff (0) or resonance (1) */
+            int got = proj.set.dj[atoi(a[1]) & 1];
+            if (got != atoi(a[2])) { fprintf(stderr, "line %d: dj %s is %d, not %s\n", line, a[1], got, a[2]); fails++; }
+        } else if (!strcmp(a[0], "expectvol")) {         /* expectvol VALUE: the master volume number (GLO > VOLUME) */
+            int got = proj.set.master_vol;
+            if (got != atoi(a[1])) { fprintf(stderr, "line %d: volume is %d, not %s\n", line, got, a[1]); fails++; }
         } else if (!strcmp(a[0], "expectknob")) {       /* expectknob SLOT KIND */
             int got = proj.set.knob[atoi(a[1]) & 3].kind;
             if (got != atoi(a[2])) { fprintf(stderr, "line %d: knob %s is kind %d, not %s\n", line, a[1], got, a[2]); fails++; }

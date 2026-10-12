@@ -54,23 +54,22 @@ void project_defaults(void)
     proj.set.bpm_x10 = 1250;
     proj.set.master_vol = 127;                               /* the volume when MASTER is not the volume knob: full */
     proj.set.knob[0].kind = KS_VOL;                          /* MASTER: the volume */
-    proj.set.knob[1].kind = KS_MFX; proj.set.knob[1].par = 0;                                   /* SELECT: the master FX (its type is in GLO) */
-    proj.set.knob[2].kind = KS_FX; proj.set.knob[2].fx = FX_FILTER; proj.set.knob[2].par = 0;    /* PRESETS: the DJ filter */
-    proj.set.knob[3].kind = KS_FX; proj.set.knob[3].fx = FX_FILTER; proj.set.knob[3].par = 1;    /* ALGORITHM: its resonance */
-    proj.set.selfx = FX_DRIVE - FX_DRIVE;
+    proj.set.knob[1].kind = KS_DJ;                           /* SELECT: the DJ filter */
+    proj.set.knob[2].kind = KS_FX1;                          /* PRESETS: FX 1's amount */
+    proj.set.knob[3].kind = KS_FX2;                          /* ALGORITHM: FX 2's amount */
+    proj.set.fxtype[0] = MX_DELAY;                           /* FX 1: the echo, FX 2: the room; each track's send (SEL) opens them */
+    proj.set.fxtype[1] = MX_REVERB;
+    proj.set.fxamt[0] = proj.set.fxamt[1] = 100;
+    proj.set.fxpar[0] = 50;                                  /* feedback */
+    proj.set.fxpar[1] = 64;                                  /* size */
     proj.set.comp[0] = 95;                                   /* the compressor, a gentle bus glue: -12 dB, */
     proj.set.comp[1] = 2;                                    /* 2:1, */
     proj.set.comp[2] = 80;                                   /* 8 ms attack, */
     proj.set.comp[3] = 60;                                   /* 110 ms release, */
     proj.set.comp[4] = 12;                                   /* +2 dB makeup, */
     proj.set.comp[5] = 127;                                  /* all wet */
-    proj.set.fxv[FX_FILTER][0] = 64;                         /* middle: off */
-    proj.set.fxv[FX_FILTER][1] = 40;
-    proj.set.fxv[FX_DRIVE][1] = 127;
-    proj.set.fxv[FX_CRUSH][1] = 127;
-    proj.set.fxv[FX_RING][1] = 64;
-    proj.set.fxv[FX_DECIM][1] = 127;
-    proj.set.fxv[FX_VINYL][1] = 64;
+    proj.set.dj[0] = 64;                                     /* the DJ filter: the middle is off */
+    proj.set.dj[1] = 40;
     for (t = 0; t < NTRK; t++) {
         proj.set.level[t] = 100;
         proj.set.arp_gate[t] = 80;

@@ -32,11 +32,9 @@ if cc -O2 -ffp-contract=off -std=gnu99 -DX0X_HOST -Ifirmware/src -Ifirmware/src/
     && build/host/mfx_test base build/scen/mfx_base.f32; then
     ok=1; : >build/scen/mfx.log
     B=build/scen/mfx_base.f32
-    # FX V0 V1 MASK expect: the filter (LP, HP, neutral), drive, crush, comp; limited to a silent track / to the playing one
-    for c in "1 10 40 0 diff" "1 120 40 0 diff" "1 64 40 0 same" "1 62 40 0 same" "2 100 127 0 diff" "2 0 127 0 same" "2 100 0 0 same" "3 100 127 0 diff" "3 0 127 0 same" "8 100 80 0 diff" "8 0 80 0 same" "8 100 80 1 diff" "9 100 80 0 diff" "9 0 80 0 same" "9 100 80 1 diff" \
-             "4 100 64 0 diff" "4 0 64 0 same" "4 100 64 1 same" "4 100 64 32 diff" "5 100 127 0 diff" "5 0 127 0 same" "5 100 0 0 same" "6 100 64 0 diff" "6 0 64 0 same" "6 100 64 32 diff" \
-             "1 10 40 1 same" "2 100 127 1 same" "3 100 127 1 same" "1 10 40 32 diff" "2 100 127 32 diff" "3 100 127 32 diff"; do
-        build/host/mfx_test $c $B >>build/scen/mfx.log 2>&1 || { ok=0; echo "  case failed: $c" >>build/scen/mfx.log; }
+    # dj CUTOFF RESO expect: the DJ filter (LP, HP, neutral) on the mix
+    for c in "10 40 diff" "120 40 diff" "64 40 same" "62 40 same" "10 100 diff" "120 0 diff"; do
+        build/host/mfx_test dj $c $B >>build/scen/mfx.log 2>&1 || { ok=0; echo "  case failed: dj $c" >>build/scen/mfx.log; }
     done
     # live transposition of the 303 track: 0 changes nothing, +12 and -5 change the notes
     for c in "0 same" "12 diff" "-5 diff"; do
@@ -46,13 +44,14 @@ if cc -O2 -ffp-contract=off -std=gnu99 -DX0X_HOST -Ifirmware/src -Ifirmware/src/
     for c in "0 95 same" "0 20 diff" "4 100 diff" "5 0 diff"; do
         build/host/mfx_test comp $c $B >>build/scen/mfx.log 2>&1 || { ok=0; echo "  case failed: comp $c" >>build/scen/mfx.log; }
     done
-    # only the master FX the GLO menu chose runs: crush / ring / decim / vinyl set up but not selected change nothing (the drive is the default)
-    for c in "3 100 127" "4 100 64" "5 100 127" "6 100 64"; do
-        build/host/mfx_test excl $c same $B >>build/scen/mfx.log 2>&1 || { ok=0; echo "  case failed: excl $c" >>build/scen/mfx.log; }
-    done
-    # the sends: the 303 track's send to the delay / reverb at 0 leaves the audio alone, at 100 changes it
-    for c in "8 100 80 0 same" "8 100 80 100 diff" "9 100 80 0 same" "9 100 80 100 diff" "8 100 80 20 diff"; do
-        build/host/mfx_test send $c $B >>build/scen/mfx.log 2>&1 || { ok=0; echo "  case failed: send $c" >>build/scen/mfx.log; }
+    # FX 1 / FX 2 (SLOT TYPE AMT PAR SEND): every type, on the 303 track's send. Send 0 or amount 0 leaves the audio alone, a send of 100 changes it.
+    # types: 0 reverb 1 delay 2 drive 3 dist 4 fuzz 5 wave 6 crush 7 decim 8 ring
+    for t in 0 1 2 3 4 5 6 7 8; do
+        for sl in 0 1; do
+            for c in "$sl $t 100 80 0 same" "$sl $t 0 80 100 same" "$sl $t 100 80 100 diff" "$sl $t 100 20 20 diff" "$sl $t 127 127 127 diff"; do
+                build/host/mfx_test send $c $B >>build/scen/mfx.log 2>&1 || { ok=0; echo "  case failed: send $c" >>build/scen/mfx.log; }
+            done
+        done
     done
     # the LFO (shape rate depth target sync retrig): depth 0 changes nothing; every shape, free and synced, moves the cutoff / the envelope amount
     for c in "0 60 0 0 1 1 same" "0 60 100 0 1 1 diff" "1 60 100 0 1 1 diff" "2 60 100 0 1 1 diff" "3 60 100 0 1 1 diff" "4 60 100 0 1 1 diff" \
@@ -60,9 +59,9 @@ if cc -O2 -ffp-contract=off -std=gnu99 -DX0X_HOST -Ifirmware/src -Ifirmware/src/
         build/host/mfx_test lfo $c $B >>build/scen/mfx.log 2>&1 || { ok=0; echo "  case failed: lfo $c" >>build/scen/mfx.log; }
     done
     # the volume: MASTER as the pot (4096 here) or as a number: 127 = the pot's full, 64 = quieter
-    build/host/mfx_test vol 0 127 same $B >>build/scen/mfx.log 2>&1 || ok=0
-    build/host/mfx_test vol 0 64 quieter $B >>build/scen/mfx.log 2>&1 || ok=0
-    build/host/mfx_test vol 1 20 same $B >>build/scen/mfx.log 2>&1 || ok=0
+    build/host/mfx_test vol 1 127 same $B >>build/scen/mfx.log 2>&1 || ok=0
+    build/host/mfx_test vol 1 64 quieter $B >>build/scen/mfx.log 2>&1 || ok=0
+    build/host/mfx_test vol 0 20 same $B >>build/scen/mfx.log 2>&1 || ok=0
     [ $ok = 1 ] && echo "  ok   master effects and volume" || { echo "  FAIL master effects and volume (see build/scen/mfx.log)"; FAIL=1; }
 else echo "  FAIL master effects build (see build/scen/mfx_build.log)"; FAIL=1; fi
 if cc -O2 -ffp-contract=off -std=gnu99 -DX0X_HOST -Ifirmware/src -Ifirmware/src/dsp -Ibuild/gen -o build/host/seq_test tests/host/seq_test.c $SRCS_ALL -lm 2>build/scen/seq_build.log; then

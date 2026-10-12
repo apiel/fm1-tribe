@@ -172,7 +172,7 @@ slide as on/off; kick level trimmed 0.25 (zicBox's drive leaves +-3). Nothing is
 
 ## Decisions (round 12): master FX slot, compressor menu, splash
 - Defaults: MASTER = volume, SELECT = the master FX (type chosen in GLO > MASTER FX: DRIVE, CRUSH, RING, DECIM, VINYL; the knob is
-  its AMT, the second parameter is assignable on the KNOBS page as "MASTER FX 2nd"), PRESETS = DJ filter, ALGORITHM = its resonance.
+  its AMT, the second parameter is assignable on the KNOBS page as "MASTER FX 2nd"), PRESETS = DJ filter, ALGORITHM = its resonance. (superseded by round 14)
 - New effects: RING (carrier 40 Hz..2 kHz), DECIM (sample-rate reducer), VINYL (band-limit, hiss, pops, WEAR); they can have track masks.
 - The master compressor is always on and set in GLO (COMP THRESH / RATIO / ATTACK / RELEASE / MAKEUP / MIX; defaults -12 dB, 2:1,
   ~2.6 ms... see project.c), saved with the settings. GLO is a scrolling list of 14 rows.
@@ -189,3 +189,29 @@ slide as on/off; kick level trimmed 0.25 (zicBox's drive leaves +-3). Nothing is
   longer on the knob assignment list separately (the master FX 1st / 2nd parameter are).
 - SEL glows at 50% (full on its page). Track sends start at 0. The SEL page shows a live level meter per track (after volume and mute) with the
   volume as a white tick and thin bars for the two sends.
+
+## Decisions (round 14): FX 1 / FX 2, GLO rows for every master job
+- FX 1 and FX 2 are two master effects every track sends to (SEL page, post-fader, post-mute). Each is one of REVERB, DELAY, DRIVE, DISTORT, FUZZ,
+  WAVSHAPE (a wavefolder), CRUSH, DECIM, RING (chosen in GLO; defaults FX 1 = DELAY, FX 2 = REVERB). AMOUNT is the return level, PARAM the effect's
+  own control (SIZE, FDBK, DRIVE, FUZZ, FOLD, BITS, RATE, FREQ; its label in GLO follows the type). VINYL is gone, and so is the "only the master FX
+  the menu chose runs" rule: the old per-effect DRIVE / CRUSH / RING / DECIM on the mix no longer exist, they are send effects now.
+- The reverb and the delay have one buffer each: the type step skips the one the other slot has, and if a saved project ever has both the second is off.
+- GLO rows: TEMPO, VOLUME, DJ FILTER, DJ RESO, DJ TRACKS (black keys; MUTE = whole mix), FX1 TYPE / AMOUNT / PARAM, FX2 TYPE / AMOUNT / PARAM, the four
+  knob rows, six COMP rows, CLIPS, CPU, BATTERY (24). The VOLUME row only counts while MASTER is not the volume pot (it then says MASTER KNOB).
+- A knob (MASTER pot, SELECT / PRESETS / ALGO encoders) does one of: OFF, VOLUME, DJ FILTER, DJ RESO, FX1 AMOUNT, FX2 AMOUNT, BPM, MACRO. Every one
+  edits the same byte as its GLO row. BPM: an encoder moves a whole BPM a detent, the pot spans 30..300. Defaults: MASTER volume, SELECT DJ filter,
+  PRESETS FX1 amount, ALGORITHM FX2 amount (DJ reso is in GLO only until a knob takes it).
+- The settings record changed again: settings saved by an earlier build are ignored once (clips are kept).
+
+## Decisions (round 15): SAVE, SEL
+- SEL no longer toggles back to SEQ: it opens the SEL page and stays there (SEQ leaves it).
+- SAVE opens a pick: SAVE glows at half, every other button is dark, the track keys whose clip on screen changed blink and so does GLO if the
+  settings changed. A track key saves that clip, GLO saves the settings, SAVE again saves everything changed (any clip, not just the ones on
+  screen), any other button or key leaves. The pick stays on screen (a modal) until a track or GLO is picked, then closes. With nothing to save, SAVE just says NOTHING TO SAVE and opens nothing.
+- The MASTER knob's volume is not saved (it is not in the settings' CRC either): at start it is read from the pot.
+- Loading a clip (HOME) that was changed and not saved puts it back as last saved. A clip that was never saved has nothing to go back to and keeps its edits.
+
+## Decisions (round 16): simpler knobs
+- Removed: the DJ filter's track mask (DJ TRACKS row), the MACRO assignment, OFF, and the KNOBS page that existed for them. The DJ filter always acts on the
+  whole mix; a knob does one of VOLUME, DJ FILTER, DJ RESO, FX1 AMOUNT, FX2 AMOUNT, BPM. GLO has 23 rows. The SEL page is view 6 now.
+- The settings record shrank (no masks or macros): settings saved by an earlier build are ignored once.

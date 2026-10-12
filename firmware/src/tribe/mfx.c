@@ -1,24 +1,18 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* The master effects the knobs can be assigned to: FILTER (a DJ filter: one knob, low-pass to the left of the
- * middle, high-pass to the right, plus RESO), DRIVE, CRUSH. Mono, in place, a few operations a sample, and
- * silent (not even run) while their knob sits at its neutral value. Each one runs either on the whole mix or,
- * with its own state, on each track it is limited to. COMP is the master section's (dsp/master.c). */
+/* The master effects: the DJ filter (one knob, low-pass to the left of the middle, high-pass to the right, plus RESO; on the whole mix) and FX 1 / FX 2, the two effects the tracks send to. Mono, in place, a few operations a sample. */
 #include "tribe.h"
 #include "../dsp/fastmath.h"
 #include "../app/plat.h"
 
-const char *mfx_name(int fx)
+const char *mx_name(int type)
 {
-    static const char *const N[NFX] = {"NONE", "FILTER", "DRIVE", "CRUSH", "RING", "DECIM", "VINYL", "COMP", "DELAY", "REVERB"};
-    return N[fx < NFX ? fx : 0];
+    static const char *const N[NMX] = {"REVERB", "DELAY", "DRIVE", "DISTORT", "FUZZ", "WAVSHAPE", "CRUSH", "DECIM", "RING"};
+    return N[type < NMX ? type : 0];
 }
-int mfx_nparams(int fx) { return fx == FX_NONE ? 0 : fx == FX_COMP ? 1 : 2; }
-const char *mfx_pname(int fx, int p)
+const char *mx_pname(int type)
 {
-    static const char *const F[2] = {"DJ", "RESO"}, *const D[2] = {"AMT", "MIX"}, *const Y[2] = {"MIX", "FDBK"},
-                            *const R[2] = {"MIX", "SIZE"}, *const G[2] = {"AMT", "FREQ"}, *const V[2] = {"AMT", "WEAR"};
-    return fx == FX_FILTER ? F[p & 1] : fx == FX_COMP ? "AMT" : fx == FX_DELAY ? Y[p & 1] : fx == FX_REVERB ? R[p & 1]
-           : fx == FX_RING ? G[p & 1] : fx == FX_VINYL ? V[p & 1] : D[p & 1];
+    static const char *const P[NMX] = {"SIZE", "FDBK", "DRIVE", "DRIVE", "FUZZ", "FOLD", "BITS", "RATE", "FREQ"};
+    return P[type < NMX ? type : 0];
 }
 
 static char *puts_(char *b, const char *s)
@@ -45,41 +39,29 @@ static char *puti_(char *b, int v)
     *b = 0;
     return b;
 }
-void mfx_format(int fx, int p, int v, char *buf)
+void dj_format(int v, char *buf)                     /* LP 0..100 left of the middle, HP right, OFF between */
 {
-    if (fx == FX_FILTER && p == 0) {                     /* LP 0..100 left of the middle, HP right, OFF between */
-        if (v < 61)
-            puti_(puts_(buf, "LP"), 100 - v * 100 / 60);
-        else if (v > 67)
-            puti_(puts_(buf, "HP"), (v - 67) * 100 / 60);
-        else
-            puts_(buf, "OFF");
-        return;
-    }
-    if (fx == FX_RING && p == 1) {                       /* the carrier: 40 Hz .. 2 kHz */
+    if (v < 61)
+        puti_(puts_(buf, "LP"), 100 - v * 100 / 60);
+    else if (v > 67)
+        puti_(puts_(buf, "HP"), (v - 67) * 100 / 60);
+    else
+        puts_(buf, "OFF");
+}
+void mx_format(int type, int v, char *buf)
+{
+    if (type == MX_RING)                                 /* the carrier: 40 Hz .. 2 kHz */
         puts_(puti_(buf, (int)(40.0f * fm_exp2f((float)v * (5.64f / 127.0f)) + 0.5f)), "Hz");
-        return;
-    }
-    puts_(puti_(buf, v * 100 / 127), "%");
+    else
+        puts_(puti_(buf, v * 100 / 127), "%");
 }
 
-/* is it doing anything at these values? */
-int mfx_active(int fx, const uint8_t v[2])
-{
-    switch (fx) {
-    case FX_FILTER: return v[0] < 61 || v[0] > 67;
-    case FX_DRIVE: case FX_CRUSH: return v[0] > 0 && v[1] > 0;
-    case FX_RING: case FX_VINYL: case FX_DELAY: case FX_REVERB: return v[0] > 0;
-    case FX_DECIM: return v[0] > 0 && v[1] > 0;
-    default: return 0;
-    }
-}
+int dj_active(const uint8_t dj[2]) { return dj[0] < 61 || dj[0] > 67; }
 
-void mfx_run(int fx, mfxs_t *s, float *x, int n, const uint8_t v[2])
+void dj_run(mfxs_t *s, float *x, int n, const uint8_t v[2])
 {
     int i;
-    switch (fx) {
-    case FX_FILTER: {
+    {
         /* a state variable filter (trapezoidal), cutoff ramped across the block; a = lowpass state, b = bandpass state */
         float fc, g1, g0 = s->gp, k = 2.0f - 1.85f * (float)v[1] / 127.0f, step;
         int hp = v[0] > 67;
@@ -103,71 +85,79 @@ void mfx_run(int fx, mfxs_t *s, float *x, int n, const uint8_t v[2])
             x[i] = hp ? hpf : lp;
         }
         s->gp = g1;
-        break;
     }
-    case FX_DRIVE: {
-        /* a soft clip, levelled so that a signal of 0.4 comes out at 0.4 whatever the drive: more drive evens the level
-         * out (quiet parts rise, peaks stay) instead of just getting louder */
-        float gain = 1.0f + (float)v[0] * (14.0f / 127.0f), mix = (float)v[1] * (1.0f / 127.0f), ref = 0.4f * gain;
-        float norm = 0.4f * (1.0f + ref) / ref;
+}
+
+/* a send effect's wet signal: the bus in, the processed bus out, before the return level. PARAM is the effect's own control */
+static void mx_wet(int type, mfxs_t *s, float *x, int n, int par)
+{
+    int i;
+    float p = (float)par * (1.0f / 127.0f);
+    switch (type) {
+    case MX_DRIVE: {                                     /* a soft clip, levelled so a signal of 0.4 comes out at 0.4 whatever the drive */
+        float gain = 1.0f + p * 14.0f, ref = 0.4f * gain, norm = 0.4f * (1.0f + ref) / ref;
         for (i = 0; i < n; i++) {
             float y = x[i] * gain;
-            y = y / (1.0f + fm_fabsf(y)) * norm;
-            x[i] += (y - x[i]) * mix;
+            x[i] = y / (1.0f + fm_fabsf(y)) * norm;
         }
         break;
     }
-    case FX_RING: {                                      /* the carrier goes through the signal: bells and metal. AMT blends it in */
-        float inc = 40.0f * fm_exp2f((float)v[1] * (5.64f / 127.0f)) * (1.0f / 44100.0f), amt = (float)v[0] * (1.0f / 127.0f);
+    case MX_DIST: {                                      /* a hard clip: flat tops, a lot more bite than the drive */
+        float gain = 2.0f + p * 38.0f;
         for (i = 0; i < n; i++) {
-            s->a += inc;
-            s->a -= fm_floorf(s->a);
-            x[i] += (x[i] * fm_sin_turns(s->a) * 1.4f - x[i]) * amt;
+            float y = x[i] * gain;
+            x[i] = (y > 1.0f ? 1.0f : y < -1.0f ? -1.0f : y) * 0.45f;
         }
         break;
     }
-    case FX_DECIM: {                                     /* a sample-rate reducer: hold every k-th sample, no bit loss */
-        int hold = 1 + (int)v[0] * 31 / 127;
-        float mix = (float)v[1] * (1.0f / 127.0f);
+    case MX_FUZZ: {                                      /* lopsided clipping (the two halves clip at different heights), fizzy; the offset that makes is taken out again */
+        float gain = 4.0f + p * 60.0f;
         for (i = 0; i < n; i++) {
-            if (s->cnt-- <= 0) {
-                s->cnt = hold - 1;
-                s->hold = x[i];
-            }
-            x[i] += (s->hold - x[i]) * mix;
+            float y = x[i] * gain;
+            y = y > 0.8f ? 0.8f : y < -0.3f ? -0.3f : y;
+            s->a += 0.002f * (y - s->a);                 /* its DC: a one-pole low-pass */
+            x[i] = (y - s->a) * 0.6f;
         }
         break;
     }
-    case FX_VINYL: {                                     /* an old record: band-limited, hiss, and pops that get denser with WEAR */
-        float amt = (float)v[0] * (1.0f / 127.0f), wear = (float)v[1] * (1.0f / 127.0f), k = 0.9f - 0.7f * amt;
-        uint32_t pop_p = (uint32_t)((0.00005f + wear * 0.002f) * amt * 4294967295.0f);
-        if (!s->rng)
-            s->rng = 0x9E3779B9u;
+    case MX_WAVE: {                                      /* a wavefolder: the wave bends back on itself instead of clipping */
+        float k = 0.15f + p * 1.6f;
         for (i = 0; i < n; i++) {
-            float y, hiss;
-            s->rng = s->rng * 1664525u + 1013904223u;
-            hiss = ((float)(int32_t)(s->rng) * (1.0f / 2147483648.0f)) * 0.006f * amt;
-            s->a += k * (x[i] - s->a);                   /* low-pass */
-            s->b += 0.008f * (s->a - s->b);              /* its slow part: taken out again, a high-pass at ~60 Hz */
-            y = s->a - s->b;
-            s->rng = s->rng * 1664525u + 1013904223u;
-            if (s->rng < pop_p)                          /* a pop: a short click of random size and sign */
-                s->c = (((float)(int32_t)(s->rng * 2654435761u)) * (1.0f / 2147483648.0f)) * (0.1f + 0.5f * amt);
-            y += hiss + s->c;
-            s->c *= 0.55f;
-            x[i] += (y - x[i]) * (amt * 4.0f > 1.0f ? 1.0f : amt * 4.0f);
+            float t = x[i] * k;
+            t -= fm_floorf(t);
+            x[i] = fm_sin_turns(t) * 0.8f;
         }
         break;
     }
-    case FX_CRUSH: {
-        int hold = 1 + (int)v[0] * 14 / 127;
-        float levels = 4.0f + (float)(127 - v[0]) * (60.0f / 127.0f), mix = (float)v[1] * (1.0f / 127.0f);
+    case MX_CRUSH: {                                     /* fewer samples and fewer levels as PARAM goes up */
+        int hold = 1 + (int)par * 14 / 127;
+        float levels = 4.0f + (float)(127 - par) * (60.0f / 127.0f);
         for (i = 0; i < n; i++) {
             if (s->cnt-- <= 0) {
                 s->cnt = hold - 1;
                 s->hold = fm_floorf(x[i] * levels + 0.5f) * (1.0f / levels);
             }
-            x[i] += (s->hold - x[i]) * mix;
+            x[i] = s->hold;
+        }
+        break;
+    }
+    case MX_DECIM: {                                     /* a sample-rate reducer: hold every k-th sample, no bit loss */
+        int hold = 1 + (int)par * 31 / 127;
+        for (i = 0; i < n; i++) {
+            if (s->cnt-- <= 0) {
+                s->cnt = hold - 1;
+                s->hold = x[i];
+            }
+            x[i] = s->hold;
+        }
+        break;
+    }
+    case MX_RING: {                                      /* a carrier through the signal: bells and metal */
+        float inc = 40.0f * fm_exp2f((float)par * (5.64f / 127.0f)) * (1.0f / 44100.0f);
+        for (i = 0; i < n; i++) {
+            s->b += inc;
+            s->b -= fm_floorf(s->b);
+            x[i] *= fm_sin_turns(s->b) * 1.4f;
         }
         break;
     }
@@ -189,10 +179,10 @@ static float rev_buf[REV_TOTAL] X0X_POOL;
 static int32_t rev_pos[6];
 static float rev_damp[4];
 
-void mfx_send_run(int fx, float *x, int n, const uint8_t v[2], float spl)
+static void delay_rev(int type, float *x, int n, const uint8_t v[2], float spl)
 {
     int i;
-    if (fx == FX_DELAY) {
+    if (type == MX_DELAY) {
         int32_t time = (int32_t)(spl * 3.0f);                    /* a dotted eighth */
         float mix = (float)v[0] * (1.0f / 127.0f), fb = (float)v[1] * (0.85f / 127.0f);
         if (!dly_on) {                                           /* a fresh start: no old echoes */
@@ -221,7 +211,7 @@ void mfx_send_run(int fx, float *x, int n, const uint8_t v[2], float spl)
                 dly_w = 0;
             x[i] = dly_lp * mix;                                 /* the wet only: the engine adds it to the mix */
         }
-    } else if (fx == FX_REVERB) {
+    } else if (type == MX_REVERB) {
         float mix = (float)v[0] * (1.0f / 127.0f), room = 0.70f + (float)v[1] * (0.27f / 127.0f);
         float *base = rev_buf;
         if (!rev_on) {
@@ -255,11 +245,27 @@ void mfx_send_run(int fx, float *x, int n, const uint8_t v[2], float spl)
     }
 }
 
-/* a delay or reverb that was switched off starts from silence next time */
-void mfx_send_idle(int fx)
+/* an effect that was switched off starts from silence next time */
+void mx_idle(int type)
 {
-    if (fx == FX_DELAY)
+    if (type == MX_DELAY)
         dly_on = 0;
-    else if (fx == FX_REVERB)
+    else if (type == MX_REVERB)
         rev_on = 0;
+}
+
+void mx_run(int type, mfxs_t *s, float *x, int n, int amt, int par, float spl)
+{
+    if (type == MX_DELAY || type == MX_REVERB) {         /* AMT is their mix: the echo / the room's own return level */
+        uint8_t v[2];
+        v[0] = (uint8_t)amt;
+        v[1] = (uint8_t)par;
+        delay_rev(type, x, n, v, spl);
+    } else {
+        float g = (float)amt * (1.0f / 127.0f);
+        int i;
+        mx_wet(type, s, x, n, par);
+        for (i = 0; i < n; i++)
+            x[i] *= g;
+    }
 }

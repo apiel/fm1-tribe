@@ -79,7 +79,7 @@ static uint32_t rnd = 0x1234567u;
 static int16_t sc_ring[NTRING + 1][SC_RING] X0X_POOL;
 static uint8_t ring_used[NTRING + 1];
 static sc_t sc_t_[NTRK], sc_g;
-static mfxs_t fx_mix[NFX], fx_trk[NTRK][NFX];      /* effect state: on the mix, and on each track an effect is limited to */
+static mfxs_t dj_mix, fx_sl[2];                      /* effect state: the DJ filter on the mix; FX 1 and FX 2 */
 static int8_t sc_ring_of[NTRK];                /* track's ring index, -1 */
 static int8_t sc_g_ring;
 
@@ -485,20 +485,23 @@ static void lfo_update(int n)
     }
 }
 
-/* the filter is always there; of drive .. vinyl only the master FX the GLO menu chose runs, the others are skipped */
-static int fx_enabled(int fx)
-{
-    return fx == FX_FILTER || (fx >= FX_DRIVE && fx <= FX_VINYL && fx == FX_DRIVE + (proj.set.selfx < NSELFX ? proj.set.selfx : 0));
-}
+static float bus[2][256];                           /* the sends: FX 1 and FX 2 */
 
-static float bus[2][256];                           /* the sends: 0 the delay, 1 the reverb */
+/* FX 1 and FX 2 each hold a type; the reverb and the delay have one buffer each, so if both slots pick the same one the second is off */
+static int slot_type(int i) { return proj.set.fxtype[i] < NMX ? proj.set.fxtype[i] : 0; }
+static int slot_on(int i)
+{
+    if (!proj.set.fxamt[i])
+        return 0;
+    return !(i == 1 && MX_STATEFUL(slot_type(1)) && slot_type(1) == slot_type(0) && proj.set.fxamt[0]);
+}
 
 static void mix(float *l, float *r, int n)
 {
-    int t, i, fx;
-    int send_on[2];
-    send_on[0] = mfx_active(FX_DELAY, proj.set.fxv[FX_DELAY]);
-    send_on[1] = mfx_active(FX_REVERB, proj.set.fxv[FX_REVERB]);
+    int t, i, k;
+    int send_on[2], dj_on = dj_active(proj.set.dj);
+    send_on[0] = slot_on(0);
+    send_on[1] = slot_on(1);
     memset(bus, 0, sizeof bus);
     for (t = 0; t < NTRK; t++) {
         float *b = trk_buf + t * 256;
@@ -509,9 +512,6 @@ static void mix(float *l, float *r, int n)
             continue;
         if (dk_scat[t])
             sc_run(&sc_t_[t], b, n, spl);
-        for (fx = FX_FILTER; fx <= FX_VINYL; fx++)          /* the effects limited to this track (a mask with its bit set) */
-            if (fx_enabled(fx) && (proj.set.fxmask[fx] >> t) & 1u && mfx_active(fx, proj.set.fxv[fx]))
-                mfx_run(fx, &fx_trk[t][fx], b, n, proj.set.fxv[fx]);
         for (i = 0; i < n; i++) {
             float v = b[i] * g;
             l[i] += v;
@@ -526,20 +526,19 @@ static void mix(float *l, float *r, int n)
                 dk_peak[t] = (uint16_t)qk;
         }
     }
-    for (fx = FX_DELAY; fx <= FX_REVERB; fx++) {            /* the echo and the room: the bus through the effect, back into the mix */
-        if (send_on[fx - FX_DELAY]) {
-            float *w = bus[fx - FX_DELAY];
-            mfx_send_run(fx, w, n, proj.set.fxv[fx], spl);
+    for (k = 0; k < 2; k++) {                               /* FX 1, FX 2: the bus through the effect, back into the mix */
+        if (send_on[k]) {
+            float *w = bus[k];
+            mx_run(slot_type(k), &fx_sl[k], w, n, proj.set.fxamt[k], proj.set.fxpar[k], spl);
             for (i = 0; i < n; i++)
                 l[i] += w[i];
-        } else
-            mfx_send_idle(fx);
+        } else if (!(send_on[k ^ 1] && slot_type(k ^ 1) == slot_type(k)))   /* (not while the other slot is running the same buffer) */
+            mx_idle(slot_type(k));
     }
     if (dk_scat_g)
         sc_run(&sc_g, l, n, spl);                 /* the mix's scatter */
-    for (fx = FX_FILTER; fx <= FX_VINYL; fx++)    /* the effects on the whole mix (no mask) */
-        if (fx_enabled(fx) && !proj.set.fxmask[fx] && mfx_active(fx, proj.set.fxv[fx]))
-            mfx_run(fx, &fx_mix[fx], l, n, proj.set.fxv[fx]);
+    if (dj_on)                                    /* the DJ filter, on the whole mix */
+        dj_run(&dj_mix, l, n, proj.set.dj);
     memcpy(r, l, (unsigned)n * sizeof(float));
 }
 

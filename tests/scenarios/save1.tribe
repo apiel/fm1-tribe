@@ -11,7 +11,7 @@ expect level 80
 wait 1000
 expect dirty 2
 leds
-# a clip on another slot: HOME, queue clip 3 (index 2), edit there, then SAVE alone saves everything changed
+# a clip on another slot: HOME, queue clip 3 (index 2), edit there
 tap HOME
 tapkey w2
 tap PLAY
@@ -23,9 +23,19 @@ tapkey w9
 expect nsteps 2
 wait 1000
 expect dirty 3
-# SAVE with a clip key (HOME) saves just that clip
-tap HOME
+# SAVE opens the pick: a track key saves that track's clip on screen (the settings and the rest stay), SAVE again saves everything left
+tap SAVE
+shot save_pick.png
+leds
+tapkey b4
+wait 300
+expect dirty 2
+tap SAVE
+shot save_pick2.png
 tap SAVE
 wait 300
 expect dirty 0
+# nothing left: SAVE says so at once and opens nothing
+tap SAVE
+shot save_none.png
 tap PLAY

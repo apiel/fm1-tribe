@@ -17,3 +17,27 @@ expect stepon 9
 # track 1 is untouched: its starting clip (four on the floor)
 tapkey b0
 expect nsteps 4
+# a saved clip that was changed and left comes back as saved when it is loaded again: track 5 (index 4), clip 3 holds step 3
+tapkey b4
+tap HOME
+tapkey w2
+wait 3000
+expect clip 2
+tap SEQ
+expect stepon 5
+tap HOME
+tapkey w0
+wait 3000
+expect clip 0
+tap SEQ
+tapkey w7
+expect stepon 7
+tap HOME
+tapkey w2
+wait 3000
+tapkey w0
+wait 3000
+expect clip 0
+tap SEQ
+expect stepoff 7
+expect stepon 3

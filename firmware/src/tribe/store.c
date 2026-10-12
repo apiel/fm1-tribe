@@ -58,9 +58,12 @@ static uint32_t crc32(const void *p, uint32_t n)
 /* what a key holds now */
 static const void *key_data(int key, uint32_t *len)
 {
-    if (key == KEY_SET) {
-        *len = sizeof proj.set;
-        return &proj.set;
+    if (key == KEY_SET) {                /* the MASTER knob's volume is not saved: it is read from the pot at start-up */
+        static dsettings_t img;
+        img = proj.set;
+        img.master_vol = 0;
+        *len = sizeof img;
+        return &img;
     }
     *len = sizeof(clip_t);
     return &proj.clip[key / NCLIP][key % NCLIP];
@@ -351,7 +354,9 @@ int store_load(void)
         if (check_slot(best_slot[k], &h) < 0)
             continue;
         if (k == KEY_SET) {
+            uint8_t mv = proj.set.master_vol;
             memcpy(&proj.set, rec_buf + HDR_SZ, sizeof proj.set);
+            proj.set.master_vol = mv;
         } else {
             memset(&proj.clip[k / NCLIP][k % NCLIP], 0, sizeof(clip_t));
             memcpy(&proj.clip[k / NCLIP][k % NCLIP], rec_buf + HDR_SZ, h.len);
@@ -368,6 +373,44 @@ int store_load(void)
     return n;
 }
 
+static void recount(void)
+{
+    int k;
+    dirty_n = 0;
+    for (k = 0; k < NKEY; k++)
+        dirty_n += dirty_bit[k];
+}
+
+int store_clip_dirty(int trk, int clip) { return key_crc(trk * NCLIP + clip) != saved_crc[trk * NCLIP + clip]; }
+int store_set_dirty(void) { return key_crc(KEY_SET) != saved_crc[KEY_SET]; }
+
+/* only the settings (GLO) */
+int store_save_set(void)
+{
+    int rc;
+    if (!store_set_dirty())
+        return 0;
+    if ((rc = put(KEY_SET)) != 0)
+        return rc;
+    dirty_bit[KEY_SET] = 0;
+    recount();
+    return 1;
+}
+
+/* a clip goes back to what was last saved (0: nothing was ever saved for it, it is left as it is) */
+int store_revert(int trk, int clip)
+{
+    int k = trk * NCLIP + clip;
+    rec_hdr_t h;
+    clip_t *c = &proj.clip[trk][clip];
+    if (best_slot[k] < 0 || check_slot(best_slot[k], &h) < 0)
+        return 0;
+    memset(c, 0, sizeof *c);
+    memcpy(c, rec_buf + HDR_SZ, h.len);
+    fix_clip(c);
+    return 1;
+}
+
 /* trk < 0: every changed clip and the settings; else that one clip (if it changed). Returns the records
  * written, or a negative error (-1 the log is full of live records, -2 no spare sector, else a flash error) */
 int store_save(int trk, int clip)
@@ -380,6 +423,7 @@ int store_save(int trk, int clip)
         if ((rc = put(k)) != 0)
             return rc;
         dirty_bit[k] = 0;
+        recount();
         return 1;
     }
     for (k = 0; k < NKEY; k++)
