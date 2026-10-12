@@ -56,12 +56,26 @@ static uint32_t crc32(const void *p, uint32_t n)
 }
 
 /* what a key holds now */
+/* the one setting the MASTER knob drives (a pot is a position, not a value to keep): dst's copy of it comes from src */
+static void copy_master(dsettings_t *dst, const dsettings_t *src)
+{
+    switch (dst->knob[0].kind) {
+    case KS_VOL: dst->master_vol = src->master_vol; break;
+    case KS_DJ: dst->dj[0] = src->dj[0]; break;
+    case KS_RESO: dst->dj[1] = src->dj[1]; break;
+    case KS_FX1: dst->fxamt[0] = src->fxamt[0]; break;
+    case KS_FX2: dst->fxamt[1] = src->fxamt[1]; break;
+    case KS_BPM: dst->bpm_x10 = src->bpm_x10; break;
+    }
+}
+
 static const void *key_data(int key, uint32_t *len)
 {
-    if (key == KEY_SET) {                /* the MASTER knob's volume is not saved: it is read from the pot at start-up */
+    if (key == KEY_SET) {                /* whatever the MASTER knob is set to do is not saved: it is read from the pot at start-up */
         static dsettings_t img;
+        static const dsettings_t none;
         img = proj.set;
-        img.master_vol = 0;
+        copy_master(&img, &none);
         *len = sizeof img;
         return &img;
     }
@@ -354,9 +368,9 @@ int store_load(void)
         if (check_slot(best_slot[k], &h) < 0)
             continue;
         if (k == KEY_SET) {
-            uint8_t mv = proj.set.master_vol;
+            dsettings_t old = proj.set;
             memcpy(&proj.set, rec_buf + HDR_SZ, sizeof proj.set);
-            proj.set.master_vol = mv;
+            copy_master(&proj.set, &old);
         } else {
             memset(&proj.clip[k / NCLIP][k % NCLIP], 0, sizeof(clip_t));
             memcpy(&proj.clip[k / NCLIP][k % NCLIP], rec_buf + HDR_SZ, h.len);

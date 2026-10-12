@@ -41,3 +41,6 @@ expect clip 0
 tap SEQ
 expect stepoff 7
 expect stepon 3
+# the volume number came back (the MASTER knob's own job, the DJ filter, starts from the pot)
+expectvol 70
+expectknob 0 1

@@ -39,3 +39,32 @@ expect dirty 0
 tap SAVE
 shot save_none.png
 tap PLAY
+# the volume, with MASTER given another job (DJ filter), is an ordinary setting: it is saved with GLO
+tap GLO
+turn K1 1
+turn K1 1
+turn K1 1
+turn K1 1
+turn K1 1
+turn K1 1
+turn K1 1
+turn K1 1
+turn K1 1
+turn K1 1
+turn K2 1
+expectknob 0 1
+turn K1 -1
+turn K1 -1
+turn K1 -1
+turn K1 -1
+turn K1 -1
+turn K1 -1
+turn K1 -1
+turn K1 -1
+turn K1 -1
+turn K2 -10
+expectvol 70
+tap SAVE
+tap GLO
+wait 300
+expect dirty 0

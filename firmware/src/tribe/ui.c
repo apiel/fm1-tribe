@@ -376,7 +376,7 @@ static void knob_say(int slot)
 }
 
 /* set a knob's value (0..127), and say it */
-static void knob_set(int slot, int v)
+static int knob_put(int slot, int v)                /* 0..127 into what the knob does; 0 if it does nothing */
 {
     int kind = assign_of(&proj.set.knob[slot]);
     uint8_t *p = kind_ptr(kind);
@@ -386,8 +386,13 @@ static void knob_set(int slot, int v)
     else if (kind == KS_BPM)
         tempo_set(300 + v * 2700 / 127);                  /* the pot: 30 .. 300 */
     else
-        return;
-    knob_say(slot);
+        return 0;
+    return 1;
+}
+static void knob_set(int slot, int v)
+{
+    if (knob_put(slot, v))
+        knob_say(slot);
 }
 
 static void knob_turn(int slot, int d)
@@ -1205,13 +1210,11 @@ static void draw_main(void)
     }
     }
     if (ui.save_mode) {                                  /* the SAVE pick stays up until something is picked */
-        box(8, 28, 224, 82, C_BLACK);
-        cv_rect(8, 28, 224, 1, C_HI);
-        cv_rect(8, 109, 224, 1, C_HI);
-        text_c(120, vc(&FONT_B, 34, 20), &FONT_B, "SAVE", C_HI);
-        text_c(120, vc(&FONT_S, 58, 16), &FONT_S, "PICK A TRACK OR GLO", C_WHITE);
-        text_c(120, vc(&FONT_S, 80, 16), &FONT_S, "SAVE AGAIN = SAVE ALL", C_AMB);
-        text_c(120, vc(&FONT_XS, 98, 12), &FONT_XS, "ANY OTHER KEY CANCELS", C_GRAY);
+        rbox(6, 26, 228, 86, 8, C_HI);                   /* one solid green panel with rounded corners */
+        text_c(120, vc(&FONT_B, 34, 20), &FONT_B, "SAVE", C_BLACK);
+        text_c(120, vc(&FONT_S, 58, 16), &FONT_S, "PICK A TRACK OR GLO", C_BLACK);
+        text_c(120, vc(&FONT_S, 80, 16), &FONT_S, "SAVE AGAIN = SAVE ALL", C_BLACK);
+        text_c(120, vc(&FONT_XS, 98, 12), &FONT_XS, "ANY OTHER KEY CANCELS", RGB(10, 70, 40));
     }
     cv_commit_rect(1, 0, MAIN_Y);
 
@@ -1450,9 +1453,9 @@ void ui_init(void)
     ui.edit = -1;
     ui.press = -1;
     ui.pot_ref = -1;
-    {   /* the MASTER knob's volume is not saved: it starts where the pot is */
+    {   /* what the MASTER knob does is not saved: it starts where the pot is */
         int pos = (int)(fm_sqrtf((float)plat_master() * 256.0f) * (1.0f / 8.0f));
-        proj.set.master_vol = (uint8_t)(pos > 127 ? 127 : pos);
+        knob_put(0, pos > 127 ? 127 : pos);
     }
     ui.grp = PG_EDIT;
     fix_group();

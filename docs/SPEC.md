@@ -208,7 +208,7 @@ slide as on/off; kick level trimmed 0.25 (zicBox's drive leaves +-3). Nothing is
 - SAVE opens a pick: SAVE glows at half, every other button is dark, the track keys whose clip on screen changed blink and so does GLO if the
   settings changed. A track key saves that clip, GLO saves the settings, SAVE again saves everything changed (any clip, not just the ones on
   screen), any other button or key leaves. The pick stays on screen (a modal) until a track or GLO is picked, then closes. With nothing to save, SAVE just says NOTHING TO SAVE and opens nothing.
-- The MASTER knob's volume is not saved (it is not in the settings' CRC either): at start it is read from the pot.
+- Only what the MASTER knob is set to do is not saved (its volume, DJ cutoff, FX amount, ... : not in the settings' CRC either); at start it is read from the pot. Every other setting, the volume included when MASTER is something else, is saved with GLO.
 - Loading a clip (HOME) that was changed and not saved puts it back as last saved. A clip that was never saved has nothing to go back to and keeps its edits.
 
 ## Decisions (round 16): simpler knobs
