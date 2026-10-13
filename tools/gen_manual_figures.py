@@ -33,6 +33,8 @@ SHOTS = {"m_seq.png": "screen-seq.png", "m_step.png": "screen-step.png", "m_fx.p
 
 
 def png_data_uri(path, scale=1):
+    """scale > 1: nearest-neighbour, so a viewer that shrinks the picture (GitHub shows the SVG as an <img>,
+    where image-rendering is ignored) starts from sharp pixels, not from a 240 px image resampled to 200"""
     im = Image.open(path).convert("RGB")
     if scale != 1:
         im = im.resize((im.width * scale, im.height * scale), Image.NEAREST)
@@ -106,7 +108,7 @@ def panel(screen_png):
          button(72, 294, 82, 38, "OCT-"), button(170, 294, 82, 38, "OCT+"),
          what(113, 362, "Page / octave -"), what(211, 362, "Page / octave +"),
          f'<rect x="300" y="44" width="236" height="236" rx="26" fill="#111214"/>',
-         f'<image x="318" y="62" width="200" height="200" href="{png_data_uri(screen_png)}" style="image-rendering:pixelated"/>']
+         f'<image x="318" y="62" width="200" height="200" href="{png_data_uri(screen_png, 4)}"/>']
     for i in range(4):
         s.append(knob(610 + i * 104, 92, 22, f"KNOB{i + 1}"))
     s.append(what(766, 136, "The page's four values"))

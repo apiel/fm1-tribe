@@ -1,7 +1,7 @@
 # What's new
 
 The newest version first. Install it with the [web installer](../install/); the
-[manual](../manual/) covers everything in detail.
+[manual](../#manual) covers everything in detail.
 
 ## 0.1 beta
 
