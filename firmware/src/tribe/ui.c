@@ -672,7 +672,7 @@ static void button_down(int b)
     case B_SAVE:
         break;
     case B_SEL:
-        ui.view = V_COMMON;                                           /* SEL: what every engine has: engine, volume, the two sends */
+        ui.view = V_COMMON;                                           /* SEL: what every engine has: volume, the two sends, engine */
         break;
     case B_OCTDN: case B_OCTUP: {
         int d = b == B_OCTUP ? 1 : -1;
@@ -751,15 +751,15 @@ static void input(void)
             }
         } else if (ui.view == V_COMMON) {
             int t = ui.trk, v;
-            if (i == 0) {                                  /* the engine of the clip on this track */
+            if (i == 3) {                                  /* the engine of the clip on this track */
                 int e = (cur_clip()->eng + eng_count() + (d > 0 ? 1 : -1)) % eng_count();
                 dk_engine(t, e);
                 fix_group();
-            } else if (i == 1) {
+            } else if (i == 0) {
                 v = proj.set.level[t] + d * 2;
                 proj.set.level[t] = (uint8_t)(v < 0 ? 0 : v > 127 ? 127 : v);
             } else {
-                uint8_t *sd = &proj.set.send[i - 2][t];
+                uint8_t *sd = &proj.set.send[i - 1][t];
                 v = *sd + d * 2;
                 *sd = (uint8_t)(v < 0 ? 0 : v > 127 ? 127 : v);
             }
@@ -1280,12 +1280,12 @@ static void draw_knobs(void)
             put_s(val, "-");
             u = 0.0f;
         } else if (cov) {
-            static const char *const CN[4] = {"Engine", "Volume", "Send 1", "Send 2"};
+            static const char *const CN[4] = {"Volume", "Send 1", "Send 2", "Engine"};
             int t = ui.trk;
             lab = CN[i];
-            if (i == 0) { put_s(val, eng_info(c->eng)->name); u = (float)c->eng / (float)(eng_count() - 1); }
-            else if (i == 1) { put_s(put_i(val, proj.set.level[t] * 100 / 127), "%"); u = (float)proj.set.level[t] / 127.0f; }
-            else { put_s(put_i(val, proj.set.send[i - 2][t] * 100 / 127), "%"); u = (float)proj.set.send[i - 2][t] / 127.0f; }
+            if (i == 3) { put_s(val, eng_info(c->eng)->name); u = (float)c->eng / (float)(eng_count() - 1); }
+            else if (i == 0) { put_s(put_i(val, proj.set.level[t] * 100 / 127), "%"); u = (float)proj.set.level[t] / 127.0f; }
+            else { put_s(put_i(val, proj.set.send[i - 1][t] * 100 / 127), "%"); u = (float)proj.set.send[i - 1][t] / 127.0f; }
         } else if (arpv) {
             static const char *const AN[4] = {"MODE", "RATE", "GATE", "OCT"};
             int t = ui.trk;
@@ -1364,7 +1364,7 @@ static void leds(void)
     if (ui.view == V_COMMON)
         b |= 1u << B_SEL;
     else
-        bd |= 1u << B_SEL;                               /* SEL: the common page (engine, volume, sends); dim = it is there */
+        bd |= 1u << B_SEL;                               /* SEL: the common page (volume, sends, engine); dim = it is there */
     if (ui.view == V_ARP) b |= 1u << B_ARP;
     if (ui.view == V_REC) b |= 1u << B_REC;
     plat_play_red(ui.view == V_REC);

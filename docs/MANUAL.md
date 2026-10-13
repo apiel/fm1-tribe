@@ -81,7 +81,7 @@ TRIBE starts with a small beat already in it, so there is something to hear stra
 5. Hold the eleventh black key (**MUTE**) and tap a track key to mute or unmute that track.
 6. Press **HOME** for the clips: sixteen per track. Press a white key to launch one. It switches at
    the end of the pattern; press it again to switch at once.
-7. Press **SEL** for the mix: each track's engine, volume and its two sends.
+7. Press **SEL** for the mix: each track's volume, its two sends and engine.
 8. Press **SAVE** when you like what you hear.
 
 ---
@@ -97,7 +97,7 @@ The drawing at the top of the manual names every control. In more detail:
 | OCT-, OCT+ | Page through the steps (SEQ) or the sound pages (FX, ENV, LFO, EDIT). On the keyboard (ARP, REC), the octave. |
 | KNOB 1–4 | The four values at the bottom of the screen. |
 | FX, ENV, LFO, EDIT | The track's sound, in four groups of parameters. Press the same button again for the next page of four. A button is dark when the engine has nothing in that group. |
-| SEL | The mix: engine, volume and sends of every track. |
+| SEL | The mix: volume, sends and engine of every track. |
 | GLO | The global settings. |
 | HOME | The clips. |
 | SAVE | The save pick (see Saving). |
@@ -118,7 +118,7 @@ knobs.
 ## 4. Tracks and engines
 
 There are ten tracks. Each plays one **engine**, which belongs to the clip, so changing clips can
-change the engine too. Choose it on the SEL page, with KNOB 1.
+change the engine too. Choose it on the SEL page, with KNOB 4.
 
 | Engine | What it is |
 |---|---|
@@ -270,14 +270,14 @@ how long you held the key). Stopped, REC just plays.
 (after the volume and the mute), the white tick the volume, and the two thin bars its sends.
 Black keys pick the track.
 
-![SEL: engine, volume and the two sends](img/screen-sel.png)
+![SEL: volume, the two sends and engine](img/screen-sel.png)
 
 | Knob | |
 |---|---|
-| ENGINE | which engine the clip on this track plays |
 | VOLUME | the track's level |
 | SEND 1 | how much goes to FX 1 |
 | SEND 2 | how much goes to FX 2 |
+| ENGINE | which engine the clip on this track plays |
 
 The sends start closed. **FX 1 and FX 2** are two master effects (chosen in GLO, next section): raise
 a track's send to put it in the echo or the room. Sends are after the volume and the mute.
