@@ -70,7 +70,19 @@ a { color: var(--accent); }
 .help p, .help ul { margin: 0; color: var(--muted); max-width: 60ch; }
 .help ul { padding-left: 1.1rem; }
 kbd { font: 600 .85em ui-monospace, Menlo, monospace; background: var(--card); border: 1px solid var(--rule); border-radius: 4px; padding: 0 .3em; color: var(--ink); }
+.embed body { padding: 0; background: transparent; }
+.embed header { display: none; }
 </style>
+<script>
+// embedded in the site's home page (?embed): no page chrome, and the page tells its height to the parent
+if (new URLSearchParams(location.search).has("embed")) {
+  document.documentElement.classList.add("embed");
+  addEventListener("DOMContentLoaded", () => {
+    const post = () => parent.postMessage({ tribeHeight: document.body.getBoundingClientRect().height }, "*");
+    new ResizeObserver(post).observe(document.body);
+  });
+}
+</script>
 </head>
 <body>
 <main>

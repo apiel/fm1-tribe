@@ -13,8 +13,8 @@ a DJ filter, the effects or the tempo.
 
 | | |
 |---|---|
-| **[Emulator](https://apiel.github.io/fm1-tribe/emu/)** | TRIBE in the browser, with sound: the same code the FM-1 runs. No FM-1 needed. |
-| **[Web installer](https://apiel.github.io/fm1-tribe/install/)** | Flash your FM-1 from Chrome or Edge over USB. Nothing to install on the computer. Can put the stock firmware back. |
+| **[Emulator](https://apiel.github.io/fm1-tribe/#emulator)** | TRIBE in the browser, with sound: the same code the FM-1 runs. No FM-1 needed. |
+| **[Web installer](https://apiel.github.io/fm1-tribe/#install)** | Flash your FM-1 from Chrome or Edge over USB. Nothing to install on the computer. Can put the stock firmware back. |
 | **[Manual](https://apiel.github.io/fm1-tribe/#manual)** | Getting started, every page and every parameter. |
 | **[What's new](https://apiel.github.io/fm1-tribe/new/)** | The release notes. |
 | **[Discord](https://discord.gg/fzHTbjh6x)** | Questions, bugs, music: the fm1-tribe channel. |
