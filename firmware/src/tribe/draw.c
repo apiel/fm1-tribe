@@ -50,7 +50,8 @@ static char *put_hex(char *b, uint32_t v, int digits)
 #define MAIN_Y 20
 #define BAND_H 69                     /* the main area: two bands of 69 (the knob row takes the 6 below) */
 #define KNOB_Y 158
-#define KNOB_H 82
+#define KNOB_H 81                     /* the last row (239) is the CPU bar */
+#define CPU_Y 239
 
 static uint32_t blit_hash[4];
 static uint32_t cv_hash(void)

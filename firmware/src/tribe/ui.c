@@ -808,6 +808,31 @@ static void input(void)
 /* ---------------------------------------------------------------- drawing --- */
 static void put_num(char *b, int v) { put_i(b, v); }
 
+/* the CPU load as a bar along the very bottom of the screen (1 row, its own tiny region: 0.5 KB).
+ * It is sampled every 8th frame and changes only when the load moved a few percent, so it is
+ * re-sent about once a second at most, not every frame; it does not have to be exact.
+ * Fill = smoothed load, tick = the peak of the last ~2 s. */
+static uint8_t cpu_fill, cpu_peak, cpu_ema;
+static void cpu_sample(void)
+{
+    cpu_ema = (uint8_t)((cpu_ema * 3u + (dk_load_pct > 100u ? 100u : dk_load_pct)) >> 2);
+    if ((ui.frame & 7u) != 0)
+        return;
+    if (cpu_ema > cpu_fill + 3 || cpu_ema + 3 < cpu_fill)
+        cpu_fill = cpu_ema;
+    if (dk_load_peak > cpu_peak + 3u || dk_load_peak + 3u < cpu_peak)
+        cpu_peak = (uint8_t)(dk_load_peak > 100u ? 100u : dk_load_peak);
+}
+static void draw_cpu_bar(void)
+{
+    int32_t f = cpu_fill * 240 / 100, k = cpu_peak * 238 / 100;
+    cv_begin(240, 1, C_BLACK);
+    cv_rect(0, 0, f, 1, cpu_fill > 80 ? RGB(230, 60, 55) : C_DIM);   /* quiet; red over 80% */
+    if (cpu_peak > cpu_fill)
+        cv_rect(k, 0, 2, 1, C_GRAY);
+    cv_commit(3, 0, CPU_Y);
+}
+
 static void draw_header(void)
 {
     char b[24];
@@ -1474,9 +1499,11 @@ void ui_frame(void)
         dk_peak[t] = (uint16_t)(dk_peak[t] - (dk_peak[t] >> 3));
         dk_hit[t] = (uint8_t)(dk_hit[t] - (dk_hit[t] >> 3) - (dk_hit[t] ? 1 : 0));
     }
+    cpu_sample();
     draw_header();
     draw_main();
     draw_knobs();
+    draw_cpu_bar();
     leds();
     ui.frame++;
 }
