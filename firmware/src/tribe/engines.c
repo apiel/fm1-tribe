@@ -97,7 +97,7 @@ const x0x_param_t *eng_param(int id, int i)
 int eng_group(int id, int i)
 {
     static const char *const hide[] = {"Rev", "Dly", "Pan", "Accent", "Veloc", "Volume", "Level", "Click", "ClkDec", 0};
-    static const char *const fx[] = {"Drive", "Dist", "DrvTyp", "Crush", "Fold", "Wfold", "Reson", "Boost", 0};
+    static const char *const fx[] = {"Drive", "Dist", "DrvTyp", "Crush", "Fold", "Wfold", "Reson", "Boost", "Ring", "RingFq", 0};
     static const char *const env[] = {"Attack", "Decay", "P.Dpth", "Pitch", "AccDec", "EnvMod", "Slide", "Tail",
                                       "PchShp", "SwpShp", "SwpDpt", "Curve", "FMSnap", "Dur", "Sustain", "Release", 0};
     static const char *const lfo[] = {"LfoRt", "LfoDpt", "LfoShp", "LfoTgt", 0};

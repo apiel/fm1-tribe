@@ -15,6 +15,8 @@
  *  Attack, Decay, Sustain, Release   the envelope; it opens the filter by EnvMod as well as the level
  *  EnvMod   filter envelope depth, 0 .. 60 semitones            Slide   glide time, 5 ms .. 600 ms
  *  Drive    gain into the filter                                 Dist, DrvTyp   the distortion after it
+ *  Ring     a ring modulator at the end: the sound times a sine that follows the note (0 = off)
+ *  RingFq   the sine's frequency as a ratio of the note: 0.5x .. 8x, exponential (a whole number: harmonic; between: metallic)
  *
  * Every instance is self-contained (no mutable static state). */
 #pragma once
@@ -31,7 +33,8 @@ enum {
     LEAD_LEGATO, LEAD_VIB,                                     /* page 3 */
     LEAD_ATTACK, LEAD_DECAY, LEAD_SUSTAIN, LEAD_RELEASE,       /* ENV, page 1 */
     LEAD_ENVMOD, LEAD_SLIDE,                                   /* page 2 */
-    LEAD_DRIVE, LEAD_DIST, LEAD_DISTTYPE,                      /* FX */
+    LEAD_DRIVE, LEAD_DIST, LEAD_RING, LEAD_RINGFQ,             /* FX, page 1 */
+    LEAD_DISTTYPE,                                             /* page 2 */
     LEAD_NPARAMS
 };
 
@@ -46,6 +49,7 @@ typedef struct lead {
     float dec_c, sustain, rel_c;  /* decay (per sample), the level it settles at, release (per sample) */
     float glide_c;                /* per control step */
     float drive_g, dist_g, dist_wet, dist_norm;
+    float ring_mix, ring_ratio, ring_ph;
     int dist_type;
 
     /* voice */

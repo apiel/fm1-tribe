@@ -27,6 +27,8 @@ static const x0x_param_t params[LEAD_NPARAMS] = {
     { "Slide", 127, 60, 0 },         /* glide, 5 ms .. 600 ms */
     { "Drive", 127, 0, 0 },          /* gain into the filter, 1 .. 8; 0 = off */
     { "Dist", 127, 0, 0 },           /* the distortion after the filter, gain 1 .. 16; 0 = off */
+    { "Ring", 127, 0, 0 },           /* ring modulator amount; 0 = off */
+    { "RingFq", 127, 64, 0 },        /* its sine: 0.5x .. 8x the note; 64 = 2x (an octave up) */
     { "DrvTyp", 2, 0, type_names },
 };
 
@@ -81,6 +83,8 @@ void lead_set(lead_t *b, int i, int v)
         b->dist_norm = 1.0f / fm_tanhf(b->dist_g);
         break;
     case LEAD_DISTTYPE: b->dist_type = v; break;
+    case LEAD_RING: b->ring_mix = n; break;
+    case LEAD_RINGFQ: b->ring_ratio = 0.5f * fm_exp2f(n * 4.0f); break;
     }
 }
 
@@ -257,6 +261,12 @@ void lead_render(lead_t *b, float *out, int n)
             default: w = fm_tanhf(ym * b->dist_g) * b->dist_norm; break;
             }
             ym += (w - ym) * b->dist_wet;
+        }
+        if (b->ring_mix > 0.0f) {                               /* the ring modulator: dry to wet (the sound times a sine) */
+            b->ring_ph += inc * b->ring_ratio;
+            if (b->ring_ph >= 1.0f)
+                b->ring_ph -= 1.0f;
+            ym += (ym * fm_sin_turns(b->ring_ph) - ym) * b->ring_mix;
         }
         out[i] = 0.5f * e * ym;
         if (b->stage == 2 && e < 1e-4f) {

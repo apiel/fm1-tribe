@@ -171,6 +171,29 @@ int main(void)
     render(&b2, buf + SR, SR);
     CHECK(memcmp(buf, buf + SR, SR * sizeof(float)) != 0, "vibrato changes nothing");
 
+    {   /* ring: off is the plain sound (bit for bit); on, a different one, still bounded */
+        static float ref[8000], rg[8000];
+        plain(&a);
+        lead_note_on(&a, 45, 0, 0);
+        render(&a, ref, 8000);
+        plain(&a);
+        lead_set(&a, LEAD_RING, 0);
+        lead_note_on(&a, 45, 0, 0);
+        render(&a, rg, 8000);
+        CHECK(memcmp(ref, rg, sizeof ref) == 0, "ring 0 is not bypassed");
+        plain(&a);
+        lead_set(&a, LEAD_RING, 127);
+        lead_set(&a, LEAD_RINGFQ, 90);
+        lead_note_on(&a, 45, 0, 0);
+        render(&a, rg, 8000);
+        CHECK(memcmp(ref, rg, sizeof ref) != 0 && rms(rg, 8000) > 0.01, "ring changes nothing (rms %g)", rms(rg, 8000));
+        for (i = 0; i < 8000; i++)
+            if (!isfinite(rg[i]) || fabsf(rg[i]) > 0.5001f) {
+                CHECK(0, "ring: sample %d = %g", i, rg[i]);
+                break;
+            }
+    }
+
     lead_init(&a);                                        /* two instances */
     lead_init(&b2);
     lead_note_on(&a, 40, 1, 0);
