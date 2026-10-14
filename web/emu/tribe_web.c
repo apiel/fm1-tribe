@@ -63,7 +63,7 @@ EXPORT void web_enc(int role, int32_t n)
 EXPORT void web_master(uint32_t v) { master = v > 4096u ? 4096u : v; }
 EXPORT uint32_t web_lit_buttons(void) { return lit_btn; }
 EXPORT uint32_t web_lit_keys(void) { return lit_keys; }
-EXPORT uint32_t web_dim_keys(void) { return dim_keys & ~lit_keys; }
+EXPORT uint32_t web_dim_keys(void) { return (dim_keys | faint_keys) & ~lit_keys; }
 EXPORT uint32_t web_dim_buttons(void) { return dim_btn & ~lit_btn; }
 EXPORT uint16_t *web_fb(void) { return fb; }
 EXPORT uint32_t web_blits(void) { return blits; }

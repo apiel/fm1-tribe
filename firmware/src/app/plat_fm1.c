@@ -63,9 +63,11 @@ static uint8_t play_red;
 void plat_play_red(int red) { play_red = (uint8_t)(red != 0); }
 static uint32_t keys_dim;
 void plat_keys_dim(uint32_t keys) { keys_dim = keys; }
+static uint32_t keys_faint;
+void plat_keys_faint(uint32_t keys) { keys_faint = keys; }
 void plat_leds(uint32_t buttons, uint32_t keys)
 {
-    uint8_t nl[FM1_NCOL] = {0}, dl[FM1_NCOL] = {0};
+    uint8_t nl[FM1_NCOL] = {0}, dl[FM1_NCOL] = {0}, fl[FM1_NCOL] = {0};
     uint32_t i, c;
     for (i = 0; i < NB + NKEYS; i++) {
         uint32_t id = i < NB ? panel.btn[i] : 14u + (i - NB);
@@ -79,12 +81,15 @@ void plat_leds(uint32_t buttons, uint32_t keys)
             nl[q >> 3] |= (uint8_t)(1u << (q & 7u));
         else if (i < NB ? (glow_on || ((btn_dim >> i) & 1u)) : (keys_dim >> (i - NB)) & 1u)
             dl[q >> 3] |= (uint8_t)(1u << (q & 7u));
+        else if (i >= NB && (keys_faint >> (i - NB)) & 1u)
+            fl[q >> 3] |= (uint8_t)(1u << (q & 7u));
     }
     for (c = 0; c < FM1_NCOL; c++) {
         fm1_led[c] = nl[c];
         fm1_led_dim[c] = dl[c];
+        fm1_led_faint[c] = fl[c];
     }
-    fm1_led_dim_div = glow_on || keys_dim || btn_dim ? GLOW_DIV : 0u;
+    fm1_led_dim_div = glow_on || keys_dim || keys_faint || btn_dim ? GLOW_DIV : 0u;
 }
 
 /* MIDI: Felucca's rings carry 4-byte USB-MIDI event packets, byte 0 = cable / CIN */

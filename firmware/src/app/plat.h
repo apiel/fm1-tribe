@@ -34,6 +34,7 @@ void plat_leds(uint32_t buttons, uint32_t keys);   /* lit: bit B_*, bit key */
 void plat_buttons_dim(uint32_t buttons);   /* these buttons light dim (TRIBE: "available"; call before plat_leds) */
 void plat_glow(int on);                /* the unlit buttons glow dimly, readable in the dark (call before plat_leds) */
 void plat_keys_dim(uint32_t keys);     /* these keys light dim (a second level; call before plat_leds) */
+void plat_keys_faint(uint32_t keys);   /* these keys light faint: half of dim (call before plat_leds) */
 void plat_play_red(int red);           /* PLAY lights green; red (its other LED) while recording (before plat_leds) */
 
 /* USB MIDI, 4-byte USB-MIDI event packets (cable 0) */

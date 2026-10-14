@@ -59,7 +59,7 @@ static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint1
 
 static uint32_t now_ms, held_btn, held_keys, master = 2048;
 static int32_t enc_acc[NE];
-static uint32_t lit_btn, lit_keys, dim_keys, dim_btn;
+static uint32_t lit_btn, lit_keys, dim_keys, faint_keys, dim_btn;
 
 uint32_t plat_ms(void) { return now_ms; }
 uint32_t plat_buttons(void) { return held_btn; }
@@ -82,6 +82,7 @@ void plat_glow(int on) { (void)on; }
 void plat_buttons_dim(uint32_t b) { dim_btn = b; }
 void plat_play_red(int red) { (void)red; }
 void plat_keys_dim(uint32_t k) { dim_keys = k; }
+void plat_keys_faint(uint32_t k) { faint_keys = k; }
 int plat_midi_in(uint32_t *pkt) { (void)pkt; return 0; }
 void plat_midi_out(uint32_t pkt) { (void)pkt; }
 
@@ -503,7 +504,7 @@ int main(int argc, char **argv)
                 if ((lit_btn >> k) & 1u) printf(" %s=#", BTN_N[k]); else if ((dim_btn >> k) & 1u) printf(" %s=o", BTN_N[k]);
             printf("\nkeys   :");
             for (k = 0; k < NKEYS; k++)
-                putchar((lit_keys >> k) & 1u ? '#' : (dim_keys >> k) & 1u ? 'o' : '.');
+                putchar((lit_keys >> k) & 1u ? '#' : (dim_keys >> k) & 1u ? 'o' : (faint_keys >> k) & 1u ? ',' : '.');
             putchar('\n');
         } else if (!strcmp(a[0], "expect"))
             fails += expect(a[1], a[2], line);

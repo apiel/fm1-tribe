@@ -1025,7 +1025,8 @@ static void draw_scatter(void)
         int row = i >> 3, col = i & 7, on = i < 8 ? dk_scat[ui.trk] == i + 1 : dk_scat_g == i - 7;
         uint16_t c = i < 8 ? tcol(ui.trk) : C_AMB;
         int x = col * 30, y = 102 + row * 18, w = 29, h = 16;
-        box(x, y, w, h, on ? c : (dk_playing ? RGB(40, 40, 48) : C_LINE));
+        int lm = !(i & 3);                              /* the 1st, 5th, 9th, 13th: a lighter ground, like their full LEDs */
+        box(x, y, w, h, on ? c : dk_playing ? (lm ? RGB(78, 78, 90) : RGB(40, 40, 48)) : lm ? blend(C_LINE, C_DIM, 8) : C_LINE);
         text_c(x + w / 2, vc(&FONT_XS, y, h), &FONT_XS, sc_name(i), on ? C_BLACK : (dk_playing ? C_WHITE : C_GRAY));
     }
 }
@@ -1372,7 +1373,7 @@ static void draw_knobs(void)
 /* ------------------------------------------------------------------ lights --- */
 static void leds(void)
 {
-    uint32_t b = 0, bd = 0, k = 0, kd = 0;
+    uint32_t b = 0, bd = 0, k = 0, kd = 0, kf = 0;
     int g, t, i, blink = (ui.frame >> 4) & 1;
     const clip_t *c = cur_clip();
     for (g = 0; g < NPG; g++) {
@@ -1430,8 +1431,10 @@ static void leds(void)
                 uint32_t m = 1u << WHITE_K[i];
                 if (i < 8 ? dk_scat[ui.trk] == i + 1 : dk_scat_g == i - 7)
                     k |= m;
+                else if (!(i & 3))
+                    k |= m;                                 /* the 1st, 5th, 9th, 13th: full, as landmarks among the faint keys */
                 else
-                    kd |= m;
+                    kf |= m;
             }
         } else if (ui.view == V_HOME) {
             for (i = 0; i < NCLIP; i++) {
@@ -1455,7 +1458,7 @@ static void leds(void)
         bd |= 1u << B_SAVE;                               /* SAVE glows: something is not saved */
     if (ui.save_mode) {          /* SAVE: only what can be saved blinks (the tracks whose clip changed, GLO); SAVE at half = everything */
         b = bd = 0;
-        k = kd = 0;
+        k = kd = kf = 0;
         bd |= 1u << B_SAVE;
         if (blink && store_set_dirty())
             b |= 1u << B_GLO;
@@ -1466,6 +1469,7 @@ static void leds(void)
     plat_glow(0);
     plat_buttons_dim(bd & ~b);
     plat_keys_dim(kd & ~k);
+    plat_keys_faint(kf & ~k & ~kd);
     plat_leds(b, k);
 }
 
