@@ -8,6 +8,7 @@
  *  EnvMod   depth of the filter envelope, which opens at each new note and closes over 1.5 x the note
  *           decay + 60 ms; an accented note opens it deeper and plays louder (Accent)
  *  Decay    length of the note (time constant 10 ms .. 2.4 s)
+ *  Sustain  the level a held note settles at (0 = it decays away, as the Cycles' do); the gate's end releases it
  *  P.Dpth   pitch envelope: centre = none, up = starts higher, down = lower (+-24 semitones, 21 ms)
  *  Slide    glide time of a slid note (5 .. 300 ms): the pitch glides, the oscillator and the filter keep
  *           running, the envelope opens again without a new attack
@@ -30,6 +31,7 @@ enum {
     ACID_DECAY, ACID_ENVMOD, ACID_PDEPTH, ACID_SLIDE,      /* page 2 (ENV) */
     ACID_TUNE,                                             /* page 3 (EDIT) */
     ACID_DRIVE, ACID_DIST, ACID_DISTTYPE,                  /* FX page */
+    ACID_SUSTAIN,                                          /* ENV page, page 2 */
     ACID_NPARAMS
 };
 
@@ -50,6 +52,7 @@ typedef struct acid {
     float drive_g;           /* gain into the filter */
     float dist_g, dist_wet, dist_norm;   /* the distortion after it: gain, how much of it (fades in over the first pots), 1 / tanh(gain) */
     int dist_type;           /* 0 soft, 1 hard, 2 fold */
+    float sustain;           /* the level the decay settles at while the gate is held, 0 .. 1 */
     float rel_c;             /* the gate's release: per-sample multiplier */
     float penv_c;            /* pitch envelope: per control step (21 ms) */
 

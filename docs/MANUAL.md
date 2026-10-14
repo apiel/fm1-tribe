@@ -177,7 +177,7 @@ when the track's pattern ends, in whatever direction it plays.
 four knobs edit the page; the name and value are under each knob. When a group has more than four
 parameters there are dots in the strip and OCT-/OCT+ (or pressing the button again) flip pages.
 
-![EDIT: the kick's frequency, FM, wave and level](img/screen-edit.png)
+![EDIT: the kick's frequency, FM, wave and harmonic 2](img/screen-edit.png)
 
 ![FX: drive, fold, reson and crush](img/screen-fx.png)
 
@@ -224,7 +224,7 @@ KNOB 1 on this page is the track's level.
 
 ## 8. Scatter effects
 
-While it **plays**, the second row of keys on a sound page (FX, ENV, LFO, EDIT) or on GLO is not for notes
+While it **plays**, the second row of keys on a sound page (FX, ENV, LFO, EDIT), on SEL or on GLO is not for notes
 but for **scatter effects**, held for as long as you press. The first eight act on the selected
 track, the last eight on the whole mix:
 
@@ -268,7 +268,8 @@ how long you held the key). Stopped, REC just plays.
 
 **SEL** is the page of what every track has. Each track is a column: the wide bar is its live level
 (after the volume and the mute), the white tick the volume, and the two thin bars its sends.
-Black keys pick the track.
+Black keys pick the track. The white keys work as on the other sound pages: they play the track when
+it is stopped, and are the scatter keys while it plays.
 
 ![SEL: volume, the two sends and engine](img/screen-sel.png)
 
@@ -430,22 +431,23 @@ shows; every knob is 0–127 underneath.
 
 | Engine | FX | ENV | EDIT |
 |---|---|---|---|
-| KICK W | Drive, Fold, Reson, Crush | PchShp, Dur, Curve | Level, Freq, FM, Wave, Harm2, Harm3, Skew, Phase |
-| KICK P | Drive, Wfold, Reson, Crush, Boost | Dur, SwpShp, SwpDpt, FMSnap | Level, Freq, Morph, FMDpt, FMRat |
-| 909 BD | Drive, Dist | Attack, Decay, P.Dpth, Pitch | Level, Tune |
-| 909 SD | Drive, Dist | (none) | Level, Tune, Tone, Snappy |
-| 909 LT, MT, HT | Drive, Dist | Decay, Attack | Level, Tune |
-| 909 RS | Drive, Dist | (none) | Level, Tune |
-| 909 CP | Drive, Dist | Tail | Level, Tune |
-| 909 CH, OH, CR, RD | Drive, Dist | Decay | Level, Tune |
-| 808 BD | Drive, Dist | Decay, Attack | Level, Tone, Tune |
-| 808 SD | Drive, Dist | Decay | Level, Tone, Snappy, Tune |
-| 808 LT, MT, HT, RS | Drive, Dist | Decay | Level, Tune, Sound |
-| 808 CP | Drive, Dist | Decay, Attack | Level, Tune, Sound |
-| 808 CB, CY, OH, CH | Drive, Dist | Decay | Level, Tune |
+| KICK W | Drive, Fold, Reson, Crush | PchShp, Dur, Curve | Freq, FM, Wave, Harm2, Harm3, Skew, Phase |
+| KICK P | Drive, Wfold, Reson, Crush, Boost | Dur, SwpShp, SwpDpt, FMSnap | Freq, Morph, FMDpt, FMRat |
+| 909 BD | Drive, Dist | Attack, Decay, P.Dpth, Pitch | Tune |
+| 909 SD | Drive, Dist | (none) | Tune, Tone, Snappy |
+| 909 LT, MT, HT | Drive, Dist | Decay, Attack | Tune |
+| 909 RS | Drive, Dist | (none) | Tune |
+| 909 CP | Drive, Dist | Tail | Tune |
+| 909 CH, OH, CR, RD | Drive, Dist | Decay | Tune |
+| 808 BD | Drive, Dist | Decay, Attack | Tone, Tune |
+| 808 SD | Drive, Dist | Decay | Tone, Snappy, Tune |
+| 808 LT, MT, HT, RS | Drive, Dist | Decay | Tune, Sound |
+| 808 CP | Drive, Dist | Decay, Attack | Tune, Sound |
+| 808 CB, CY, OH, CH | Drive, Dist | Decay | Tune |
 | 303 | Drive, DrvTyp | EnvMod, Decay, Slide, AccDec | Cutoff, Reso, Accent, Wave, Tune |
+| ACID | Drive, Dist, DrvTyp | Decay, EnvMod, P.Dpth, Slide, Sustain | Cutoff, Reso, Color, Accent, Tune |
 
-The 303 also has the LFO page (section 6). Every track has its VOLUME and the two sends on SEL.
+The 303 and ACID also have the LFO page (section 6). The track's level is VOLUME on SEL (with the two sends), and KNOB 1 on CLIPS; no sound page has a level of its own.
 
 ---
 

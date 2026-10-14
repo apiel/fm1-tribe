@@ -1,12 +1,10 @@
-# a track's level: first knob of the EDIT page, and KNOB 1 on the CLIPS page
+# a track's level: KNOB 1 of the SEL page (volume), and KNOB 1 on the CLIPS page; the EDIT page has none of it
 expect level 100
-tap EDIT
-expect view 1
-expect grp 3
-expect page 0
+tap SEL
+expect view 6
 turn K1 -5
 expect level 90
-shot level_edit.png
+shot level_sel.png
 tap HOME
 expect view 2
 turn K1 3
@@ -21,7 +19,7 @@ tapkey b0
 expect level 96
 # a track whose engine has no pots still has its level (track 10 has no engine)
 tapkey b9
-tap EDIT
-expect grp 3
+tap SEL
+expect view 6
 turn K1 -5
 expect level 90

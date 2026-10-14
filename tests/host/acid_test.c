@@ -195,6 +195,32 @@ int main(void)
     CHECK(fabs(f - 220.0) < 6.0, "slid note settles at %.1f Hz", f);
     CHECK(rms(buf + 100, 300) > 0.1, "the slide dropped out (rms %g)", rms(buf + 100, 300));
 
+    /* sustain: a short decay settles on the level while the gate is held, and the gate ends it */
+    acid_init(&a);
+    open_filter(&a);
+    acid_set(&a, ACID_DECAY, 30);
+    acid_set(&a, ACID_SUSTAIN, 100);
+    acid_note_on(&a, 45, 0, 0);
+    render(&a, buf, SR);
+    r1 = rms(buf + SR * 8 / 10, 4410);
+    acid_init(&a);
+    open_filter(&a);
+    acid_set(&a, ACID_DECAY, 30);
+    acid_note_on(&a, 45, 0, 0);
+    render(&a, buf, SR);
+    r2 = rms(buf + SR * 8 / 10, 4410);
+    CHECK(r2 < 0.001 && r1 > 0.1, "sustain: rms %g held, %g with none", r1, r2);
+    acid_note_off(&a);
+    acid_init(&a);
+    open_filter(&a);
+    acid_set(&a, ACID_DECAY, 30);
+    acid_set(&a, ACID_SUSTAIN, 100);
+    acid_note_on(&a, 45, 0, 0);
+    render(&a, buf, SR / 2);
+    acid_note_off(&a);
+    render(&a, buf, SR / 2);
+    CHECK(rms(buf + SR / 4, 2000) < 0.001, "the sustained note does not end with the gate (%g)", rms(buf + SR / 4, 2000));
+
     /* Drive and Dist: off is the plain sound; on, a brighter, denser one, still bounded; each type works */
     {
         static float ref[8000], dd[8000];

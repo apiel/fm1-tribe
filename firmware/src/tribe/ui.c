@@ -83,11 +83,11 @@ static int clip_has(const clip_t *c) { return c->on[0] | c->on[1]; }
 static int nsteps_page(void) { return LEN_OF(cur_clip()) / 16; }
 static uint16_t tcol(int t) { return TRK_COL[t % NTRK]; }
 
-/* the pages of a group: the engine's pots, and the track's LEVEL first on EDIT (it belongs to the track, not the clip) */
+/* the pages of a group: the engine's pots (the track's level is on the SEL page, and on CLIPS) */
 #define PIX_LFO 110                                    /* the LFO's six controls: PIX_LFO + LFO_* */
 static int grp_count(int g)
 {
-    int n = eng_nparams(cur_clip()->eng), i, c = g == PG_EDIT;
+    int n = eng_nparams(cur_clip()->eng), i, c = 0;
     if (g == PG_LFO)
         return eng_info(cur_clip()->eng)->kind == EK_SYNTH ? NLFO : 0;     /* the LFO is for synths; a drum hit is too short for one */
     for (i = 0; i < n; i++)
@@ -216,11 +216,6 @@ static int param_ix(int slot)
         return slot == 0 ? PIX_LEVEL : -1;
     if (ui.grp == PG_LFO)
         return k < NLFO ? PIX_LFO + k : -1;
-    if (ui.grp == PG_EDIT) {
-        if (k == 0)
-            return PIX_LEVEL;
-        k--;
-    }
     return eng_param_at(cur_clip()->eng, ui.grp, k / 4, k % 4);
 }
 
@@ -561,6 +556,7 @@ static void key_down(int k)
         break;
     case V_PARAM:
     case V_GLO:
+    case V_COMMON:                                       /* SEL too: the keys play the track, or scatter, as on the other sound pages */
         if (dk_playing) {                                /* playing: the second row is the scatter FX, not notes */
             ui.held_scat[k] = (uint8_t)(w + 1);
             ui.held_trk[k] = ui.trk;
@@ -970,14 +966,6 @@ static void draw_param(void)
             text_r(110 + (k & 1 ? 120 : 0), 44 + (k >> 1) * 15, &FONT_S, lv, on ? C_HI : C_GRAY);
         }
         return;
-    }
-    if (ui.grp == PG_EDIT) {                            /* the track's level heads the EDIT list */
-        char lv[8];
-        int k = ui.page[ui.grp] == 0;
-        put_i(lv, proj.set.level[ui.trk]);
-        cv_text(10, 44, &FONT_S, "Level", k ? C_WHITE : C_GRAY);
-        text_r(110, 44, &FONT_S, lv, k ? C_HI : C_GRAY);
-        row = 1;
     }
     for (i = 0; i < n; i++) {
         int g = eng_group(c->eng, i), k;
@@ -1426,7 +1414,7 @@ static void leds(void)
                         kd |= m;
                 }
             }
-        } else if ((ui.view == V_PARAM || ui.view == V_GLO) && dk_playing) {
+        } else if ((ui.view == V_PARAM || ui.view == V_GLO || ui.view == V_COMMON) && dk_playing) {
             for (i = 0; i < 16; i++) {
                 uint32_t m = 1u << WHITE_K[i];
                 if (i < 8 ? dk_scat[ui.trk] == i + 1 : dk_scat_g == i - 7)

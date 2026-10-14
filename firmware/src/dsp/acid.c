@@ -19,6 +19,7 @@ static const x0x_param_t params[ACID_NPARAMS] = {
     { "Drive", 127, 0, 0 },          /* gain into the filter, 1 .. 8; 0 = off */
     { "Dist", 127, 0, 0 },           /* the distortion after the filter, gain 1 .. 16; 0 = off */
     { "DrvTyp", 2, 0, type_names },  /* what the distortion does */
+    { "Sustain", 127, 0, 0 },        /* 0 .. 1: where the decay settles while the gate is held; 0 = it dies away */
 };
 
 int acid_nparams(void) { return ACID_NPARAMS; }
@@ -61,6 +62,7 @@ void acid_set(acid_t *b, int i, int v)
         b->dist_norm = 1.0f / fm_tanhf(b->dist_g);
         break;
     case ACID_DISTTYPE: b->dist_type = v; break;
+    case ACID_SUSTAIN: b->sustain = n; break;
     }
 }
 
@@ -234,7 +236,10 @@ void acid_render(acid_t *b, float *out, int n)
                 b->att_step = 0.0f;
             }
         } else {
-            amp *= b->gate ? b->amp_c : (b->amp_c < b->rel_c ? b->amp_c : b->rel_c);
+            if (b->gate)
+                amp = b->sustain + (amp - b->sustain) * b->amp_c;          /* the decay settles on the sustain level */
+            else
+                amp *= b->amp_c < b->rel_c ? b->amp_c : b->rel_c;          /* the gate ends: the release */
         }
         b->amp = amp;
         ym = fm_tanhf(ym * 2.0f * b->gain);
