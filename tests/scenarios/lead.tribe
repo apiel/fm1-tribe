@@ -1,0 +1,17 @@
+# LEAD: the starting project's track 8 plays it (two bars of long notes), its three groups of pages show
+tapkey b7
+expect trk 7
+tap SEL
+expect eng 27
+tap EDIT
+shot lead_edit.png
+tap ENV
+shot lead_env.png
+tap FX
+shot lead_fx.png
+tap SEQ
+shot lead_seq.png
+wav lead.wav
+tap PLAY
+wait 6000
+wavstop

@@ -43,11 +43,11 @@ static int find(const char *n)
 
 static void put(clip_t *c, int s, int note) { c->on[s >> 5] |= 1u << (s & 31); c->st[s].note = (uint8_t)note; }
 
-/* a starting point that makes noise: four-on-the-floor, backbeat, hats, a 303 line */
+/* a starting point that makes noise: four-on-the-floor, backbeat, hats, a 303 line, a long legato lead */
 void project_defaults(void)
 {
     static const char *const names[NTRK] = {"KICK W", "909 SD", "909 CH", "909 OH", "808 CP", "303", "KICK P",
-                                            "808 BD", "909 RS", "NONE"};
+                                            "LEAD", "909 RS", "NONE"};
     int t, c, s;
     memset(&proj, 0, sizeof proj);
     proj.set.magic = 0x54524942u;
@@ -96,6 +96,21 @@ void project_defaults(void)
                 proj.clip[5][0].st[s].slide = 1;
             if (s == 6)
                 proj.clip[5][0].st[s].vel = 120;
+        }
+    }
+    {   /* track 8: the LEAD, two bars of long notes that glide into each other (a slide step glides into the next note) */
+        static const struct { uint8_t step, note, len, slide, vel; } lead[] = {
+            {0, 57, 31, 1, 100}, {8, 60, 31, 1, 100}, {16, 64, 31, 1, 100}, {20, 62, 15, 0, 120},
+            {24, 60, 23, 1, 100}, {28, 59, 15, 0, 100},
+        };
+        clip_t *l = &proj.clip[7][0];
+        unsigned i;
+        l->lensel = 1;
+        for (i = 0; i < sizeof lead / sizeof lead[0]; i++) {
+            put(l, lead[i].step, lead[i].note);
+            l->st[lead[i].step].len = lead[i].len;
+            l->st[lead[i].step].slide = lead[i].slide;
+            l->st[lead[i].step].vel = lead[i].vel;
         }
     }
     proj.clip[6][0].lensel = 1;                      /* a 32-step kick fill on the second kick */

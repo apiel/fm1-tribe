@@ -11,6 +11,7 @@
 #include "../dsp/drum808.h"
 #include "../dsp/bass303.h"
 #include "../dsp/acid.h"
+#include "../dsp/lead.h"
 #include "../dsp/fastmath.h"
 #include "kicks.h"
 
@@ -18,7 +19,7 @@
 #define POOLED X0X_POOL
 #endif
 
-/* the table: none, the kicks, the 909 voices, the 808 voices, the 303, ACID (the zicCycle 303) */
+/* the table: none, the kicks, the 909 voices, the 808 voices, the 303, ACID (the zicCycle 303), LEAD */
 #define E(n, k, f, v, c) { n, k, f, v, c }
 static const tribe_eng_t ENG[] = {
     E("NONE", EK_DRUM, F_NONE, 0, 0),
@@ -37,7 +38,8 @@ static const tribe_eng_t ENG[] = {
     E("808 CY", EK_DRUM, F_808, D8_CY, 1), E("808 OH", EK_DRUM, F_808, D8_OH, 1),
     E("808 CH", EK_DRUM, F_808, D8_CH, 1),
     E("303", EK_SYNTH, F_303, 0, 6),
-    E("ACID", EK_SYNTH, F_ACID, 0, 4),                     /* appended: projects store engines by index */
+    E("ACID", EK_SYNTH, F_ACID, 0, 4),
+    E("LEAD", EK_SYNTH, F_LEAD, 0, 8),                     /* long legato leads: a unison of detuned oscillators */                     /* appended: projects store engines by index */
 };
 #define NENG ((int)(sizeof ENG / sizeof ENG[0]))
 
@@ -71,6 +73,7 @@ int eng_nparams(int id)
     case F_808: n = drum808_nparams(e->voice); break;
     case F_303: n = bass303_nparams(); break;
     case F_ACID: n = acid_nparams(); break;
+    case F_LEAD: n = lead_nparams(); break;
     case F_KICKW: case F_KICKP: n = kick_nparams(e->fam == F_KICKP); break;
     }
     return n > NPAR ? NPAR : n;
@@ -84,6 +87,7 @@ const x0x_param_t *eng_param(int id, int i)
     case F_808: return drum808_param(e->voice, i);
     case F_303: return bass303_param(i);
     case F_ACID: return acid_param(i);
+    case F_LEAD: return lead_param(i);
     case F_KICKW: case F_KICKP: return kick_param(e->fam == F_KICKP, i);
     }
     return 0;
@@ -95,13 +99,13 @@ int eng_group(int id, int i)
     static const char *const hide[] = {"Rev", "Dly", "Pan", "Accent", "Veloc", "Volume", "Level", "Click", "ClkDec", 0};
     static const char *const fx[] = {"Drive", "Dist", "DrvTyp", "Crush", "Fold", "Wfold", "Reson", "Boost", 0};
     static const char *const env[] = {"Attack", "Decay", "P.Dpth", "Pitch", "AccDec", "EnvMod", "Slide", "Tail",
-                                      "PchShp", "SwpShp", "SwpDpt", "Curve", "FMSnap", "Dur", "Sustain", 0};
+                                      "PchShp", "SwpShp", "SwpDpt", "Curve", "FMSnap", "Dur", "Sustain", "Release", 0};
     static const char *const lfo[] = {"LfoRt", "LfoDpt", "LfoShp", "LfoTgt", 0};
     const x0x_param_t *p = eng_param(id, i);
     const tribe_eng_t *e = eng_info(id);
     if (!p)
         return PG_HIDE;
-    if (in(p->name, hide) && !((e->fam == F_303 || e->fam == F_ACID) && ieq(p->name, "Accent")))
+    if (in(p->name, hide) && !((e->fam == F_303 || e->fam == F_ACID || e->fam == F_LEAD) && ieq(p->name, "Accent")))
         return PG_HIDE;
     if (in(p->name, fx))
         return PG_FX;
@@ -160,15 +164,17 @@ void eng_format(int id, int i, int value, char *buf)
 /* ------------------------------------------------------------ instances --- */
 #define N303 2
 #define NACID 2
+#define NLEAD 2
 #define NKICK 3
 static drum909_t d909;
 static drum808_t d808;
 static bass303_t b303[N303];
 static acid_t bacid[NACID];
+static lead_t blead[NLEAD];
 static float scratch_rev[256], scratch_dly[256];
 static uint8_t bound_eng[NTRK];              /* engine id a track holds (0 = none) */
 static int8_t inst[NTRK];                    /* instance index of a 303 / kick, -1 */
-static uint8_t inst_used[3][4];              /* [0] 303s, [1] kicks, [2] ACIDs */
+static uint8_t inst_used[4][4];              /* [0] 303s, [1] kicks, [2] ACIDs, [3] LEADs */
 static uint8_t voice_owner[2][12];           /* kits: which track + 1 has a voice */
 static uint8_t base_tune[NTRK];
 static int8_t tune_ix[NTRK];
@@ -186,6 +192,8 @@ void eng_init(void)
         bass303_init(&b303[t]);
     for (t = 0; t < NACID; t++)
         acid_init(&bacid[t]);
+    for (t = 0; t < NLEAD; t++)
+        lead_init(&blead[t]);
     kicks_init();
     memset(bound_eng, 0, sizeof bound_eng);
     memset(inst_used, 0, sizeof inst_used);
@@ -215,6 +223,9 @@ void eng_unbind(int t)
         } else if (e->fam == F_ACID) {
             acid_all_off(&bacid[inst[t]]);
             inst_used[2][inst[t]] = 0;
+        } else if (e->fam == F_LEAD) {
+            lead_all_off(&blead[inst[t]]);
+            inst_used[3][inst[t]] = 0;
         } else if (e->fam == F_KICKW || e->fam == F_KICKP) {
             kick_free(inst[t]);
             inst_used[1][inst[t]] = 0;
@@ -255,6 +266,13 @@ int eng_bind(int t, int id)
         inst_used[2][i] = 1;
         inst[t] = (int8_t)i;
         break;
+    case F_LEAD:
+        for (i = 0; i < NLEAD && inst_used[3][i]; i++) ;
+        if (i == NLEAD)
+            return -1;
+        inst_used[3][i] = 1;
+        inst[t] = (int8_t)i;
+        break;
     case F_KICKW: case F_KICKP:
         i = kick_alloc(e->fam == F_KICKP);
         if (i < 0)
@@ -268,7 +286,7 @@ int eng_bind(int t, int id)
     bound_eng[t] = (uint8_t)id;
     n = eng_nparams(id);
     for (i = 0; i < n; i++)
-        if (e->fam != F_303 && e->fam != F_ACID && eng_param(id, i) && ieq(eng_param(id, i)->name, "Tune"))
+        if (e->fam != F_303 && e->fam != F_ACID && e->fam != F_LEAD && eng_param(id, i) && ieq(eng_param(id, i)->name, "Tune"))
             tune_ix[t] = (int8_t)i;
     return 0;
 }
@@ -286,6 +304,7 @@ void eng_set(int t, int i, int v)
     case F_808: drum808_set(&d808, e->voice, i, v); break;
     case F_303: if (inst[t] >= 0) bass303_set(&b303[inst[t]], i, v); break;
     case F_ACID: if (inst[t] >= 0) acid_set(&bacid[inst[t]], i, v); break;
+    case F_LEAD: if (inst[t] >= 0) lead_set(&blead[inst[t]], i, v); break;
     case F_KICKW: case F_KICKP: if (inst[t] >= 0) kick_set(inst[t], i, v); break;
     }
 }
@@ -337,6 +356,13 @@ void eng_note(int t, int note, int vel, int slide)
         slide_pending[t] = (uint8_t)(slide != 0);
         gate_open[t] = 1;
         break;
+    case F_LEAD:
+        if (inst[t] < 0)
+            return;
+        lead_note_on(&blead[inst[t]], note, vel > 100, slide_pending[t]);
+        slide_pending[t] = (uint8_t)(slide != 0);
+        gate_open[t] = 1;
+        break;
     case F_KICKW: case F_KICKP:
         if (inst[t] >= 0)
             kick_trigger(inst[t], note, v);
@@ -348,9 +374,11 @@ void eng_note(int t, int note, int vel, int slide)
 void eng_off(int t)
 {
     const tribe_eng_t *e = eng_info(bound_eng[t]);
-    if ((e->fam == F_303 || e->fam == F_ACID) && inst[t] >= 0 && gate_open[t] && !slide_pending[t]) {
+    if ((e->fam == F_303 || e->fam == F_ACID || e->fam == F_LEAD) && inst[t] >= 0 && gate_open[t] && !slide_pending[t]) {
         if (e->fam == F_ACID)
             acid_note_off(&bacid[inst[t]]);
+        else if (e->fam == F_LEAD)
+            lead_note_off(&blead[inst[t]]);
         else
             bass303_note_off(&b303[inst[t]]);
         gate_open[t] = 0;
@@ -361,9 +389,11 @@ void eng_panic(int t)
 {
     const tribe_eng_t *e = eng_info(bound_eng[t]);
     slide_pending[t] = 0;
-    if ((e->fam == F_303 || e->fam == F_ACID) && inst[t] >= 0) {
+    if ((e->fam == F_303 || e->fam == F_ACID || e->fam == F_LEAD) && inst[t] >= 0) {
         if (e->fam == F_ACID)
             acid_note_off(&bacid[inst[t]]);
+        else if (e->fam == F_LEAD)
+            lead_note_off(&blead[inst[t]]);
         else
             bass303_note_off(&b303[inst[t]]);
         gate_open[t] = 0;
@@ -396,6 +426,8 @@ void eng_render_all(float *buf, int off, int n)
             bass303_render(&b303[inst[t]], o, n);
         } else if (e->fam == F_ACID && inst[t] >= 0) {
             acid_render(&bacid[inst[t]], o, n);
+        } else if (e->fam == F_LEAD && inst[t] >= 0) {
+            lead_render(&blead[inst[t]], o, n);
         } else if ((e->fam == F_KICKW || e->fam == F_KICKP) && inst[t] >= 0) {
             kick_render(inst[t], o, n);
         }
