@@ -1,0 +1,23 @@
+# FM4 (the mono 4-operator synth, appended after LEAD): track 5 is ACID in the starting project; K4 on the common page steps to FM4
+tapkey b5
+expect trk 5
+tap SEL
+expect eng 25
+turn K4 1
+turn K4 1
+expect eng 27
+tap EDIT
+shot fm4_edit.png
+tap ENV
+shot fm4_env.png
+tap FX
+expect grp 0
+tap SEQ
+# the starter line on this track now plays FM4: the peak says it sounds
+peakreset
+wav fm4.wav
+tap PLAY
+wait 3000
+wavstop
+expect peak_db_min -30
+tap PLAY

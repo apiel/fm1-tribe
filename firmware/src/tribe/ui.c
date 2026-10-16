@@ -983,15 +983,19 @@ static void draw_param(void)
         return;
     }
     for (i = 0; i < n; i++) {
-        int g = eng_group(c->eng, i), k;
+        int g = eng_group(c->eng, i), slot;
         const x0x_param_t *p;
         if (g != ui.grp)
             continue;
         p = eng_param(c->eng, i);
-        k = row / 4 == ui.page[ui.grp];
-        cv_text(10 + (row & 1 ? 120 : 0), 36 + (row >> 1) * 15, &FONT_S, p->name, k ? C_WHITE : C_GRAY);   /* 36: clear of the scatter row (102) */
+        if (row / 4 != ui.page[ui.grp]) {                /* one page of four at a time, as the knobs: the page dots say where the others are */
+            row++;
+            continue;
+        }
+        slot = row & 3;
+        cv_text(10 + (slot & 1 ? 120 : 0), 36 + (slot >> 1) * 15, &FONT_S, p->name, C_WHITE);   /* 36: clear of the scatter row (102) */
         eng_format(c->eng, i, c->par[i], v);
-        text_r(110 + (row & 1 ? 120 : 0), 36 + (row >> 1) * 15, &FONT_S, v, k ? C_HI : C_GRAY);
+        text_r(110 + (slot & 1 ? 120 : 0), 36 + (slot >> 1) * 15, &FONT_S, v, C_HI);
         row++;
     }
 }

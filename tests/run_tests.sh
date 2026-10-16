@@ -13,21 +13,24 @@ for s in tests/scenarios/*.tribe; do
     if build/host/tribe_host "$s" build/scen >build/scen/$(basename "$s").log 2>&1; then echo "  ok   $(basename "$s")"
     else echo "  FAIL $(basename "$s")"; tail -5 build/scen/$(basename "$s").log | sed 's/^/       /'; FAIL=1; fi
 done
-SRCS_ALL="firmware/src/tribe/engine.c firmware/src/tribe/mfx.c firmware/src/tribe/store.c firmware/src/tribe/scatter.c firmware/src/tribe/engines.c firmware/src/tribe/kicks.c firmware/src/tribe/project.c firmware/src/dsp/drum909.c firmware/src/dsp/drum808.c firmware/src/dsp/acid.c firmware/src/dsp/lead.c firmware/src/dsp/master.c"
-SRCS="firmware/src/tribe/engine.c firmware/src/tribe/mfx.c firmware/src/tribe/scatter.c firmware/src/tribe/engines.c firmware/src/tribe/kicks.c firmware/src/tribe/project.c firmware/src/dsp/drum909.c firmware/src/dsp/drum808.c firmware/src/dsp/acid.c firmware/src/dsp/lead.c firmware/src/dsp/master.c"
+SRCS_ALL="firmware/src/tribe/engine.c firmware/src/tribe/mfx.c firmware/src/tribe/store.c firmware/src/tribe/scatter.c firmware/src/tribe/engines.c firmware/src/tribe/kicks.c firmware/src/tribe/project.c firmware/src/dsp/drum909.c firmware/src/dsp/drum808.c firmware/src/dsp/acid.c firmware/src/dsp/lead.c firmware/src/dsp/fm4.c firmware/src/dsp/master.c"
+SRCS="firmware/src/tribe/engine.c firmware/src/tribe/mfx.c firmware/src/tribe/scatter.c firmware/src/tribe/engines.c firmware/src/tribe/kicks.c firmware/src/tribe/project.c firmware/src/dsp/drum909.c firmware/src/dsp/drum808.c firmware/src/dsp/acid.c firmware/src/dsp/lead.c firmware/src/dsp/fm4.c firmware/src/dsp/master.c"
 rm -f build/scen/flash.bin
 if TRIBE_FLASH=build/scen/flash.bin build/host/tribe_host tests/scenarios/save1.tribe build/scen >build/scen/save1.log 2>&1 \
     && TRIBE_FLASH=build/scen/flash.bin build/host/tribe_host tests/scenarios/save2.tribe build/scen >build/scen/save2.log 2>&1; then echo "  ok   save and load (two runs)"
 else echo "  FAIL save and load (see build/scen/save1.log, save2.log)"; FAIL=1; fi
-if cc -O2 -ffp-contract=off -std=gnu99 -Wall -Wextra -DX0X_HOST -Ifirmware/src/dsp -o build/host/acid_test tests/host/acid_test.c firmware/src/dsp/acid.c firmware/src/dsp/lead.c -lm 2>build/scen/acid_build.log \
+if cc -O2 -ffp-contract=off -std=gnu99 -Wall -Wextra -DX0X_HOST -Ifirmware/src/dsp -o build/host/acid_test tests/host/acid_test.c firmware/src/dsp/acid.c firmware/src/dsp/lead.c firmware/src/dsp/fm4.c -lm 2>build/scen/acid_build.log \
     && build/host/acid_test >build/scen/acid.log 2>&1; then echo "  ok   ACID engine (pitch, decay, filter, slide)"
 else echo "  FAIL ACID engine (see build/scen/acid.log, acid_build.log)"; FAIL=1; fi
 if cc -O2 -ffp-contract=off -std=gnu99 -DX0X_HOST -Ifirmware/src -Ifirmware/src/dsp -Ibuild/gen -o build/host/keys_test tests/host/keys_test.c $SRCS_ALL -lm 2>build/scen/keys_build.log \
     && build/host/keys_test >build/scen/keys.log 2>&1; then echo "  ok   keys on a synth (the last one held sounds, a release goes back to the one before)"
 else echo "  FAIL keys on a synth (see build/scen/keys.log, keys_build.log)"; FAIL=1; fi
-if cc -O2 -ffp-contract=off -std=gnu99 -Wall -Wextra -DX0X_HOST -Ifirmware/src/dsp -o build/host/lead_test tests/host/lead_test.c firmware/src/dsp/lead.c -lm 2>build/scen/lead_build.log \
+if cc -O2 -ffp-contract=off -std=gnu99 -Wall -Wextra -DX0X_HOST -Ifirmware/src/dsp -o build/host/lead_test tests/host/lead_test.c firmware/src/dsp/lead.c firmware/src/dsp/fm4.c -lm 2>build/scen/lead_build.log \
     && build/host/lead_test >build/scen/lead.log 2>&1; then echo "  ok   LEAD engine (pitch, unison, legato, envelope)"
 else echo "  FAIL LEAD engine (see build/scen/lead.log, lead_build.log)"; FAIL=1; fi
+if cc -O2 -ffp-contract=off -std=gnu99 -Wall -Wextra -DX0X_HOST -Ifirmware/src/dsp -o build/host/fm4_test tests/host/fm4_test.c firmware/src/dsp/fm4.c -lm 2>build/scen/fm4_build.log \
+    && build/host/fm4_test >build/scen/fm4.log 2>&1; then echo "  ok   FM4 engine (operators at their ratios, routings bounded, release, legato)"
+else echo "  FAIL FM4 engine (see build/scen/fm4.log, fm4_build.log)"; FAIL=1; fi
 if cc -O2 -ffp-contract=off -std=gnu99 -DX0X_HOST -Ifirmware/src -Ifirmware/src/dsp -Ibuild/gen -o build/host/store_test tests/host/store_test.c $SRCS_ALL -lm 2>build/scen/store_build.log \
     && build/host/store_test >build/scen/store.log 2>&1; then echo "  ok   clip store under power cuts"
 else echo "  FAIL clip store under power cuts (see build/scen/store.log)"; FAIL=1; fi
