@@ -20,7 +20,7 @@
 #define KEY_SET (NKEY - 1)
 #define REC_MAGIC 0x31434C54u              /* "TLC1" */
 #define HDR_SZ 32u
-#define REC_VER 2                          /* 2: the 303 engine is gone; 1 is still read (see unpack_clip) */
+#define REC_VER 3                          /* 3: LEAD lost Accent, Legato and Vib; 1 and 2 are still read (see unpack_clip) */
 
 typedef struct {
     uint32_t magic, seq, crc;
@@ -104,7 +104,7 @@ static int hdr_blank(const rec_hdr_t *h)
 /* a record's key, and whether its payload is intact; the payload is left in rec_buf + HDR_SZ */
 static int check_slot(int s, rec_hdr_t *h)
 {
-    if (read_slot(s, 0, h, sizeof *h) || h->magic != REC_MAGIC || h->len > SLOT_SZ - HDR_SZ || (h->ver != REC_VER && h->ver != 1))
+    if (read_slot(s, 0, h, sizeof *h) || h->magic != REC_MAGIC || h->len > SLOT_SZ - HDR_SZ || (h->ver < 1 || h->ver > REC_VER))
         return -1;
     if (read_slot(s, HDR_SZ, rec_buf + HDR_SZ, h->len) || crc32(rec_buf + HDR_SZ, h->len) != h->crc)
         return -1;
@@ -357,6 +357,26 @@ static void fix_clip(clip_t *c)
         c->lensel = 0;
 }
 
+/* LEAD before version 3 had Accent (pot 7), Legato (8) and Vib (9) between Tune and Attack: the pots after them
+ * move up three, Unison is 1..3 now, and an LFO on one of the three removed pots goes to Cutoff */
+#define LEAD_ENG 26                         /* LEAD's place in the engine table (engines.c) */
+static void lead_v2(clip_t *c)
+{
+    static const uint8_t old[18] = {0, 1, 2, 3, 4, 5, 6, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20};
+    uint8_t p[NPAR];
+    int i;
+    memset(p, 0, sizeof p);
+    for (i = 0; i < 18; i++)
+        p[i] = c->par[old[i]];
+    if (p[4] > 2)
+        p[4] = 2;
+    memcpy(c->par, p, sizeof p);
+    if (c->lfo[LFO_TARGET] >= 7 && c->lfo[LFO_TARGET] <= 9)
+        c->lfo[LFO_TARGET] = 0;
+    else if (c->lfo[LFO_TARGET] >= 10)
+        c->lfo[LFO_TARGET] -= 3;
+}
+
 /* a clip out of rec_buf. Version 1 numbered the engines with the 303 in the table (25), so there ACID was 26 and
  * LEAD 27: the 303's clips become ACID (their pots are ACID's defaults), the others move down one */
 static void unpack_clip(clip_t *c, const rec_hdr_t *h)
@@ -369,6 +389,8 @@ static void unpack_clip(clip_t *c, const rec_hdr_t *h)
         else if (c->eng > 25)
             c->eng--;
     }
+    if (h->ver <= 2 && c->eng == LEAD_ENG)
+        lead_v2(c);
     fix_clip(c);
 }
 

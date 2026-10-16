@@ -974,9 +974,9 @@ static void draw_param(void)
             continue;
         p = eng_param(c->eng, i);
         k = row / 4 == ui.page[ui.grp];
-        cv_text(10 + (row & 1 ? 120 : 0), 44 + (row / 2 % 2) * 0 + (row >> 1) * 15, &FONT_S, p->name, k ? C_WHITE : C_GRAY);
+        cv_text(10 + (row & 1 ? 120 : 0), 36 + (row >> 1) * 15, &FONT_S, p->name, k ? C_WHITE : C_GRAY);   /* 36: clear of the scatter row (102) */
         eng_format(c->eng, i, c->par[i], v);
-        text_r(110 + (row & 1 ? 120 : 0), 44 + (row >> 1) * 15, &FONT_S, v, k ? C_HI : C_GRAY);
+        text_r(110 + (row & 1 ? 120 : 0), 36 + (row >> 1) * 15, &FONT_S, v, k ? C_HI : C_GRAY);
         row++;
     }
 }

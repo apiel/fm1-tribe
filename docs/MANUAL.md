@@ -445,7 +445,7 @@ shows; every knob is 0–127 underneath.
 | 808 CP | Drive, Dist | Decay, Attack | Tune, Sound |
 | 808 CB, CY, OH, CH | Drive, Dist | Decay | Tune |
 | ACID | Drive, Dist, DrvTyp | Decay, EnvMod, P.Dpth, Slide, Sustain | Cutoff, Reso, Color, Accent, Tune |
-| LEAD | Drive, Dist, DrvTyp, Ring, RingFq | Attack, Decay, Sustain, Release, EnvMod, Slide | Cutoff, Reso, Color, Detune, Unison, Sub, Tune, Accent, Legato, Vib |
+| LEAD | Drive, Dist, DrvTyp, Ring, RingFq | Attack, Decay, Sustain, Release, EnvMod, Slide | Cutoff, Reso, Color, Detune, Unison, Sub, Tune |
 
 ACID and LEAD also have the LFO page (section 6). The track's level is VOLUME on SEL (with the two sends), and KNOB 1 on CLIPS; no sound page has a level of its own.
 

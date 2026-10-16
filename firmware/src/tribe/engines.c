@@ -101,7 +101,7 @@ int eng_group(int id, int i)
     const tribe_eng_t *e = eng_info(id);
     if (!p)
         return PG_HIDE;
-    if (in(p->name, hide) && !((e->fam == F_ACID || e->fam == F_LEAD) && ieq(p->name, "Accent")))
+    if (in(p->name, hide) && !(e->fam == F_ACID && ieq(p->name, "Accent")))
         return PG_HIDE;
     if (in(p->name, fx))
         return PG_FX;
@@ -341,7 +341,7 @@ void eng_note(int t, int note, int vel, int slide)
     case F_LEAD:
         if (inst[t] < 0)
             return;
-        lead_note_on(&blead[inst[t]], note, vel > 100, slide_pending[t]);
+        lead_note_on(&blead[inst[t]], note, slide_pending[t]);
         slide_pending[t] = (uint8_t)(slide != 0);
         gate_open[t] = 1;
         break;
@@ -367,7 +367,7 @@ void eng_key_on(int t, int note, int vel)
     held[t][nheld[t]].note = (uint8_t)note;
     held[t][nheld[t]].vel = (uint8_t)vel;
     nheld[t]++;
-    slide_pending[t] = 0;                          /* a key pressed is a new attack, even over the one held */
+    slide_pending[t] = 0;                          /* a key pressed: a new attack (LEAD still glides over a held note, always legato) */
     eng_note(t, note, vel, 0);
 }
 

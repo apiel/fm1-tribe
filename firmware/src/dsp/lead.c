@@ -4,8 +4,7 @@
 #include "lead.h"
 #include "fastmath.h"
 
-static const char *const unison_names[] = { "1", "2", "3", "4", "5", "6", "7" };
-static const char *const legato_names[] = { "Off", "On" };
+static const char *const unison_names[] = { "1", "2", "3" };
 static const char *const type_names[] = { "Soft", "Hard", "Fold" };
 
 static const x0x_param_t params[LEAD_NPARAMS] = {
@@ -13,12 +12,9 @@ static const x0x_param_t params[LEAD_NPARAMS] = {
     { "Reso", 127, 40, 0 },          /* 0 .. 4.2 */
     { "Color", 127, 0, 0 },          /* saw .. square */
     { "Detune", 127, 56, 0 },        /* 0 .. 60 cents (squared): 56 = 12 cents */
-    { "Unison", 6, 4, unison_names },/* 1 .. 7 oscillators */
+    { "Unison", 2, 2, unison_names },/* 1 .. 3 oscillators */
     { "Sub", 127, 40, 0 },           /* a sine an octave down */
     { "Tune", 127, 64, 0 },          /* +-1.5 semitones */
-    { "Accent", 127, 64, 0 },
-    { "Legato", 1, 1, legato_names },
-    { "Vib", 127, 0, 0 },            /* 0 .. 1 semitone at 5.5 Hz */
     { "Attack", 127, 20, 0 },        /* 1 ms .. 2 s, exponential */
     { "Decay", 127, 64, 0 },         /* 5 ms .. 2.5 s */
     { "Sustain", 127, 110, 0 },      /* the level a held note settles at */
@@ -67,9 +63,6 @@ void lead_set(lead_t *b, int i, int v)
     case LEAD_UNISON: b->nvoices = v + 1; set_ratios(b); break;
     case LEAD_SUB: b->sub = n; break;
     case LEAD_TUNE: b->tune_st = (float)(v - 64) * (1.5f / 64.0f); break;
-    case LEAD_ACCENT: b->acc_amt = n; break;
-    case LEAD_LEGATO: b->legato = v; break;
-    case LEAD_VIB: b->vib_st = n; break;
     case LEAD_ATTACK: b->att_step = 1.0f / (0.001f * fm_exp2f(n * 11.0f) * LEAD_SR); break;
     case LEAD_DECAY: b->dec_c = decay_mul(0.005f * fm_exp2f(n * 9.0f), 1.0f / LEAD_SR); break;
     case LEAD_SUSTAIN: b->sustain = n; break;
@@ -101,16 +94,15 @@ void lead_init(lead_t *b)
         lead_set(b, i, params[i].def);
 }
 
-void lead_note_on(lead_t *b, int note, int accent, int slide)
+void lead_note_on(lead_t *b, int note, int slide)
 {
     int legato;
     if (note < 0)
         note = 0;
     if (note > 127)
         note = 127;
-    legato = !b->idle && ((slide && b->gate) || (b->legato && b->env > 0.05f));
+    legato = !b->idle && ((slide && b->gate) || b->env > 0.05f);
     b->target_st = (float)(note - 69) + b->tune_st;
-    b->accent = accent != 0;
     if (!legato) {
         if (b->idle)
             b->s1 = b->s2 = b->s3 = b->s4 = 0.0f;
@@ -148,20 +140,16 @@ static inline float blep(float t, float dt)
 
 static void control(lead_t *b)
 {
-    float cur, fc, x, sn, cs, g, g2, cut, env_depth, base;
+    float cur, fc, x, sn, cs, g, g2, cut, base;
     b->cur_st += (b->target_st - b->cur_st) * b->glide_c;
-    b->vib_ph += (float)LEAD_CTRL * (5.5f / LEAD_SR);
-    if (b->vib_ph >= 1.0f)
-        b->vib_ph -= 1.0f;
-    cur = b->cur_st + b->vib_st * fm_sin_turns(b->vib_ph);
+    cur = b->cur_st;
     base = 440.0f * fm_exp2f(cur * (1.0f / 12.0f)) * (1.0f / LEAD_SR);
     if (base > 0.4f)
         base = 0.4f;
     b->inc0 = b->snap ? base : b->inc1;
     b->inc1 = base;
     b->snap = 0;
-    env_depth = b->env_st * (b->accent ? 1.0f + 0.5f * b->acc_amt : 1.0f);
-    cut = b->cut_st + b->env * env_depth;
+    cut = b->cut_st + b->env * b->env_st;
     if (cut > 60.0f)
         cut = 60.0f;
     fc = 440.0f * fm_exp2f(cut * (1.0f / 12.0f));
@@ -176,7 +164,6 @@ static void control(lead_t *b)
     b->G4 = g2 * g2;
     b->kk = b->reso_k;
     b->rdiv = 1.0f / (1.0f + b->reso_k * g2 * g2);
-    b->gain = b->accent ? 1.0f + 0.4f * b->acc_amt : 1.0f;
 }
 
 void lead_render(lead_t *b, float *out, int n)
@@ -225,7 +212,7 @@ void lead_render(lead_t *b, float *out, int n)
         G = b->G;
         omg = 1.0f - G;
         sum = b->G3 * (omg * b->s1) + b->G2 * (omg * b->s2) + G * (omg * b->s3) + omg * b->s4;
-        y4 = (b->G4 * u + sum) * b->rdiv;
+        y4 = (b->G4 * u + sum) * b->rdiv;                        /* the feedback loop, solved exactly */
         x = u - b->kk * y4;
         xs = fm_tanhf(x);
         vv = G * (xs - b->s1); y = vv + b->s1; b->s1 = y + vv;
@@ -252,7 +239,7 @@ void lead_render(lead_t *b, float *out, int n)
         }
         b->env = e;
 
-        ym = fm_tanhf(ym * 2.0f * b->gain);
+        ym = fm_tanhf(ym * 2.0f);
         if (b->dist_wet > 0.0f) {
             float w;
             switch (b->dist_type) {
