@@ -291,10 +291,10 @@ static void drain(void)
                 else
                     arp_del(c.trk, c.a);
             } else if (c.b > 0) {
-                eng_note(c.trk, c.a, c.b, 0);
+                eng_key_on(c.trk, c.a, c.b);
                 dk_hit[c.trk] = (uint8_t)c.b;
             } else
-                eng_panic(c.trk);
+                eng_key_off(c.trk, c.a);
             break;
         case C_SCAT: scat_set(c.trk, c.a, c.b); break;
         case C_TRANS: dk_trans[c.trk] = (int8_t)(c.a < -48 ? -48 : c.a > 48 ? 48 : c.a); break;

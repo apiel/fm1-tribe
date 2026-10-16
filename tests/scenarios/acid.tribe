@@ -1,18 +1,16 @@
-# ACID (the zicCycle 303) is the engine after the 303: K4 on the common page steps to it, its pages show
+# ACID (the zicCycle 303) is the starting project's track 5: its pages show
 tapkey b5
 expect trk 5
 tap SEL
 expect view 6
 expect eng 25
-turn K4 1
-expect eng 26
 tap EDIT
 shot acid_edit.png
 tap ENV
 shot acid_env.png
 tap FX
 shot acid_fx.png
-# and it plays on the track (the 303 line of the starter project)
+# and it plays on the track (the ACID line of the starter project)
 tap SEQ
 wav acid.wav
 tap PLAY

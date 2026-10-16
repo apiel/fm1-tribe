@@ -3,7 +3,7 @@
 # TRIBE
 
 Custom firmware for the [M-VAVE FM-1](https://www.m-vave.com): a ten-track groovebox where **any engine
-plays on any track**. Kicks, the 909 and 808 voices and the 303, sixteen clips per track, scatter
+plays on any track**. Kicks, the 909 and 808 voices and ACID, sixteen clips per track, scatter
 effects, two master effects every track sends to, and four master knobs you assign to the volume,
 a DJ filter, the effects or the tempo.
 
@@ -41,12 +41,12 @@ The FM-1's screen, from the same code (the [manual](https://apiel.github.io/fm1-
 
 ## What it does
 
-- **10 tracks, 25 engines:** two kicks (KICK W, KICK P), the 909 and 808 drum voices, a 303.
+- **10 tracks, 26 engines:** two kicks (KICK W, KICK P), the 909 and 808 drum voices, ACID, LEAD.
 - **16 clips per track**, launched at the end of the pattern or at once. 16, 32 or 64 steps, six rates, four directions, swing.
 - **Scatter effects** on the keys while it plays: loops, reverse, gate, crush, distortion, ring, filters, on a track or the whole mix.
 - **FX 1 and FX 2:** reverb, delay, drive, distortion, fuzz, wavefolder, crusher, decimator or ring modulator, fed by each track's sends.
 - **Four master knobs**, assignable: volume, DJ filter, resonance, FX amounts, BPM.
-- Keyboard with arpeggiator and transposition, quantised recording, a 303 LFO, an always-on master compressor.
+- Keyboard with arpeggiator and transposition, quantised recording, a synth LFO, an always-on master compressor.
 
 ## Build and test
 
@@ -64,8 +64,8 @@ See [BUILDING.md](BUILDING.md) for the toolchain, the tests and how the site is 
 A fork of [X0X](https://github.com/charlesvestal/fm1-x0x) by Charles Vestal (see
 [docs/X0X-README.md](docs/X0X-README.md)), which is built on
 [Felucca](https://github.com/hugelton/Felucca) by Leo Kuroshita, Hügelton Instruments. The kicks and the
-scatter effects come from [zicBox](https://github.com/apiel/zicBox); the 909, 808 and 303 are ports of
-9W9, 8W8 and schwung-303 (details in [LICENSING.md](LICENSING.md) and the manual's credits).
+scatter effects come from [zicBox](https://github.com/apiel/zicBox); the 909, 808 and ACID are ports of
+9W9, 8W8 and the zicCycle 303 (details in [LICENSING.md](LICENSING.md) and the manual's credits).
 
 GPL-3.0-only. M-VAVE and FM-1 are trademarks of their owners; TRIBE is not connected with M-VAVE,
 Roland or Hügelton Instruments.

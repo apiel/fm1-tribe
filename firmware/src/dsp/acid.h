@@ -8,12 +8,12 @@
  *  EnvMod   depth of the filter envelope, which opens at each new note and closes over 1.5 x the note
  *           decay + 60 ms; an accented note opens it deeper and plays louder (Accent)
  *  Decay    length of the note (time constant 10 ms .. 2.4 s)
- *  Sustain  the level a held note settles at (0 = it decays away, as the Cycles' do); the gate's end releases it
+ *  Sustain  the level a held note settles at (70 % by default; 0 = it decays away, as the Cycles' do); the gate's end releases it
  *  P.Dpth   pitch envelope: centre = none, up = starts higher, down = lower (+-24 semitones, 21 ms)
  *  Slide    glide time of a slid note (5 .. 300 ms): the pitch glides, the oscillator and the filter keep
  *           running, the envelope opens again without a new attack
  *
- *  Drive    gain into the filter: the ladder's own saturation works harder, the resonance bites (0 = as the Cycles)
+ *  Drive    a saturation of the oscillator before the filter, its level kept: a squarer, grittier wave (0 = off, as the Cycles)
  *  Dist     a distortion after the filter, of the type DrvTyp: soft (tanh), hard (clip), fold (wavefold)
  *
  * The filter is the Cycles' one: four zero-delay-feedback one-pole stages with the feedback loop solved
@@ -49,7 +49,8 @@ typedef struct acid {
     float amp_c;             /* amp envelope: per-sample multiplier */
     float fenv_c;            /* filter envelope: per control step */
     float glide_c;           /* glide: per control step */
-    float drive_g;           /* gain into the filter */
+    float drive_g;           /* gain into the saturator before the filter */
+    float drive_norm;        /* 1 / tanh(drive_g): the saturator's output stays near the clean level */
     float dist_g, dist_wet, dist_norm;   /* the distortion after it: gain, how much of it (fades in over the first pots), 1 / tanh(gain) */
     int dist_type;           /* 0 soft, 1 hard, 2 fold */
     float sustain;           /* the level the decay settles at while the gate is held, 0 .. 1 */

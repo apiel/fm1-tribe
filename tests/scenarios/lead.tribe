@@ -2,7 +2,7 @@
 tapkey b7
 expect trk 7
 tap SEL
-expect eng 27
+expect eng 26
 tap EDIT
 shot lead_edit.png
 tap ENV

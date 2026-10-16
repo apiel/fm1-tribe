@@ -43,10 +43,10 @@ static int find(const char *n)
 
 static void put(clip_t *c, int s, int note) { c->on[s >> 5] |= 1u << (s & 31); c->st[s].note = (uint8_t)note; }
 
-/* a starting point that makes noise: four-on-the-floor, backbeat, hats, a 303 line, a long legato lead */
+/* a starting point that makes noise: four-on-the-floor, backbeat, hats, an ACID line, a long legato lead */
 void project_defaults(void)
 {
-    static const char *const names[NTRK] = {"KICK W", "909 SD", "909 CH", "909 OH", "808 CP", "303", "KICK P",
+    static const char *const names[NTRK] = {"KICK W", "909 SD", "909 CH", "909 OH", "808 CP", "ACID", "KICK P",
                                             "LEAD", "909 RS", "NONE"};
     int t, c, s;
     memset(&proj, 0, sizeof proj);

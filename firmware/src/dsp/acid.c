@@ -16,10 +16,10 @@ static const x0x_param_t params[ACID_NPARAMS] = {
     { "P.Dpth", 127, 64, 0 },        /* pitch envelope: 64 = none, +-24 semitones */
     { "Slide", 127, 74, 0 },         /* 5 .. 300 ms; 74 = 55 ms (the Cycles' glide) */
     { "Tune", 127, 64, 0 },          /* +-1.5 semitones */
-    { "Drive", 127, 0, 0 },          /* gain into the filter, 1 .. 8; 0 = off */
+    { "Drive", 127, 0, 0 },          /* saturation before the filter, 1 .. 8 x; 0 = off */
     { "Dist", 127, 0, 0 },           /* the distortion after the filter, gain 1 .. 16; 0 = off */
     { "DrvTyp", 2, 0, type_names },  /* what the distortion does */
-    { "Sustain", 127, 0, 0 },        /* 0 .. 1: where the decay settles while the gate is held; 0 = it dies away */
+    { "Sustain", 127, 89, 0 },       /* 0 .. 1: where the decay settles while the gate is held; 89 = 70 %; 0 = it dies away */
 };
 
 int acid_nparams(void) { return ACID_NPARAMS; }
@@ -55,7 +55,10 @@ void acid_set(acid_t *b, int i, int v)
     case ACID_PDEPTH: b->pdepth_st = (float)(v - 64) * (24.0f / 64.0f); break;
     case ACID_SLIDE: b->glide_c = 1.0f - decay_mul(0.005f * fm_exp2f(n * 5.9f), (float)ACID_CTRL / ACID_SR); break;
     case ACID_TUNE: b->tune_st = (float)(v - 64) * (1.5f / 64.0f); break;
-    case ACID_DRIVE: b->drive_g = 1.0f + 7.0f * n * n; break;
+    case ACID_DRIVE:
+        b->drive_g = 1.0f + 7.0f * n * n;
+        b->drive_norm = 1.0f / fm_tanhf(b->drive_g);
+        break;
     case ACID_DIST:
         b->dist_g = 1.0f + 15.0f * n * n;
         b->dist_wet = v >= 16 ? 1.0f : (float)v * (1.0f / 16.0f);
@@ -206,7 +209,9 @@ void acid_render(acid_t *b, float *out, int n)
         b->phase += inc;
         if (b->phase >= 1.0f)
             b->phase -= 1.0f;
-        u = osc(b->phase, inc, b->color) * (0.8f * b->drive_g);
+        u = osc(b->phase, inc, b->color) * 0.8f;
+        if (b->pot[ACID_DRIVE])                                   /* the drive: a saturation of the oscillator, its level kept */
+            u = fm_tanhf(u * b->drive_g) * b->drive_norm;
 
         G = b->G;
         omg = 1.0f - G;

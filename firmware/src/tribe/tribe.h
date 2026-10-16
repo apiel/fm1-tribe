@@ -16,7 +16,7 @@
 /* ------------------------------------------------------------- engines --- */
 enum { EK_DRUM, EK_SYNTH };             /* what the step editor offers (note/vel/prob  or  note/vel/len/slide) */
 enum { PG_FX, PG_ENV, PG_LFO, PG_EDIT, NPG, PG_HIDE = NPG };   /* parameter pages; HIDE: not shown */
-enum { F_NONE, F_909, F_808, F_303, F_KICKW, F_KICKP, F_ACID, F_LEAD };         /* engine families */
+enum { F_NONE, F_909, F_808, F_KICKW, F_KICKP, F_ACID, F_LEAD };         /* engine families */
 
 typedef struct {
     const char *name;                   /* <= 8 characters */
@@ -146,11 +146,12 @@ void eng_unbind(int trk);
 int eng_bound(int trk);
 void eng_set(int trk, int i, int value);
 void eng_note(int trk, int note, int vel, int slide);
-void eng_off(int trk);                  /* the step's gate ends (a sliding 303 keeps it) */
+void eng_key_on(int trk, int note, int vel);    /* a key pressed: the track plays it, the last one held */
+void eng_key_off(int trk, int note);            /* a key let go: the held note before it, if it was the one sounding */
+void eng_off(int trk);                  /* the step's gate ends (a sliding synth keeps it) */
 void eng_panic(int trk);                /* release now */
 int eng_slide_pending(int trk);
 extern volatile uint32_t eng_notes[NTRK];                /* notes started on each track (the LFO restarts on them) */
-void eng_lite(int on);
 void eng_render_all(float *buf, int off, int n);   /* buf[trk * 256 + off ...] */
 
 /* ------------------------------------------------------------- the clip store --- */

@@ -20,7 +20,7 @@
 #define KEY_SET (NKEY - 1)
 #define REC_MAGIC 0x31434C54u              /* "TLC1" */
 #define HDR_SZ 32u
-#define REC_VER 1
+#define REC_VER 2                          /* 2: the 303 engine is gone; 1 is still read (see unpack_clip) */
 
 typedef struct {
     uint32_t magic, seq, crc;
@@ -104,7 +104,7 @@ static int hdr_blank(const rec_hdr_t *h)
 /* a record's key, and whether its payload is intact; the payload is left in rec_buf + HDR_SZ */
 static int check_slot(int s, rec_hdr_t *h)
 {
-    if (read_slot(s, 0, h, sizeof *h) || h->magic != REC_MAGIC || h->len > SLOT_SZ - HDR_SZ || h->ver != REC_VER)
+    if (read_slot(s, 0, h, sizeof *h) || h->magic != REC_MAGIC || h->len > SLOT_SZ - HDR_SZ || (h->ver != REC_VER && h->ver != 1))
         return -1;
     if (read_slot(s, HDR_SZ, rec_buf + HDR_SZ, h->len) || crc32(rec_buf + HDR_SZ, h->len) != h->crc)
         return -1;
@@ -357,6 +357,21 @@ static void fix_clip(clip_t *c)
         c->lensel = 0;
 }
 
+/* a clip out of rec_buf. Version 1 numbered the engines with the 303 in the table (25), so there ACID was 26 and
+ * LEAD 27: the 303's clips become ACID (their pots are ACID's defaults), the others move down one */
+static void unpack_clip(clip_t *c, const rec_hdr_t *h)
+{
+    memset(c, 0, sizeof *c);
+    memcpy(c, rec_buf + HDR_SZ, h->len);
+    if (h->ver == 1) {
+        if (c->eng == 25)
+            clip_set_engine(c, 25);
+        else if (c->eng > 25)
+            c->eng--;
+    }
+    fix_clip(c);
+}
+
 int store_load(void)
 {
     int k, n = 0;
@@ -372,9 +387,7 @@ int store_load(void)
             memcpy(&proj.set, rec_buf + HDR_SZ, sizeof proj.set);
             copy_master(&proj.set, &old);
         } else {
-            memset(&proj.clip[k / NCLIP][k % NCLIP], 0, sizeof(clip_t));
-            memcpy(&proj.clip[k / NCLIP][k % NCLIP], rec_buf + HDR_SZ, h.len);
-            fix_clip(&proj.clip[k / NCLIP][k % NCLIP]);
+            unpack_clip(&proj.clip[k / NCLIP][k % NCLIP], &h);
         }
         n++;
     }
@@ -419,9 +432,7 @@ int store_revert(int trk, int clip)
     clip_t *c = &proj.clip[trk][clip];
     if (best_slot[k] < 0 || check_slot(best_slot[k], &h) < 0)
         return 0;
-    memset(c, 0, sizeof *c);
-    memcpy(c, rec_buf + HDR_SZ, h.len);
-    fix_clip(c);
+    unpack_clip(c, &h);
     return 1;
 }
 

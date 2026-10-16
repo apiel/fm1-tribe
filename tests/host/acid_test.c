@@ -52,6 +52,7 @@ static void open_filter(acid_t *b)
     acid_set(b, ACID_ENVMOD, 0);
     acid_set(b, ACID_DECAY, 127);
     acid_set(b, ACID_PDEPTH, 64);
+    acid_set(b, ACID_SUSTAIN, 0);                          /* the tests that want a sustain set it */
 }
 
 static float buf[SR * 2];
@@ -195,8 +196,9 @@ int main(void)
     CHECK(fabs(f - 220.0) < 6.0, "slid note settles at %.1f Hz", f);
     CHECK(rms(buf + 100, 300) > 0.1, "the slide dropped out (rms %g)", rms(buf + 100, 300));
 
-    /* sustain: a short decay settles on the level while the gate is held, and the gate ends it */
+    /* sustain: a short decay settles on the level while the gate is held, and the gate ends it; by default 70 % */
     acid_init(&a);
+    CHECK(acid_get(&a, ACID_SUSTAIN) == 89, "sustain's default is 70 %% (%d)", acid_get(&a, ACID_SUSTAIN));
     open_filter(&a);
     acid_set(&a, ACID_DECAY, 30);
     acid_set(&a, ACID_SUSTAIN, 100);
@@ -252,7 +254,14 @@ int main(void)
         acid_set(&a, ACID_DRIVE, 127);
         acid_note_on(&a, 45, 0, 0);
         render(&a, dd, 8000);
-        CHECK(bright(dd, 8000) != bright(ref, 8000) && rms(dd, 8000) > 0.0, "drive changes nothing");
+        {                                                       /* the saturation: a clear change, the level about the same */
+            double dif = 0;
+            for (i = 0; i < 8000; i++)
+                dif += (double)(dd[i] - ref[i]) * (dd[i] - ref[i]);
+            dif = sqrt(dif / 8000) / rms(ref, 8000);
+            CHECK(dif > 0.2 && dif < 2.0, "drive changes the sound by %.2f of its level", dif);
+            CHECK(fabs(rms(dd, 8000) / rms(ref, 8000) - 1.0) < 0.5, "drive keeps the level (%g vs %g)", rms(dd, 8000), rms(ref, 8000));
+        }
         acid_init(&a);
         open_filter(&a);
         acid_set(&a, ACID_CUTOFF, 60);

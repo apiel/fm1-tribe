@@ -1,7 +1,7 @@
 # TRIBE
 
 TRIBE turns the M-VAVE FM-1 into a ten-track groovebox. Every track can play any engine: a
-kick, a 909 or 808 drum voice, or a 303 bass line. Each track has sixteen clips to launch, you can
+kick, a 909 or 808 drum voice, or an ACID bass line. Each track has sixteen clips to launch, you can
 add scatter effects while it plays, send tracks to two master effects, and put the master
 volume, a DJ filter, the effects or the tempo on the four master knobs.
 
@@ -76,7 +76,7 @@ TRIBE starts with a small beat already in it, so there is something to hear stra
    screen's header names the track and its engine.
 3. The white keys are the sixteen steps of the track. Press one to switch a step on, press it
    again to switch it off. Hold an "on" step to edit it: the three or four knobs become its note,
-   velocity, probability (and length and slide on a 303).
+   velocity, probability (and length and slide on an ACID).
 4. Press **EDIT**, **ENV** or **FX** to shape the track's sound with the four knobs.
 5. Hold the eleventh black key (**MUTE**) and tap a track key to mute or unmute that track.
 6. Press **HOME** for the clips: sixteen per track. Press a white key to launch one. It switches at
@@ -127,16 +127,16 @@ change the engine too. Choose it on the SEL page, with KNOB 4.
 | KICK P | A kick with a morphing oscillator and an FM pair. |
 | 909 BD, SD, LT, MT, HT, RS, CP, CH, OH, CR, RD | The 909 voices: kick, snare, three toms, rim, clap, closed and open hat, crash, ride. |
 | 808 BD, SD, LT, MT, HT, RS, CP, CB, CY, OH, CH | The 808 voices: kick, snare, three toms, rim, clap, cowbell, cymbal, open and closed hat. |
-| 303 | The bass synth, with accent, slide and its LFO. |
+| ACID | The bass synth: the zicCycle 303, with accent, slide, a colour and a pitch envelope, and its LFO. |
 
 Every drum engine is pitched: the note of a step changes its tune, which is what makes the kicks
 useful. A synth step has a note, a velocity, a length and a slide.
 
 A voice exists once. Each 909 and 808 voice can be on one track at a time (a second track that picks
-a voice already in use shows **BUSY** in the header and stays silent), there are two 303s and
+a voice already in use shows **BUSY** in the header and stays silent), there are two ACIDs, two LEADs and
 three kicks (KICK W and KICK P share them).
 
-![A 303 track: note, velocity, length and slide for the held step](img/screen-303.png)
+![An ACID track: note, velocity, length and slide for the held step](img/screen-303.png)
 
 ---
 
@@ -149,7 +149,7 @@ second) and it stays selected: the knobs become that step's.
 ![A step held: its note, velocity and probability](img/screen-step.png)
 
 - **Drums:** NOTE, VELOCITY, PROBABILITY (the chance it plays, 0–100%).
-- **303:** NOTE, VELOCITY, LENGTH (in quarter steps), SLIDE (the note glides into the next).
+- **ACID:** NOTE, VELOCITY, LENGTH (in quarter steps), SLIDE (the note glides into the next).
 
 With no step selected the knobs are greyed and do nothing. A track can be **16, 32 or 64 steps**;
 OCT- and OCT+ page through them, sixteen at a time.
@@ -186,7 +186,7 @@ parameters there are dots in the strip and OCT-/OCT+ (or pressing the button aga
 What each engine has is listed in section 14. Parameters belong to the **clip**: switch clips and the
 sound switches with it.
 
-**LFO** (the 303 only, since a drum hit is too short for one) is a modulation of one of the
+**LFO** (the synths only, ACID and LEAD, since a drum hit is too short for one) is a modulation of one of the
 engine's parameters. There is one per clip, saved with it.
 
 | Control | |
@@ -198,7 +198,7 @@ engine's parameters. There is one per clip, saved with it.
 | SYNC | on: tempo-synced; off: free |
 | RETRIG | restart on every note (with random: a new value on every note) |
 
-![The 303's LFO: a triangle on the cutoff](img/screen-lfo.png)
+![The LFO: a triangle on the cutoff](img/screen-lfo.png)
 
 ---
 
@@ -257,7 +257,7 @@ OCT+ move it up and down. The first knob chooses a mode:
 ![ARP in KEYS mode](img/screen-arp.png)
 
 **REC** gives the keyboard to the selected track too, and while the track plays it **records**: a
-note goes into the nearest step of the track's pattern (a drum hit, or a 303 note whose length is
+note goes into the nearest step of the track's pattern (a drum hit, or an ACID note whose length is
 how long you held the key). Stopped, REC just plays.
 
 ![REC](img/screen-rec.png)
@@ -380,7 +380,7 @@ the FM-1 on. The screen then asks you to press each button and turn each knob in
 
 **Questions and bugs:** join the [fm1-tribe Discord](https://discord.gg/fzHTbjh6x) or [open an issue](https://github.com/apiel/fm1-tribe/issues).
 
-**It's crackling or cutting out:** look at CPU in GLO while everything plays. Ten tracks of 303s
+**It's crackling or cutting out:** look at CPU in GLO while everything plays. Ten tracks of ACIDs
 and kicks is a lot for the FM-1; turn tracks to NONE or to simpler engines if the peak reaches 100%.
 
 **After a crash:** TRIBE shows a red CRASH screen and restarts by itself a few seconds later. The
@@ -444,11 +444,10 @@ shows; every knob is 0–127 underneath.
 | 808 LT, MT, HT, RS | Drive, Dist | Decay | Tune, Sound |
 | 808 CP | Drive, Dist | Decay, Attack | Tune, Sound |
 | 808 CB, CY, OH, CH | Drive, Dist | Decay | Tune |
-| 303 | Drive, DrvTyp | EnvMod, Decay, Slide, AccDec | Cutoff, Reso, Accent, Wave, Tune |
 | ACID | Drive, Dist, DrvTyp | Decay, EnvMod, P.Dpth, Slide, Sustain | Cutoff, Reso, Color, Accent, Tune |
 | LEAD | Drive, Dist, DrvTyp, Ring, RingFq | Attack, Decay, Sustain, Release, EnvMod, Slide | Cutoff, Reso, Color, Detune, Unison, Sub, Tune, Accent, Legato, Vib |
 
-The 303, ACID and LEAD also have the LFO page (section 6). The track's level is VOLUME on SEL (with the two sends), and KNOB 1 on CLIPS; no sound page has a level of its own.
+ACID and LEAD also have the LFO page (section 6). The track's level is VOLUME on SEL (with the two sends), and KNOB 1 on CLIPS; no sound page has a level of its own.
 
 ---
 
@@ -463,8 +462,7 @@ firmware, you must also share its source code.
 - The 909 is from **9W9** by athousanddetails, which is based on **ER-99** by Matthew
   Cieplak. Its hat and cymbal samples are ER-99's.
 - The 808 is from **8W8** by athousanddetails.
-- The 303 is from **schwung-303**, built on Open303 by Robin Schmidt (MIT licence), with
-  extensions based on jc303 and dm-Rat.
+- ACID is a port of the **zicCycle 303** (Model:Cycles, by apiel), in float.
 - The fonts are Barlow Semi Condensed and Terminus (SIL Open Font License).
 
 M-VAVE and FM-1 are trademarks of their owners, and TR-808, TR-909 and TB-303 are Roland
