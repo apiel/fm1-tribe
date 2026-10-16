@@ -1,0 +1,25 @@
+# each track keeps its own group (FX, ENV, LFO, EDIT) and page; SEL and SEQ stay put when a track is picked
+tapkey b1
+expect trk 1
+expect grp 3
+tap ENV
+expect grp 1
+tapkey b2
+expect trk 2
+expect grp 3
+tap FX
+expect grp 0
+tapkey b1
+expect trk 1
+expect grp 1
+tapkey b2
+expect grp 0
+tap SEL
+expect view 6
+tapkey b1
+expect view 6
+expect trk 1
+tap SEQ
+tapkey b2
+expect view 0
+expect trk 2

@@ -110,9 +110,24 @@ static void fix_group(void)
             return;
         }
 }
+/* each track keeps the parameter group (FX, ENV, LFO, EDIT) and the page it was left on; SEL and SEQ stay as they are */
+static uint8_t trk_grp[NTRK];
+static uint8_t trk_page[NTRK][NPG];
 static void select_track(int t)
 {
-    ui.trk = (uint8_t)t;
+    int g;
+    if (t != ui.trk) {
+        trk_grp[ui.trk] = ui.grp;
+        for (g = 0; g < NPG; g++)
+            trk_page[ui.trk][g] = ui.page[g];
+        ui.trk = (uint8_t)t;
+        ui.grp = trk_grp[t];
+        for (g = 0; g < NPG; g++)
+            ui.page[g] = trk_page[t][g];
+        for (g = 0; g < NPG; g++)                    /* the engine may have fewer pages than the one it was left on */
+            if (ui.page[g] >= npages(g))
+                ui.page[g] = 0;
+    }
     ui.edit = -1;
     ui.press = -1;
     if (ui.spage >= nsteps_page())
@@ -1464,9 +1479,12 @@ static void leds(void)
 /* ------------------------------------------------------------------- entry --- */
 void ui_init(void)
 {
+    int t;
     palette_set(0);
     corners_init();
     ui.trk = 0;
+    for (t = 0; t < NTRK; t++)
+        trk_grp[t] = PG_EDIT;
     ui.edit = -1;
     ui.press = -1;
     ui.pot_ref = -1;
