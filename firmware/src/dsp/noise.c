@@ -4,22 +4,28 @@
 #include "noise.h"
 #include "fastmath.h"
 
-static const char *const ntype_names[] = { "White", "Pink", "Brown" };
+static const char *const ntype_names[] = { "White", "Pink", "Brown", "Dust" };
 static const char *const ftype_names[] = { "LP", "HP", "BP", "Notch" };
+static const char *const mod_names[] = { "Off", "Sine", "Rand", "Drift", "Gate" };
 
-/* the pink and brown levels: about the rms of white (0.58), so the colours sit at the same loudness */
-#define PINK_G 0.333f                /* measured: pink rms 1.73 and brown rms 0.0575 on the raw filters, white 0.577 */
+/* the pink and brown levels: measured, so each colour has the rms of white (0.577) on the raw filters */
+#define PINK_G 0.333f
 #define BROWN_G 10.0f
+/* dust: a click with probability 0.002 a sample (about 90 a second); this gain makes its rms about white's (0.577) */
+#define DUST_G 13.0f
+#define DUST_LIM 0.998f
+#define NOISE_OUT 1.0f                /* level: the default matches LEAD's (rms 0.17 on a note); the soft limit keeps it bounded */
+#define MOD_OCT 24.0f                 /* the cutoff's modulation at full depth: 24 semitones (2 octaves) each way */
 
 static const x0x_param_t params[NOISE_NPARAMS] = {
-    { "Morph", 127, 0, 0 },          /* 0 square, 1/4 noise, 1/2 saw, 3/4 noise, 1 tri */
-    { "Noise", 127, 32, 0 },         /* the noise floor: always there; at a noise anchor it is all there is */
-    { "NType", 2, 0, ntype_names },
-    { "Tune", 127, 64, 0 },          /* +-1.5 semitones */
+    { "NType", 3, 0, ntype_names },
     { "FType", 3, 0, ftype_names },
     { "Cutoff", 127, 70, 0 },        /* 40 Hz .. 12 kHz */
-    { "Reso", 127, 40, 0 },          /* Q 0.5 .. 24 */
+    { "Reso", 127, 40, 0 },          /* Q 0.5 .. 24; the notch: Q 0.5 .. 4 */
     { "KeyTrk", 127, 64, 0 },        /* the cutoff follows the note: 0 .. 1 semitone a semitone */
+    { "Mod", 4, 0, mod_names },      /* a built-in modulation: the cutoff, or the level */
+    { "ModAmt", 127, 0, 0 },         /* its depth */
+    { "ModRat", 127, 40, 0 },        /* its rate: 0.1 .. 51 Hz, exponential */
     { "Attack", 127, 20, 0 },        /* 1 ms .. 2 s, exponential */
     { "Decay", 127, 64, 0 },         /* 5 ms .. 2.5 s */
     { "Sustain", 127, 110, 0 },      /* the level a held note settles at */
@@ -34,12 +40,6 @@ int noise_get(const noise_t *b, int i) { return (i >= 0 && i < NOISE_NPARAMS) ? 
 
 static float decay_mul(float seconds, float step_s) { return fm_expf(-step_s / seconds); }
 
-static inline float pitch_inc(float st)                      /* semitones from A4 to a phase step per sample */
-{
-    float base = 440.0f * fm_exp2f(st * (1.0f / 12.0f)) * (1.0f / NOISE_SR);
-    return base > 0.4f ? 0.4f : base;
-}
-
 void noise_set(noise_t *b, int i, int v)
 {
     float n;
@@ -52,14 +52,14 @@ void noise_set(noise_t *b, int i, int v)
     b->pot[i] = (uint8_t)v;
     n = (float)v * (1.0f / 127.0f);
     switch (i) {
-    case NOISE_MORPH: b->morph = (float)v * (4.0f / 127.0f); break;
-    case NOISE_NOISE: b->floor_ = n; break;
     case NOISE_NTYPE: b->ntype = v; break;
-    case NOISE_TUNE: b->tune_st = (float)(v - 64) * (1.5f / 64.0f); break;
     case NOISE_FTYPE: b->ftype = v; break;
     case NOISE_CUTOFF: b->cut_st = -43.0f + 100.0f * n; break;
-    case NOISE_RESO: b->reso_k = 2.0f * fm_exp2f(-5.6f * n); break;
+    case NOISE_RESO: b->reso_n = n; break;
     case NOISE_KEYTRK: b->keytrk = n; break;
+    case NOISE_MOD: b->mod = v; break;
+    case NOISE_MODAMT: b->mod_amt = n; break;
+    case NOISE_MODRAT: b->mod_inc = 0.1f * fm_exp2f(n * 9.0f) * (float)NOISE_CTRL / NOISE_SR; break;
     case NOISE_ATTACK: b->att_step = 1.0f / (0.001f * fm_exp2f(n * 11.0f) * NOISE_SR); break;
     case NOISE_DECAY: b->dec_c = decay_mul(0.005f * fm_exp2f(n * 9.0f), 1.0f / NOISE_SR); break;
     case NOISE_SUSTAIN: b->sustain = n; break;
@@ -75,6 +75,7 @@ void noise_init(noise_t *b)
     memset(b, 0, sizeof *b);
     b->idle = 1;
     b->rng = 0x2545F491u;                                  /* any nonzero seed */
+    b->mod_gain = 1.0f;
     svf_init(&b->fl);
     for (i = 0; i < NOISE_NPARAMS; i++)
         noise_set(b, i, params[i].def);
@@ -87,9 +88,8 @@ void noise_note_on(noise_t *b, int note, int slide)
         note = 0;
     if (note > 127)
         note = 127;
-    legato = slide && b->gate && !b->idle;                 /* a slide over a held note: the pitch moves, the envelope goes on */
+    legato = slide && b->gate && !b->idle;                 /* a slide over a held note: the envelope goes on */
     b->note_st = (float)(note - 69);
-    b->inc = pitch_inc((float)(note - 69) + b->tune_st);
     if (!legato) {
         b->stage = 0;                                      /* a new attack, from the level it is at */
         b->cc = 0;
@@ -105,20 +105,6 @@ void noise_note_off(noise_t *b)
 }
 void noise_all_off(noise_t *b) { noise_note_off(b); }
 
-static inline float blep(float t, float dt)
-{
-    float x;
-    if (t < dt) {
-        x = t / dt;
-        return x + x - x * x - 1.0f;
-    }
-    if (t > 1.0f - dt) {
-        x = (t - 1.0f) / dt;
-        return x * x + x + x + 1.0f;
-    }
-    return 0.0f;
-}
-
 /* the white noise: xorshift32, in [-1, 1) */
 static inline float white(noise_t *b)
 {
@@ -130,30 +116,56 @@ static inline float white(noise_t *b)
     return (float)(int32_t)x * (1.0f / 2147483648.0f);
 }
 
-/* the morph: the square fades out into the noise, the noise into the saw, the saw out into the noise, the noise into
- * the tri. The noise gets what the oscillator gives up, on top of the floor */
+/* the built-in modulation, at the control rate. Sine: the cutoff follows a sine. Rand: it takes a new random value at
+ * each cycle (a stepped sample and hold). Drift: the same, but glides to each new value. Gate: the level pulses,
+ * softly, so it is on and off with no click. The cutoff ones add to the cutoff in control(); the gate sets mod_gain */
+static void modulate(noise_t *b)
+{
+    float target;
+    b->mod_ph += b->mod_inc;
+    if (b->mod_ph >= 1.0f) {
+        b->mod_ph -= 1.0f;
+        b->mod_hold = white(b);                                /* a new random value, for Rand and Drift */
+    }
+    switch (b->mod) {
+    case NM_SINE:
+        b->mod_v = fm_sin_turns(b->mod_ph);
+        break;
+    case NM_RAND:
+        b->mod_v = b->mod_hold;
+        break;
+    case NM_DRIFT:
+        target = b->mod_hold;
+        b->mod_v += (target - b->mod_v) * 0.005f;               /* a glide of about 35 ms to each new value */
+        break;
+    case NM_GATE:
+        b->mod_v = fm_clampf(6.0f * fm_sin_turns(b->mod_ph), -1.0f, 1.0f);
+        b->mod_gain = 1.0f - b->mod_amt * (0.5f - 0.5f * b->mod_v);
+        return;
+    default:
+        b->mod_v = 0.0f;
+        break;
+    }
+    b->mod_gain = 1.0f;
+}
+
+/* the filter's coefficients: the cutoff with the envelope, the note and the modulation, the damping from the resonance.
+ * The notch's Q stops at 4: a narrower notch is too thin to hear on noise, so its cutoff sweep would be silent */
 static void control(noise_t *b)
 {
-    float pos = b->morph, f, go, fc, cut;
-    int seg = (int)pos;
-    if (seg > 3)
-        seg = 3;
-    f = pos - (float)seg;
-    b->gsq = b->gsaw = b->gtri = 0.0f;
-    switch (seg) {
-    case 0: b->gsq = 1.0f - f; break;
-    case 1: b->gsaw = f; break;
-    case 2: b->gsaw = 1.0f - f; break;
-    default: b->gtri = f; break;
-    }
-    go = b->gsq + b->gsaw + b->gtri;
-    b->gnoise = b->floor_ + (1.0f - b->floor_) * (1.0f - go);
-
+    float cut, fc, k;
+    if (b->mod)
+        modulate(b);
+    else
+        b->mod_gain = 1.0f;
     cut = b->cut_st + b->env * b->env_st + b->keytrk * b->note_st;
+    if (b->mod == NM_SINE || b->mod == NM_RAND || b->mod == NM_DRIFT)
+        cut += b->mod_v * b->mod_amt * MOD_OCT;
     if (cut > 100.0f)
         cut = 100.0f;
     fc = 440.0f * fm_exp2f(cut * (1.0f / 12.0f));
-    svf_set(&b->fl, fc, b->reso_k, NOISE_SR);
+    k = b->ftype == NF_NOTCH ? 2.0f * fm_exp2f(-3.0f * b->reso_n) : 2.0f * fm_exp2f(-5.6f * b->reso_n);
+    svf_set(&b->fl, fc, k, NOISE_SR);
 }
 
 void noise_render(noise_t *b, float *out, int n)
@@ -164,24 +176,12 @@ void noise_render(noise_t *b, float *out, int n)
         return;
     }
     for (i = 0; i < n; i++) {
-        float p, p2, dt = b->inc, saw, sq, tri, osc, w, nz, mix, u, lp, bp, hp, y, e;
+        float w, nz, u, lp, bp, hp, y, e;
         if (b->cc == 0) {
             control(b);
             b->cc = NOISE_CTRL;
         }
         b->cc--;
-
-        p = b->ph + dt;
-        if (p >= 1.0f)
-            p -= 1.0f;
-        b->ph = p;
-        saw = 2.0f * p - 1.0f - blep(p, dt);
-        p2 = p + 0.5f;
-        if (p2 >= 1.0f)
-            p2 -= 1.0f;
-        sq = (p < 0.5f ? 1.0f : -1.0f) + blep(p, dt) - blep(p2, dt);
-        tri = 2.0f * fm_fabsf(2.0f * p - 1.0f) - 1.0f;
-        osc = b->gsq * sq + b->gsaw * saw + b->gtri * tri;
 
         w = white(b);
         switch (b->ntype) {
@@ -195,13 +195,15 @@ void noise_render(noise_t *b, float *out, int n)
             b->brown = (b->brown + 0.02f * w) * (1.0f / 1.02f);
             nz = b->brown * BROWN_G;
             break;
+        case NT_DUST:
+            nz = fm_fabsf(w) > DUST_LIM ? (w > 0.0f ? DUST_G : -DUST_G) : 0.0f;
+            break;
         default:
             nz = w;
             break;
         }
-        mix = osc + b->gnoise * nz;
 
-        u = fm_tanhf(mix * b->drive_g);                        /* the drive into the filter, bounded */
+        u = fm_tanhf(nz * b->drive_g);                         /* the drive into the filter, bounded */
         svf_tick(&b->fl, u, &lp, &bp, &hp);
         switch (b->ftype) {
         case NF_HP: y = hp; break;
@@ -225,7 +227,7 @@ void noise_render(noise_t *b, float *out, int n)
         }
         b->env = e;
 
-        out[i] = 0.5f * e * y;
+        out[i] = NOISE_OUT * e * y * b->mod_gain;
         if (b->stage == 2 && e < 1e-4f) {
             memset(out + i + 1, 0, (unsigned)(n - i - 1) * sizeof(float));
             b->idle = 1;

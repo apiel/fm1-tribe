@@ -1,8 +1,9 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* NOISE (noise.c): finite and bounded at the corners of its controls, the square and the tri anchors play their pitch,
- * the noise anchor is loud and unpitched, the noise floor is on a wave anchor too, the filter types differ (HP on noise
- * has more energy than LP at a low cutoff), the three colours differ in their crossings and loudness, a slide keeps the
- * envelope, the release ends in silence, and two instances do not touch each other. */
+/* NOISE (noise.c): finite and bounded at the corners of its controls, the three colours differ (crossings and level),
+ * HP has more energy than LP on noise at a low cutoff, KeyTrk moves the cutoff with the note, a resonant band-pass
+ * keeps its loudness and rings at the note (a pitched noise), the notch moves with its cutoff and its width follows the
+ * resonance, a default note is about as loud as LEAD's, a slide keeps the envelope, the release ends in silence, and
+ * two instances do not touch each other. */
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
@@ -41,21 +42,46 @@ static double crossings(const float *x, int n)            /* all sign changes pe
         c += (x[i - 1] < 0) != (x[i] < 0);
     return (double)c * SR / n;
 }
+/* a crude brightness: the rms of what a one-pole low-pass leaves out */
+static double bright(const float *x, int n)
+{
+    double lp = 0, s = 0;
+    int i;
+    for (i = 0; i < n; i++) {
+        lp = 0.9 * lp + 0.1 * x[i];
+        s += (x[i] - lp) * (x[i] - lp);
+    }
+    return sqrt(s / n);
+}
 
-/* the open filter, no envelope, a held note: the oscillator or the noise alone */
-static void plain(noise_t *b, int morph, int noisefloor)
+/* the spread of the level: the loudest over the quietest 50 ms window, so a modulation shows and a steady sound does not */
+static double swing(const float *x, int n)
+{
+    int w, win = SR / 20, nw = n / win;
+    double lo = 1e9, hi = 0;
+    for (w = 0; w < nw; w++) {
+        double r = rms(x + w * win, win);
+        if (r < lo)
+            lo = r;
+        if (r > hi)
+            hi = r;
+    }
+    return lo > 0 ? hi / lo : 0;
+}
+
+/* a held note on the given filter; the envelope open at once, the cutoff fixed (no LFO, no envelope, no key tracking) */
+static void plain(noise_t *b, int ntype, int ftype, int cut, int reso)
 {
     noise_init(b);
-    noise_set(b, NOISE_MORPH, morph);
-    noise_set(b, NOISE_NOISE, noisefloor);
-    noise_set(b, NOISE_CUTOFF, 127);
-    noise_set(b, NOISE_RESO, 0);
+    noise_set(b, NOISE_NTYPE, ntype);
+    noise_set(b, NOISE_FTYPE, ftype);
+    noise_set(b, NOISE_CUTOFF, cut);
+    noise_set(b, NOISE_RESO, reso);
     noise_set(b, NOISE_KEYTRK, 0);
     noise_set(b, NOISE_ENVMOD, 0);
     noise_set(b, NOISE_ATTACK, 0);
     noise_set(b, NOISE_SUSTAIN, 127);
     noise_set(b, NOISE_DRIVE, 0);
-    noise_set(b, NOISE_TUNE, 64);
 }
 
 static float buf[SR * 3];
@@ -66,98 +92,29 @@ int main(void)
     int i, c, k;
     double r1, r2;
 
-    for (c = 0; c < 64; c++) {                            /* corners: finite, bounded (the output is 0.5 x a soft limit) */
+    for (c = 0; c < 64; c++) {                            /* corners: finite, bounded by the output level */
         noise_init(&a);
         for (k = 0; k < NOISE_NPARAMS; k++)
             noise_set(&a, k, ((c >> (k % 6)) & 1) ? 127 : 0);
-        noise_set(&a, NOISE_NTYPE, c % 3);
+        noise_set(&a, NOISE_NTYPE, c % 4);
         noise_set(&a, NOISE_FTYPE, (c / 3) % 4);
         noise_note_on(&a, 24 + c, 0);
         render(&a, buf, SR / 2);
         noise_note_on(&a, 60, 1);
         render(&a, buf + SR / 2, SR / 2);
         for (i = 0; i < SR; i++)
-            if (!isfinite(buf[i]) || fabsf(buf[i]) > 0.5001f) {
+            if (!isfinite(buf[i]) || fabsf(buf[i]) > 1.0001f) {
                 CHECK(0, "corner %d: sample %d = %f", c, i, buf[i]);
                 break;
             }
     }
-
-    plain(&a, 0, 0);                                      /* the square anchor, no noise: the pitch asked (A4) */
-    noise_note_on(&a, 69, 0);
-    render(&a, buf, SR);
-    r1 = hz(buf + SR / 4, SR / 2);
-    CHECK(fabs(r1 - 440.0) < 440.0 * 0.02, "square anchor pitch %.1f Hz (want 440)", r1);
-
-    plain(&a, 127, 0);                                    /* the tri anchor, no noise: the pitch asked */
-    noise_note_on(&a, 69, 0);
-    render(&a, buf, SR);
-    r1 = hz(buf + SR / 4, SR / 2);
-    CHECK(fabs(r1 - 440.0) < 440.0 * 0.02, "tri anchor pitch %.1f Hz (want 440)", r1);
-    CHECK(rms(buf + SR / 4, SR / 2) > 0.2, "tri anchor level %.3f", rms(buf + SR / 4, SR / 2));
-
-    plain(&a, 32, 0);                                     /* the first noise anchor, noise floor 0: the noise is all there is */
-    noise_note_on(&a, 69, 0);
-    render(&a, buf, SR);
-    r1 = rms(buf + SR / 4, SR / 2);
-    r2 = crossings(buf + SR / 4, SR / 2);
-    CHECK(r1 > 0.1, "noise anchor is silent: rms %.3f", r1);
-    CHECK(r2 > 3000.0, "noise anchor is pitched: %.0f crossings/s", r2);
-
-    {                                                     /* the morph law: each anchor's waves and the noise, by the gains the engine computes */
-        static const struct { int morph, floor; float sq, saw, tri, nz; } want[] = {
-            { 0, 0, 1.0f, 0.0f, 0.0f, 0.0f },              /* square: the noise floor off */
-            { 0, 127, 1.0f, 0.0f, 0.0f, 1.0f },            /* square with the floor on full: the noise is there too */
-            { 32, 0, 0.0f, 0.0f, 0.0f, 1.0f },             /* the first noise anchor: the noise is all there is */
-            { 64, 0, 0.0f, 1.0f, 0.0f, 0.0f },             /* saw */
-            { 95, 0, 0.0f, 0.0f, 0.0f, 1.0f },             /* the second noise anchor (3/4 of the morph: 95.25) */
-            { 127, 0, 0.0f, 0.0f, 1.0f, 0.0f },            /* tri */
-            { 127, 64, 0.0f, 0.0f, 1.0f, 0.5f },          /* tri with the floor at half: the noise sits under the wave */
-        };
-        int w;
-        for (w = 0; w < (int)(sizeof want / sizeof want[0]); w++) {
-            float sq, saw, tri, nz;
-            plain(&a, want[w].morph, want[w].floor);
-            noise_note_on(&a, 69, 0);
-            render(&a, buf, 64);
-            sq = a.gsq; saw = a.gsaw; tri = a.gtri; nz = a.gnoise;
-            CHECK(fabsf(sq - want[w].sq) < 0.02f && fabsf(saw - want[w].saw) < 0.02f &&
-                  fabsf(tri - want[w].tri) < 0.02f && fabsf(nz - want[w].nz) < 0.02f,
-                  "morph %d floor %d: square %.2f saw %.2f tri %.2f noise %.2f (want %.2f %.2f %.2f %.2f)",
-                  want[w].morph, want[w].floor, sq, saw, tri, nz,
-                  want[w].sq, want[w].saw, want[w].tri, want[w].nz);
-        }
-    }
-
-    plain(&a, 0, 0);                                      /* the filter: HP passes more of the noise than LP at 40 Hz */
-    noise_set(&a, NOISE_MORPH, 32);
-    noise_set(&a, NOISE_NOISE, 127);
-    noise_set(&a, NOISE_CUTOFF, 0);
-    noise_set(&a, NOISE_FTYPE, NF_LP);
-    noise_note_on(&a, 69, 0);
-    render(&a, buf, SR);
-    r1 = rms(buf + SR / 4, SR / 2);
-    plain(&b2, 32, 127);
-    noise_set(&b2, NOISE_CUTOFF, 0);
-    noise_set(&b2, NOISE_FTYPE, NF_HP);
-    noise_note_on(&b2, 69, 0);
-    render(&b2, buf + SR, SR);
-    r2 = rms(buf + SR + SR / 4, SR / 2);
-    CHECK(r2 > 3.0 * r1, "HP %.4f should pass much more than LP %.4f at 40 Hz", r2, r1);
 
     {                                                     /* the colours: white crosses zero most, brown least; the levels are close */
         static noise_t cw[3];
         double zc[3], rm[3];
         int t;
         for (t = 0; t < 3; t++) {
-            noise_init(&cw[t]);
-            noise_set(&cw[t], NOISE_MORPH, 32);
-            noise_set(&cw[t], NOISE_NOISE, 127);
-            noise_set(&cw[t], NOISE_CUTOFF, 127);
-            noise_set(&cw[t], NOISE_RESO, 0);
-            noise_set(&cw[t], NOISE_SUSTAIN, 127);
-            noise_set(&cw[t], NOISE_ATTACK, 0);
-            noise_set(&cw[t], NOISE_NTYPE, t);
+            plain(&cw[t], t, NF_LP, 127, 0);
             noise_note_on(&cw[t], 69, 0);
             render(&cw[t], buf, SR);
             zc[t] = crossings(buf + SR / 4, SR / 2);
@@ -170,6 +127,112 @@ int main(void)
         CHECK(rm[NT_BROWN] > 0.7 * rm[NT_WHITE] && rm[NT_BROWN] < 1.4 * rm[NT_WHITE],
               "brown level %.3f against white %.3f", rm[NT_BROWN], rm[NT_WHITE]);
     }
+
+    plain(&a, NT_WHITE, NF_LP, 0, 0);                     /* the filter: HP passes more of the noise than LP at 40 Hz */
+    noise_note_on(&a, 69, 0);
+    render(&a, buf, SR);
+    r1 = rms(buf + SR / 4, SR / 2);
+    plain(&b2, NT_WHITE, NF_HP, 0, 0);
+    noise_note_on(&b2, 69, 0);
+    render(&b2, buf + SR, SR);
+    r2 = rms(buf + SR + SR / 4, SR / 2);
+    CHECK(r2 > 3.0 * r1, "HP %.4f should pass much more than LP %.4f at 40 Hz", r2, r1);
+
+    plain(&a, NT_WHITE, NF_LP, 40, 0);                    /* KeyTrk: the cutoff follows the note, so a high note is brighter */
+    noise_set(&a, NOISE_KEYTRK, 127);
+    noise_note_on(&a, 36, 0);
+    render(&a, buf, SR);
+    r1 = rms(buf + SR / 4, SR / 2);
+    noise_note_on(&a, 96, 0);
+    render(&a, buf, SR);
+    r2 = rms(buf + SR / 4, SR / 2);
+    CHECK(r2 > 1.5 * r1, "KeyTrk: note 96 at %.4f should be brighter than note 36 at %.4f", r2, r1);
+
+    plain(&a, NT_WHITE, NF_BP, 70, 0);                    /* BP: a resonance keeps the loudness, it does not vanish */
+    noise_note_on(&a, 69, 0);
+    render(&a, buf, SR);
+    r1 = rms(buf + SR / 4, SR / 2);
+    noise_set(&a, NOISE_RESO, 127);
+    render(&a, buf, SR);
+    r2 = rms(buf + SR / 4, SR / 2);
+    CHECK(r2 > 0.5 * r1 && r2 < 2.0 * r1, "BP at full resonance %.4f against %.4f at none", r2, r1);
+
+    plain(&a, NT_WHITE, NF_BP, 70, 127);                  /* the pitched noise: a resonant BP rings at its note */
+    noise_set(&a, NOISE_KEYTRK, 127);
+    noise_note_on(&a, 69, 0);
+    render(&a, buf, SR);
+    r1 = hz(buf + SR / 4, SR / 2);
+    noise_note_on(&a, 81, 0);
+    render(&a, buf, SR);
+    r2 = hz(buf + SR / 4, SR / 2);
+    CHECK(r1 > 0.0 && fabs(r2 / r1 - 2.0) < 0.3, "pitched BP: note 81 rings at %.0f Hz, note 69 at %.0f (want ~2x)", r2, r1);
+
+    plain(&a, NT_WHITE, NF_NOTCH, 20, 0);                 /* the notch moves with its cutoff: low and high cutoffs differ */
+    noise_note_on(&a, 69, 0);
+    render(&a, buf, SR);
+    r1 = bright(buf + SR / 4, SR / 2);
+    noise_set(&a, NOISE_CUTOFF, 120);
+    render(&a, buf, SR);
+    r2 = bright(buf + SR / 4, SR / 2);
+    CHECK(fabs(r1 - r2) > 0.1 * r1, "notch barely moves with its cutoff: %.4f at 20, %.4f at 120", r1, r2);
+
+    plain(&a, NT_WHITE, NF_NOTCH, 120, 0);                /* the notch's width follows the resonance, up to Q 4 */
+    noise_note_on(&a, 69, 0);
+    render(&a, buf, SR);
+    r1 = rms(buf + SR / 4, SR / 2);
+    noise_set(&a, NOISE_RESO, 127);
+    render(&a, buf, SR);
+    r2 = rms(buf + SR / 4, SR / 2);
+    CHECK(fabs(r1 - r2) > 0.05 * r1, "notch width does nothing: %.4f at no resonance, %.4f at full", r1, r2);
+
+    plain(&a, NT_DUST, NF_LP, 127, 0);                    /* dust: sparse clicks, so a high peak against its rms */
+    noise_note_on(&a, 69, 0);
+    render(&a, buf, SR);
+    {
+        float pk = 0;
+        for (i = SR / 4; i < SR; i++)
+            if (fabsf(buf[i]) > pk)
+                pk = fabsf(buf[i]);
+        r1 = rms(buf + SR / 4, 3 * SR / 4);
+        CHECK(pk > 5.0 * r1, "dust is not clicky: peak %.3f against rms %.3f", pk, r1);
+    }
+
+    plain(&a, NT_WHITE, NF_LP, 50, 0);                    /* Mod Sine: the cutoff wobbles, so the level swings over the window */
+    noise_set(&a, NOISE_MOD, NM_OFF);
+    noise_note_on(&a, 69, 0);
+    render(&a, buf, SR);
+    r1 = swing(buf + SR / 4, SR / 2);
+    plain(&a, NT_WHITE, NF_LP, 50, 0);
+    noise_set(&a, NOISE_MOD, NM_SINE);
+    noise_set(&a, NOISE_MODAMT, 127);
+    noise_set(&a, NOISE_MODRAT, 40);
+    noise_note_on(&a, 69, 0);
+    render(&a, buf, SR);
+    r2 = swing(buf + SR / 4, SR / 2);
+    CHECK(r2 > 1.5 && r2 > 1.3 * r1, "Sine modulation does nothing: swing %.2f against %.2f with it off", r2, r1);
+
+    plain(&a, NT_WHITE, NF_LP, 127, 0);                   /* Mod Gate: the level pulses, so the swing is large */
+    noise_set(&a, NOISE_MOD, NM_GATE);
+    noise_set(&a, NOISE_MODAMT, 127);
+    noise_set(&a, NOISE_MODRAT, 40);
+    noise_note_on(&a, 69, 0);
+    render(&a, buf, SR);
+    r2 = swing(buf + SR / 4, SR / 2);
+    CHECK(r2 > 2.0, "Gate does not pulse: swing %.2f", r2);
+
+    plain(&a, NT_WHITE, NF_LP, 70, 40);                   /* the default level is about LEAD's: rms 0.17 on a note */
+    noise_set(&a, NOISE_CUTOFF, 70);
+    noise_set(&a, NOISE_RESO, 40);
+    noise_set(&a, NOISE_KEYTRK, 64);
+    noise_set(&a, NOISE_ENVMOD, 50);
+    noise_set(&a, NOISE_ATTACK, 20);
+    noise_set(&a, NOISE_DECAY, 64);
+    noise_set(&a, NOISE_SUSTAIN, 110);
+    noise_set(&a, NOISE_RELEASE, 50);
+    noise_note_on(&a, 45, 0);
+    render(&a, buf, SR);
+    r1 = rms(buf + SR / 4, SR / 2);
+    CHECK(r1 > 0.1 && r1 < 0.25, "default level %.3f (want about 0.17, LEAD's)", r1);
 
     noise_init(&a);                                       /* a slide over a held note keeps the envelope; a new key restarts it */
     noise_set(&a, NOISE_ATTACK, 0);

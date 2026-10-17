@@ -36,6 +36,12 @@ void eng_format(int id, int i, int value, char *buf);       /* a value in text, 
 /* ------------------------------------------------------------- project --- */
 /* one LFO per clip, on one pot of the engine. Values are pots 0..127 except SHAPE (LFO_SHAPES), TARGET (a pot index) and the switches */
 enum { LFO_SHAPE, LFO_RATE, LFO_DEPTH, LFO_TARGET, LFO_SYNC, LFO_RETRIG, NLFO };
+/* the rate pot, 0..127, continuous. Synced: a cycle is 2^(9 r/127) / 4 steps of a 16th, so 1/64 to 8 bars (the labels
+ * are the octaves of that range: 1/64 .. 8BAR). Free: 0.02 Hz .. 100 Hz, in two parts: the slow end (0.02 .. 1 Hz) takes
+ * the first 40 pot positions, the fast end (1 .. 100 Hz) the other 87, so the slow end is less fine and the fast end gets
+ * the room. Both are continuous, and the free part is exponential in each half. */
+#define LFO_STEPS(r) (0.25f * fm_exp2f((float)(r) * (9.0f / 127.0f)))
+#define LFO_HZ(r) ((r) <= 40 ? 0.02f * fm_exp2f((float)(r) * (5.644f / 40.0f)) : fm_exp2f(((float)(r) - 40.0f) * (6.644f / 87.0f)))
 enum { LS_SINE, LS_TRI, LS_SAW, LS_SQUARE, LS_RANDOM, LFO_SHAPES };
 /* how fast a clip's steps go (a step is that many ticks of the engine's 1/96-note clock), and in which order */
 enum { SR_16, SR_8, SR_32, SR_16T, SR_8T, SR_32T, NSEQRATE };

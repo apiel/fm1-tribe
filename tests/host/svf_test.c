@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* SVF (svf.c), the shared filter: the low-pass passes DC and the high-pass blocks it, the band-pass peaks near unity at
- * its centre, the notch nulls at its centre, and the filter stays finite at the corners of its cutoff and damping. */
+/* SVF (svf.c), the shared filter: the low-pass passes DC and the high-pass blocks it, the band-pass peaks at 1/sqrt(k) at
+ * its centre (constant energy on noise), the notch nulls at its centre, and the filter stays finite at the corners of its cutoff and damping. */
 #include <stdio.h>
 #include <math.h>
 #include <stdint.h>
@@ -48,7 +48,7 @@ int main(void)
         for (i = settle; i < n; i++)
             hi[i] = lo[i] + hi[i];                         /* the notch: low + high */
         rnotch = rms(hi + settle, n - settle);
-        CHECK(fabs(rbp / rin - 1.0) < 0.05, "band-pass at its centre %.3f (want ~1), fc %.0f k %.2f", rbp / rin, fc, k);
+        CHECK(fabs(rbp / rin * sqrt(k) - 1.0) < 0.05, "band-pass at its centre %.3f (want 1/sqrt(k) = %.3f), fc %.0f k %.2f", rbp / rin, 1.0 / sqrt(k), fc, k);
         CHECK(rnotch / rin < 0.02, "notch at its centre %.4f (want ~0), fc %.0f k %.2f", rnotch / rin, fc, k);
     }
 

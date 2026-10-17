@@ -41,7 +41,7 @@ static const tribe_eng_t ENG[] = {
     E("ACID", EK_SYNTH, F_ACID, 0, 4),
     E("LEAD", EK_SYNTH, F_LEAD, 0, 8),                     /* long legato leads: a unison of detuned oscillators */                     /* appended: projects store engines by index */
     E("FM4", EK_SYNTH, F_FM4, 0, 5),                       /* a mono 4-operator FM synth (Digitone-style operators) */
-    E("NOISE", EK_SYNTH, F_NOISE, 0, 4),                   /* a morph through square, noise, saw, noise, tri, over a noise floor, and a filter */
+    E("NOISE", EK_SYNTH, F_NOISE, 0, 4),                   /* noise (white, pink or brown) through a filter, with the note on the cutoff: a tonal noise with a resonance */
 };
 #define NENG ((int)(sizeof ENG / sizeof ENG[0]))
 

@@ -427,8 +427,12 @@ static int32_t next_event(int32_t want)
 /* ---- the LFOs: one a clip, moving one pot of the engine around the value the clip holds. Run once a block
  * (172 times a second): slow modulation (wobble, sweeps), not audio rate. ---- */
 static float lfo_ph[NTRK], lfo_hold[NTRK];
+static float lfo_rp[NTRK];                         /* the rate pot the LFO runs at: it glides toward the clip's */
+static int8_t lfo_mode[NTRK];                      /* the sync flag the rate was last set in (-1: none): a change of mode snaps */
 static int16_t lfo_sent[NTRK], lfo_tgt[NTRK];      /* the last value sent to the engine (-1: none), and the pot it was for */
 static uint32_t lfo_notes[NTRK];
+#define LFO_CHUNK 32                               /* the LFO runs every 32 samples: 1378 times a second */
+#define LFO_GLIDE (0.03f * 44100.0f)               /* the rate's glide, a time constant of 30 ms, in samples */
 
 static float lfo_shape(int shape, float ph, float *hold)
 {
@@ -443,7 +447,6 @@ static float lfo_shape(int shape, float ph, float *hold)
 
 static void lfo_update(int n)
 {
-    static const float DIV[10] = {0.25f, 0.5f, 1.0f, 2.0f, 4.0f, 8.0f, 16.0f, 32.0f, 64.0f, 128.0f};   /* steps */
     int t;
     for (t = 0; t < NTRK; t++) {
         const clip_t *c = &proj.clip[t][dk_clip[t]];
@@ -453,20 +456,24 @@ static void lfo_update(int n)
                 eng_set(t, lfo_tgt[t], c->par[lfo_tgt[t]]);
             lfo_sent[t] = -1;
         }
-        if (!depth || !eng || tgt >= np || eng_info(eng)->kind != EK_SYNTH)
-            continue;                                                          /* the LFO is for synths */
+        if (!depth || !eng || tgt >= np || eng_info(eng)->kind != EK_SYNTH) {
+            lfo_mode[t] = -1;                                                  /* the LFO is for synths; off, its rate starts over */
+            continue;
+        }
         {
-            float period, max = (float)eng_param(eng, tgt)->max, v, eff;
-            int rate = c->lfo[LFO_RATE], shape = c->lfo[LFO_SHAPE], e;
+            float period, max = (float)eng_param(eng, tgt)->max, v, eff, target = (float)c->lfo[LFO_RATE];
+            int sync = c->lfo[LFO_SYNC] ? 1 : 0, shape = c->lfo[LFO_SHAPE], e;
             if (c->lfo[LFO_RETRIG] && eng_notes[t] != lfo_notes[t]) {
                 lfo_ph[t] = 0.0f;                                              /* each note starts the wave again */
                 lfo_hold[t] = (float)(rand32() & 0xFFFFu) * (2.0f / 65535.0f) - 1.0f;    /* (and a random one takes a new level) */
             }
             lfo_notes[t] = eng_notes[t];
-            if (c->lfo[LFO_SYNC])
-                period = DIV[rate * 10 / 128] * spl;
-            else
-                period = 44100.0f / (0.05f * fm_exp2f((float)rate * (9.0f / 127.0f)));
+            if (lfo_mode[t] != sync) {                                         /* switched on, or sync changed: the rate snaps */
+                lfo_rp[t] = target;
+                lfo_mode[t] = (int8_t)sync;
+            } else
+                lfo_rp[t] += (target - lfo_rp[t]) * (1.0f - fm_expf(-(float)n / LFO_GLIDE));   /* a rate change glides */
+            period = sync ? LFO_STEPS(lfo_rp[t]) * spl : 44100.0f / LFO_HZ(lfo_rp[t]);
             lfo_ph[t] += (float)n / period;
             if (lfo_ph[t] >= 1.0f) {
                 lfo_ph[t] -= fm_floorf(lfo_ph[t]);
@@ -549,6 +556,7 @@ void engine_init(void)
     for (t = 0; t < NTRK; t++) {
         sc_ring_of[t] = -1;
         lfo_sent[t] = -1;
+        lfo_mode[t] = -1;
     }
     sc_g_ring = -1;
     master_init(&mst);
@@ -584,8 +592,7 @@ void engine_render(int32_t *out_lr, uint32_t n)
         n = 256u;
     left = (int32_t)n;
     drain();
-    lfo_update((int)n);
-    /* the block is cut at every step and every gate end, so a note starts on its own sample */
+    /* the block is cut at every step and every gate end, so a note starts on its own sample; and at 32 samples, so the LFO runs */
     while (left > 0) {
         int32_t k;
         if (playing_ && acc <= 0.0f) {
@@ -593,6 +600,9 @@ void engine_render(int32_t *out_lr, uint32_t n)
             acc += tick_spl;
         }
         k = next_event(left);
+        if (k > LFO_CHUNK)
+            k = LFO_CHUNK;
+        lfo_update((int)k);
         eng_render_all(trk_buf, off, k);
         if (playing_) {
             int t;

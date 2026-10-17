@@ -129,7 +129,7 @@ change the engine too. Choose it on the SEL page, with KNOB 4.
 | 808 BD, SD, LT, MT, HT, RS, CP, CB, CY, OH, CH | The 808 voices: kick, snare, three toms, rim, clap, cowbell, cymbal, open and closed hat. |
 | ACID | The bass synth: the zicCycle 303, with accent, slide, a colour and a pitch envelope, and its LFO. |
 | FM4 | A mono 4-operator FM synth laid out like the Digitone's FM: operators C, A and B1/B2, eight algorithms with two outputs (X and Y, mixed by MIX), HARM and DTUN, two envelopes with end levels, a filter and an overdrive. |
-| NOISE | A mono synth built on noise: an oscillator that morphs through square, noise, saw, noise and tri, over a noise floor that is always there (white, pink or brown), then a filter (LP, HP, BP or notch) with key tracking, and an envelope. |
+| NOISE | A mono noise synth: white, pink, brown or dust (sparse clicks) through a filter (LP, HP, BP or notch), with key tracking (the note moves the cutoff, so a resonant band-pass rings at the note), a built-in modulation (sine, random, drift or gate), an envelope, and drive. |
 
 Every drum engine is pitched: the note of a step changes its tune, which is what makes the kicks
 useful. A synth step has a note, a velocity, a length and a slide.
@@ -188,13 +188,13 @@ parameters there are dots in the strip and OCT-/OCT+ (or pressing the button aga
 What each engine has is listed in section 14. Parameters belong to the **clip**: switch clips and the
 sound switches with it.
 
-**LFO** (the synths only, ACID and LEAD, since a drum hit is too short for one) is a modulation of one of the
+**LFO** (the synths only: ACID, LEAD, FM4 and NOISE, since a drum hit is too short for one) is a modulation of one of the
 engine's parameters. There is one per clip, saved with it.
 
 | Control | |
 |---|---|
 | SHAPE | sine, triangle, saw, square, random |
-| RATE | synced to the tempo (1/64 to 8 bars) or free (0.05–25 Hz) |
+| RATE | continuous, one step a click. Synced to the tempo: from 1/64 to 8 bars. Free: from 0.02 Hz (a cycle every 50 s) to 100 Hz; the slow part (under 1 Hz) takes the first third of the knob, so it is coarser there. A change glides, over about 30 ms, so turning it never jumps |
 | DEPTH | 0 is off; at full the parameter moves half its range each way |
 | TARGET | the parameter it moves |
 | SYNC | on: tempo-synced; off: free |
@@ -449,7 +449,7 @@ shows; every knob is 0–127 underneath.
 | ACID | Drive, Dist, DrvTyp | Decay, EnvMod, P.Dpth, Slide, Sustain | Cutoff, Reso, Color, Accent, Tune |
 | LEAD | Drive, Dist, DrvTyp, Ring, RingFq | Attack, Decay, Sustain, Release, EnvMod, Slide | Cutoff, Reso, Color, Detune, Unison, Sub, Tune |
 | FM4 | Drive, Trig | Atk A, Dec A, End A, Lev A, Atk B, Dec B, End B, Lev B, Attack, Decay, Sustain, Release | Alg, Ratio C, Ratio A, Ratio B, Harm, Detune, Feedbk, Mix, Cutoff, Reso |
-| NOISE | Drive | Attack, Decay, Sustain, Release, EnvMod | Morph, Noise, NType, Tune, FType, Cutoff, Reso, KeyTrk |
+| NOISE | Drive | Attack, Decay, Sustain, Release, EnvMod | NType, FType, Cutoff, Reso, KeyTrk, Mod, ModAmt, ModRat |
 
 ACID, LEAD, FM4 and NOISE also have the LFO page (section 6). The track's level is VOLUME on SEL (with the two sends), and KNOB 1 on CLIPS; no sound page has a level of its own.
 

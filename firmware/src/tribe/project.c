@@ -24,7 +24,7 @@ void clip_init(clip_t *c, int eng)
         c->st[s].len = 3;
     }
     clip_set_engine(c, eng);
-    c->lfo[LFO_RATE] = 80;
+    c->lfo[LFO_RATE] = 85;                           /* synced: 1 BAR (16 steps) */
     c->lfo[LFO_SYNC] = 1;
     c->lfo[LFO_RETRIG] = 1;
 }

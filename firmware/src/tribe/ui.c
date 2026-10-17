@@ -138,19 +138,29 @@ static void select_track(int t)
 /* ---- the LFO's controls ---- */
 static const char *const LFO_L[NLFO] = {"Shape", "Rate", "Depth", "Target", "Sync", "Retrig"};
 static const char *const LFO_SHAPE_N[LFO_SHAPES] = {"SINE", "TRI", "SAW", "SQR", "RND"};
-static const char *const LFO_DIV_N[10] = {"1/64", "1/32", "1/16", "1/8", "1/4", "1/2", "1BAR", "2BAR", "4BAR", "8BAR"};
+static const char *const LFO_DIV_N[10] = {"1/64", "1/32", "1/16", "1/8", "1/4", "1/2", "1BAR", "2BAR", "4BAR", "8BAR"};   /* the octaves of the synced rate */
 static void lfo_text(const clip_t *c, int k, char *b)
 {
     int v = c->lfo[k];
     switch (k) {
     case LFO_SHAPE: put_s(b, LFO_SHAPE_N[v < LFO_SHAPES ? v : 0]); break;
     case LFO_RATE:
-        if (c->lfo[LFO_SYNC])
-            put_s(b, LFO_DIV_N[v * 10 / 128]);
+        if (c->lfo[LFO_SYNC])                                          /* the nearest division: the rate between two is still felt */
+            put_s(b, LFO_DIV_N[(v * 9 + 63) / 127]);
         else {
-            int hz10 = (int)(fm_exp2f((float)v * (9.0f / 127.0f)) * 0.5f + 0.5f);      /* 0.05 Hz * 2^(v 9/127), in tenths */
-            char *q = hz10 >= 100 ? put_i(b, hz10 / 10) : put_i(put_s(put_i(b, hz10 / 10), "."), hz10 % 10);
-            put_s(q, "Hz");
+            float hz = LFO_HZ(v);
+            if (hz < 1.0f) {                                           /* 0.02 .. 0.99 Hz */
+                int c2 = (int)(hz * 100.0f + 0.5f);
+                b = put_s(b, "0.");
+                if (c2 < 10)
+                    b = put_s(b, "0");
+                b = put_i(b, c2);
+            } else if (hz < 10.0f) {                                   /* 1.0 .. 9.9 Hz */
+                int t10 = (int)(hz * 10.0f + 0.5f);
+                b = put_i(put_s(put_i(b, t10 / 10), "."), t10 % 10);
+            } else
+                b = put_i(b, (int)(hz + 0.5f));
+            put_s(b, "Hz");
         }
         break;
     case LFO_DEPTH: put_s(put_i(b, v * 100 / 127), "%"); break;
@@ -176,6 +186,7 @@ static void lfo_turn(int k, int d)
     case LFO_SHAPE: v += d > 0 ? 1 : -1; v = v < 0 ? 0 : v >= LFO_SHAPES ? LFO_SHAPES - 1 : v; break;
     case LFO_TARGET: v += d > 0 ? 1 : -1; v = v < 0 ? 0 : v >= eng_nparams(c->eng) ? eng_nparams(c->eng) - 1 : v; break;
     case LFO_SYNC: case LFO_RETRIG: v = d > 0; break;
+    case LFO_RATE: v += d; v = v < 0 ? 0 : v > 127 ? 127 : v; break;        /* one step a click: the rate is continuous, so fine steps */
     default: v += d * 2; v = v < 0 ? 0 : v > 127 ? 127 : v; break;
     }
     c->lfo[k] = (uint8_t)v;
