@@ -18,6 +18,7 @@
 #define FM4_CTRL 8                       /* control rate: the operators' pitch and the filter's coefficients */
 #define FM4_OPS 4                        /* 0 C, 1 A, 2 B1, 3 B2 */
 #define FM4_PARTIALS 4                   /* the additive waveform: up to four partials */
+#define FM4_SINE 1024                    /* the sine table: points per cycle (a power of two; 4 KB of RAM) */
 
 enum {
     FM4_ALG, FM4_RATC, FM4_RATA, FM4_RATB, FM4_HARM, FM4_DTUN, FM4_FDBK, FM4_MIX,     /* EDIT: the FM */
@@ -35,6 +36,8 @@ typedef struct fm4 {
     /* derived from the pots */
     int alg;
     uint8_t ord[FM4_OPS];            /* the order the operators are computed in: modulators first */
+    uint8_t mods[FM4_OPS][FM4_OPS];  /* the operators that modulate each operator, in order: from ALG */
+    uint8_t nmods[FM4_OPS];          /* how many of them */
     float ratio[FM4_OPS];            /* each operator's ratio to the note (A and B2 before DTUN) */
     float dt_factor;                 /* DTUN: the factor on A and B2 */
     float idx[FM4_OPS];              /* modulation index: C fixed, A = LEV A, B1 and B2 from LEV B (times the envelope) */

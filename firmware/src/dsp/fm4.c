@@ -68,6 +68,27 @@ int fm4_nparams(void) { return FM4_NPARAMS; }
 const x0x_param_t *fm4_param(int i) { return (i >= 0 && i < FM4_NPARAMS) ? &params[i] : 0; }
 int fm4_get(const fm4_t *b, int i) { return (i >= 0 && i < FM4_NPARAMS) ? b->pot[i] : 0; }
 
+/* a sine of a phase in turns, read from one cycle of FM4_SINE points by linear interpolation: the error is under 1e-5 */
+static float sine_tab[FM4_SINE + 1];               /* the last point repeats the first, for the interpolation */
+static int sine_ready;
+
+static void sine_init(void)
+{
+    int i;
+    for (i = 0; i <= FM4_SINE; i++)
+        sine_tab[i] = fm_sin_turns((float)i * (1.0f / FM4_SINE));
+    sine_ready = 1;
+}
+
+static float sine_turns(float ph)
+{
+    float pos = (ph - fm_floorf(ph)) * (float)FM4_SINE;
+    int i = (int)pos;
+    float fr = pos - (float)i;
+    i &= FM4_SINE - 1;                             /* rounding can reach the end of the cycle: wrap to the start */
+    return sine_tab[i] + (sine_tab[i + 1] - sine_tab[i]) * fr;
+}
+
 /* the multiplier of a one-pole decay that falls by e over `seconds` */
 static float decay_mul(float seconds, float step_s) { return fm_expf(-step_s / seconds); }
 
@@ -94,6 +115,12 @@ static void build_order(fm4_t *b)
             b->ord[n++] = (uint8_t)j;
             done[j] = 1;
         }
+    for (j = 0; j < FM4_OPS; j++) {                       /* the modulators of each operator, lowest first */
+        b->nmods[j] = 0;
+        for (k = 0; k < FM4_OPS; k++)
+            if ((mod[j] >> k) & 1u)
+                b->mods[j][b->nmods[j]++] = (uint8_t)k;
+    }
 }
 
 /* HARM: the preset amplitudes, morphed by x in 0 .. 3 (sine, saw, square, bell), normalised to unit energy */
@@ -192,6 +219,8 @@ void fm4_set(fm4_t *b, int i, int v)
 void fm4_init(fm4_t *b)
 {
     int i;
+    if (!sine_ready)
+        sine_init();
     memset(b, 0, sizeof *b);
     b->idle = 1;
     b->idx[0] = 0.5f;                                     /* C's modulation index, fixed */
@@ -269,7 +298,7 @@ static float partial(const fm4_t *b, int j, float x)
     int p;
     for (p = 0; p < b->nparts[j]; p++)
         if (b->part[j][p] != 0.0f)
-            s += b->part[j][p] * fm_sin_turns((float)(p + 1) * x);
+            s += b->part[j][p] * sine_turns((float)(p + 1) * x);
     return s;
 }
 
@@ -298,8 +327,7 @@ static void env_step(fm4_t *b, int k)
 
 void fm4_render(fm4_t *b, float *out, int n)
 {
-    int i, k, j, m;
-    const uint8_t *mod = ALG_MOD[b->alg];
+    int i, k, j, m, q;
     unsigned xm = ALG_X[b->alg], ym = ALG_Y[b->alg];
     if (b->idle) {
         memset(out, 0, (unsigned)n * sizeof(float));
@@ -323,9 +351,10 @@ void fm4_render(fm4_t *b, float *out, int n)
         for (k = 0; k < FM4_OPS; k++) {                    /* in the order that makes each modulator ready first */
             j = b->ord[k];
             pm = 0.0f;
-            for (m = 0; m < FM4_OPS; m++)
-                if ((mod[j] >> m) & 1u)
-                    pm += b->idx[m] * a[m] * b->s[m];
+            for (q = 0; q < b->nmods[j]; q++) {
+                m = b->mods[j][q];
+                pm += b->idx[m] * a[m] * b->s[m];
+            }
             if (j == 1)
                 pm += b->fb * b->s[1];                     /* A's feedback: its own last output */
             b->ph[j] += b->inc[j];

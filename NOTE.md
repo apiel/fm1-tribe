@@ -7,6 +7,17 @@
     - a Filter where we can select the filter type.
     - and an effect selector: where we can select only one effect from a list of effects, and have only one param edit.
 
-- FM4 is great but using lot of CPU, maybe we can see if we can improve perf for it...
+- FM3
+
+- Noise engine
+  - Square - noise - saw - noise - tri
+
+- Clip page
+  - 4 pages ? or more?
+  - copy / paste: copy current patch, including unsaved change, and paste them to another clip.
+  - Kind of song mode: We could make clip which are after each other play. They could play in loop or in one shot. The empty clip define the end of the loop --> so we should be able to delete clip.
+  - Pressing long on a clip or home button give us more setting 
+
+
 
 - TODO midi
