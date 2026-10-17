@@ -11,6 +11,7 @@
 #include "../dsp/drum808.h"
 #include "../dsp/acid.h"
 #include "../dsp/fm4.h"
+#include "../dsp/noise.h"
 #include "../dsp/lead.h"
 #include "../dsp/fastmath.h"
 #include "kicks.h"
@@ -40,6 +41,7 @@ static const tribe_eng_t ENG[] = {
     E("ACID", EK_SYNTH, F_ACID, 0, 4),
     E("LEAD", EK_SYNTH, F_LEAD, 0, 8),                     /* long legato leads: a unison of detuned oscillators */                     /* appended: projects store engines by index */
     E("FM4", EK_SYNTH, F_FM4, 0, 5),                       /* a mono 4-operator FM synth (Digitone-style operators) */
+    E("NOISE", EK_SYNTH, F_NOISE, 0, 4),                   /* a morph through square, noise, saw, noise, tri, over a noise floor, and a filter */
 };
 #define NENG ((int)(sizeof ENG / sizeof ENG[0]))
 
@@ -74,6 +76,7 @@ int eng_nparams(int id)
     case F_ACID: n = acid_nparams(); break;
     case F_LEAD: n = lead_nparams(); break;
     case F_FM4: n = fm4_nparams(); break;
+    case F_NOISE: n = noise_nparams(); break;
     case F_KICKW: case F_KICKP: n = kick_nparams(e->fam == F_KICKP); break;
     }
     return n > NPAR ? NPAR : n;
@@ -88,6 +91,7 @@ const x0x_param_t *eng_param(int id, int i)
     case F_ACID: return acid_param(i);
     case F_LEAD: return lead_param(i);
     case F_FM4: return fm4_param(i);
+    case F_NOISE: return noise_param(i);
     case F_KICKW: case F_KICKP: return kick_param(e->fam == F_KICKP, i);
     }
     return 0;
@@ -167,16 +171,18 @@ void eng_format(int id, int i, int value, char *buf)
 #define NACID 2
 #define NLEAD 2
 #define NFM4 4
+#define NNOISE 2
 #define NKICK 3
 static drum909_t d909;
 static drum808_t d808;
 static acid_t bacid[NACID];
 static lead_t blead[NLEAD];
 static fm4_t bfm4[NFM4];
+static noise_t bnoise[NNOISE];
 static float scratch_rev[256], scratch_dly[256];
 static uint8_t bound_eng[NTRK];              /* engine id a track holds (0 = none) */
 static int8_t inst[NTRK];                    /* instance index of an ACID / LEAD / kick, -1 */
-static uint8_t inst_used[4][4];              /* [0] kicks, [1] ACIDs, [2] LEADs, [3] FM4s */
+static uint8_t inst_used[5][4];              /* [0] kicks, [1] ACIDs, [2] LEADs, [3] FM4s, [4] NOISEs */
 static uint8_t voice_owner[2][12];           /* kits: which track + 1 has a voice */
 static uint8_t base_tune[NTRK];
 static int8_t tune_ix[NTRK];
@@ -202,6 +208,8 @@ void eng_init(void)
         lead_init(&blead[t]);
     for (t = 0; t < NFM4; t++)
         fm4_init(&bfm4[t]);
+    for (t = 0; t < NNOISE; t++)
+        noise_init(&bnoise[t]);
     kicks_init();
     memset(bound_eng, 0, sizeof bound_eng);
     memset(inst_used, 0, sizeof inst_used);
@@ -235,6 +243,9 @@ void eng_unbind(int t)
         } else if (e->fam == F_FM4) {
             fm4_all_off(&bfm4[inst[t]]);
             inst_used[3][inst[t]] = 0;
+        } else if (e->fam == F_NOISE) {
+            noise_all_off(&bnoise[inst[t]]);
+            inst_used[4][inst[t]] = 0;
         } else if (e->fam == F_KICKW || e->fam == F_KICKP) {
             kick_free(inst[t]);
             inst_used[0][inst[t]] = 0;
@@ -283,6 +294,13 @@ int eng_bind(int t, int id)
         inst_used[3][i] = 1;
         inst[t] = (int8_t)i;
         break;
+    case F_NOISE:
+        for (i = 0; i < NNOISE && inst_used[4][i]; i++) ;
+        if (i == NNOISE)
+            return -1;
+        inst_used[4][i] = 1;
+        inst[t] = (int8_t)i;
+        break;
     case F_KICKW: case F_KICKP:
         i = kick_alloc(e->fam == F_KICKP);
         if (i < 0)
@@ -296,7 +314,7 @@ int eng_bind(int t, int id)
     bound_eng[t] = (uint8_t)id;
     n = eng_nparams(id);
     for (i = 0; i < n; i++)
-        if (e->fam != F_ACID && e->fam != F_LEAD && eng_param(id, i) && ieq(eng_param(id, i)->name, "Tune"))
+        if (e->fam != F_ACID && e->fam != F_LEAD && e->fam != F_NOISE && eng_param(id, i) && ieq(eng_param(id, i)->name, "Tune"))
             tune_ix[t] = (int8_t)i;
     return 0;
 }
@@ -315,6 +333,7 @@ void eng_set(int t, int i, int v)
     case F_ACID: if (inst[t] >= 0) acid_set(&bacid[inst[t]], i, v); break;
     case F_LEAD: if (inst[t] >= 0) lead_set(&blead[inst[t]], i, v); break;
     case F_FM4: if (inst[t] >= 0) fm4_set(&bfm4[inst[t]], i, v); break;
+    case F_NOISE: if (inst[t] >= 0) noise_set(&bnoise[inst[t]], i, v); break;
     case F_KICKW: case F_KICKP: if (inst[t] >= 0) kick_set(inst[t], i, v); break;
     }
 }
@@ -373,6 +392,13 @@ void eng_note(int t, int note, int vel, int slide)
         slide_pending[t] = (uint8_t)(slide != 0);
         gate_open[t] = 1;
         break;
+    case F_NOISE:
+        if (inst[t] < 0)
+            return;
+        noise_note_on(&bnoise[inst[t]], note, slide_pending[t]);
+        slide_pending[t] = (uint8_t)(slide != 0);
+        gate_open[t] = 1;
+        break;
     case F_KICKW: case F_KICKP:
         if (inst[t] >= 0)
             kick_trigger(inst[t], note, v);
@@ -416,13 +442,15 @@ void eng_key_off(int t, int note)
 }
 
 /* the synths: the note off of the instance a track holds */
-static int is_synth(const tribe_eng_t *e) { return e->fam == F_ACID || e->fam == F_LEAD || e->fam == F_FM4; }
+static int is_synth(const tribe_eng_t *e) { return e->fam == F_ACID || e->fam == F_LEAD || e->fam == F_FM4 || e->fam == F_NOISE; }
 static void synth_note_off(const tribe_eng_t *e, int i)
 {
     if (e->fam == F_ACID)
         acid_note_off(&bacid[i]);
     else if (e->fam == F_LEAD)
         lead_note_off(&blead[i]);
+    else if (e->fam == F_NOISE)
+        noise_note_off(&bnoise[i]);
     else
         fm4_note_off(&bfm4[i]);
 }
@@ -468,6 +496,8 @@ void eng_render_all(float *buf, int off, int n)
             lead_render(&blead[inst[t]], o, n);
         } else if (e->fam == F_FM4 && inst[t] >= 0) {
             fm4_render(&bfm4[inst[t]], o, n);
+        } else if (e->fam == F_NOISE && inst[t] >= 0) {
+            noise_render(&bnoise[inst[t]], o, n);
         } else if ((e->fam == F_KICKW || e->fam == F_KICKP) && inst[t] >= 0) {
             kick_render(inst[t], o, n);
         }

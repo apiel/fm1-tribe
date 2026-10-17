@@ -41,7 +41,7 @@ The FM-1's screen, from the same code (the [manual](https://apiel.github.io/fm1-
 
 ## What it does
 
-- **10 tracks, 27 engines:** two kicks (KICK W, KICK P), the 909 and 808 drum voices, ACID, LEAD, FM4.
+- **10 tracks, 28 engines:** two kicks (KICK W, KICK P), the 909 and 808 drum voices, ACID, LEAD, FM4, NOISE.
 - **16 clips per track**, launched at the end of the pattern or at once. 16, 32 or 64 steps, six rates, four directions, swing.
 - **Scatter effects** on the keys while it plays: loops, reverse, gate, crush, distortion, ring, filters, on a track or the whole mix.
 - **FX 1 and FX 2:** reverb, delay, drive, distortion, fuzz, wavefolder, crusher, decimator or ring modulator, fed by each track's sends.

@@ -129,6 +129,7 @@ change the engine too. Choose it on the SEL page, with KNOB 4.
 | 808 BD, SD, LT, MT, HT, RS, CP, CB, CY, OH, CH | The 808 voices: kick, snare, three toms, rim, clap, cowbell, cymbal, open and closed hat. |
 | ACID | The bass synth: the zicCycle 303, with accent, slide, a colour and a pitch envelope, and its LFO. |
 | FM4 | A mono 4-operator FM synth laid out like the Digitone's FM: operators C, A and B1/B2, eight algorithms with two outputs (X and Y, mixed by MIX), HARM and DTUN, two envelopes with end levels, a filter and an overdrive. |
+| NOISE | A mono synth built on noise: an oscillator that morphs through square, noise, saw, noise and tri, over a noise floor that is always there (white, pink or brown), then a filter (LP, HP, BP or notch) with key tracking, and an envelope. |
 
 Every drum engine is pitched: the note of a step changes its tune, which is what makes the kicks
 useful. A synth step has a note, a velocity, a length and a slide.
@@ -448,8 +449,9 @@ shows; every knob is 0–127 underneath.
 | ACID | Drive, Dist, DrvTyp | Decay, EnvMod, P.Dpth, Slide, Sustain | Cutoff, Reso, Color, Accent, Tune |
 | LEAD | Drive, Dist, DrvTyp, Ring, RingFq | Attack, Decay, Sustain, Release, EnvMod, Slide | Cutoff, Reso, Color, Detune, Unison, Sub, Tune |
 | FM4 | Drive, Trig | Atk A, Dec A, End A, Lev A, Atk B, Dec B, End B, Lev B, Attack, Decay, Sustain, Release | Alg, Ratio C, Ratio A, Ratio B, Harm, Detune, Feedbk, Mix, Cutoff, Reso |
+| NOISE | Drive | Attack, Decay, Sustain, Release, EnvMod | Morph, Noise, NType, Tune, FType, Cutoff, Reso, KeyTrk |
 
-ACID and LEAD also have the LFO page (section 6). The track's level is VOLUME on SEL (with the two sends), and KNOB 1 on CLIPS; no sound page has a level of its own.
+ACID, LEAD, FM4 and NOISE also have the LFO page (section 6). The track's level is VOLUME on SEL (with the two sends), and KNOB 1 on CLIPS; no sound page has a level of its own.
 
 ---
 

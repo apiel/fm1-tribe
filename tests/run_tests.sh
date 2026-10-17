@@ -13,8 +13,8 @@ for s in tests/scenarios/*.tribe; do
     if build/host/tribe_host "$s" build/scen >build/scen/$(basename "$s").log 2>&1; then echo "  ok   $(basename "$s")"
     else echo "  FAIL $(basename "$s")"; tail -5 build/scen/$(basename "$s").log | sed 's/^/       /'; FAIL=1; fi
 done
-SRCS_ALL="firmware/src/tribe/engine.c firmware/src/tribe/mfx.c firmware/src/tribe/store.c firmware/src/tribe/scatter.c firmware/src/tribe/engines.c firmware/src/tribe/kicks.c firmware/src/tribe/project.c firmware/src/dsp/drum909.c firmware/src/dsp/drum808.c firmware/src/dsp/acid.c firmware/src/dsp/lead.c firmware/src/dsp/fm4.c firmware/src/dsp/master.c"
-SRCS="firmware/src/tribe/engine.c firmware/src/tribe/mfx.c firmware/src/tribe/scatter.c firmware/src/tribe/engines.c firmware/src/tribe/kicks.c firmware/src/tribe/project.c firmware/src/dsp/drum909.c firmware/src/dsp/drum808.c firmware/src/dsp/acid.c firmware/src/dsp/lead.c firmware/src/dsp/fm4.c firmware/src/dsp/master.c"
+SRCS_ALL="firmware/src/tribe/engine.c firmware/src/tribe/mfx.c firmware/src/tribe/store.c firmware/src/tribe/scatter.c firmware/src/tribe/engines.c firmware/src/tribe/kicks.c firmware/src/tribe/project.c firmware/src/dsp/drum909.c firmware/src/dsp/drum808.c firmware/src/dsp/acid.c firmware/src/dsp/lead.c firmware/src/dsp/fm4.c firmware/src/dsp/noise.c firmware/src/dsp/svf.c firmware/src/dsp/master.c"
+SRCS="firmware/src/tribe/engine.c firmware/src/tribe/mfx.c firmware/src/tribe/scatter.c firmware/src/tribe/engines.c firmware/src/tribe/kicks.c firmware/src/tribe/project.c firmware/src/dsp/drum909.c firmware/src/dsp/drum808.c firmware/src/dsp/acid.c firmware/src/dsp/lead.c firmware/src/dsp/fm4.c firmware/src/dsp/noise.c firmware/src/dsp/svf.c firmware/src/dsp/master.c"
 rm -f build/scen/flash.bin
 if TRIBE_FLASH=build/scen/flash.bin build/host/tribe_host tests/scenarios/save1.tribe build/scen >build/scen/save1.log 2>&1 \
     && TRIBE_FLASH=build/scen/flash.bin build/host/tribe_host tests/scenarios/save2.tribe build/scen >build/scen/save2.log 2>&1; then echo "  ok   save and load (two runs)"
@@ -31,6 +31,12 @@ else echo "  FAIL LEAD engine (see build/scen/lead.log, lead_build.log)"; FAIL=1
 if cc -O2 -ffp-contract=off -std=gnu99 -Wall -Wextra -DX0X_HOST -Ifirmware/src/dsp -o build/host/fm4_test tests/host/fm4_test.c firmware/src/dsp/fm4.c -lm 2>build/scen/fm4_build.log \
     && build/host/fm4_test >build/scen/fm4.log 2>&1; then echo "  ok   FM4 engine (operators at their ratios, routings bounded, release, legato)"
 else echo "  FAIL FM4 engine (see build/scen/fm4.log, fm4_build.log)"; FAIL=1; fi
+if cc -O2 -ffp-contract=off -std=gnu99 -Wall -Wextra -DX0X_HOST -Ifirmware/src/dsp -o build/host/svf_test tests/host/svf_test.c firmware/src/dsp/svf.c -lm 2>build/scen/svf_build.log \
+    && build/host/svf_test >build/scen/svf.log 2>&1; then echo "  ok   SVF filter (DC, band-pass centre, notch, corners)"
+else echo "  FAIL SVF filter (see build/scen/svf.log, svf_build.log)"; FAIL=1; fi
+if cc -O2 -ffp-contract=off -std=gnu99 -Wall -Wextra -DX0X_HOST -Ifirmware/src/dsp -o build/host/noise_test tests/host/noise_test.c firmware/src/dsp/noise.c firmware/src/dsp/svf.c -lm 2>build/scen/noise_build.log \
+    && build/host/noise_test >build/scen/noise.log 2>&1; then echo "  ok   NOISE engine (morph law, pitch, noise anchors, filter types, colours, envelope)"
+else echo "  FAIL NOISE engine (see build/scen/noise.log, noise_build.log)"; FAIL=1; fi
 if cc -O2 -ffp-contract=off -std=gnu99 -DX0X_HOST -Ifirmware/src -Ifirmware/src/dsp -Ibuild/gen -o build/host/store_test tests/host/store_test.c $SRCS_ALL -lm 2>build/scen/store_build.log \
     && build/host/store_test >build/scen/store.log 2>&1; then echo "  ok   clip store under power cuts"
 else echo "  FAIL clip store under power cuts (see build/scen/store.log)"; FAIL=1; fi
