@@ -69,6 +69,18 @@ static double swing(const float *x, int n)
     return lo > 0 ? hi / lo : 0;
 }
 
+/* the correlation of the signal with itself at a lag, over the window: a comb rings, so it repeats at its period */
+static double autocorr(const float *x, int n, int lag)
+{
+    double num = 0, den = 0;
+    int i;
+    for (i = 0; i < n - lag; i++)
+        num += (double)x[i] * x[i + lag];
+    for (i = 0; i < n; i++)
+        den += (double)x[i] * x[i];
+    return den > 0 ? num / den : 0;
+}
+
 /* a held note on the given filter; the envelope open at once, the cutoff fixed (no LFO, no envelope, no key tracking) */
 static void plain(noise_t *b, int ntype, int ftype, int cut, int reso)
 {
@@ -219,6 +231,81 @@ int main(void)
     render(&a, buf, SR);
     r2 = swing(buf + SR / 4, SR / 2);
     CHECK(r2 > 2.0, "Gate does not pulse: swing %.2f", r2);
+
+    plain(&a, NT_WHITE, NF_LP, 127, 0);                   /* the drive shapes differ: Soft and Fold on the same noise */
+    noise_set(&a, NOISE_DRIVE, 127);
+    noise_set(&a, NOISE_DRVTYP, ND_SOFT);
+    noise_note_on(&a, 69, 0);
+    render(&a, buf, SR);
+    r1 = rms(buf + SR / 4, SR / 2);
+    noise_init(&b2);
+    noise_set(&b2, NOISE_NTYPE, NT_WHITE);
+    noise_set(&b2, NOISE_FTYPE, NF_LP);
+    noise_set(&b2, NOISE_CUTOFF, 127);
+    noise_set(&b2, NOISE_RESO, 0);
+    noise_set(&b2, NOISE_KEYTRK, 0);
+    noise_set(&b2, NOISE_ENVMOD, 0);
+    noise_set(&b2, NOISE_ATTACK, 0);
+    noise_set(&b2, NOISE_SUSTAIN, 127);
+    noise_set(&b2, NOISE_DRIVE, 127);
+    noise_set(&b2, NOISE_DRVTYP, ND_FOLD);
+    noise_note_on(&b2, 69, 0);
+    render(&b2, buf + SR, SR);
+    {
+        double dd = 0;
+        for (i = SR / 4; i < SR / 2 + SR / 4; i++)
+            dd += (double)(buf[i] - buf[SR + i]) * (buf[i] - buf[SR + i]);
+        r2 = sqrt(dd / (SR / 2));
+    }
+    CHECK(r2 > 0.3 * r1, "Fold is like Soft: the difference is %.3f against a level of %.3f", r2, r1);
+
+    plain(&a, NT_WHITE, NF_LP, 127, 0);                   /* Crush: the output keeps only a few levels (3 bits: 9 values) */
+    noise_set(&a, NOISE_CRUSH, 127);
+    noise_note_on(&a, 69, 0);
+    render(&a, buf, SR);
+    {
+        float seen[64];
+        int nseen = 0, found;
+        for (i = SR / 4; i < SR; i++) {
+            int k2;
+            found = 0;
+            for (k2 = 0; k2 < nseen; k2++)
+                if (seen[k2] == buf[i]) {
+                    found = 1;
+                    break;
+                }
+            if (!found && nseen < 64)
+                seen[nseen++] = buf[i];
+        }
+        CHECK(nseen <= 9, "Crush keeps %d levels (want 9 or fewer)", nseen);
+    }
+
+    plain(&a, NT_WHITE, NF_LP, 127, 0);                   /* CrshRt: samples are held, so most neighbours are equal */
+    noise_set(&a, NOISE_CRSHRT, 127);
+    noise_note_on(&a, 69, 0);
+    render(&a, buf, SR);
+    {
+        int same = 0;
+        for (i = SR / 4 + 1; i < SR; i++)
+            same += buf[i] == buf[i - 1];
+        r1 = (double)same / (SR * 3 / 4);
+    }
+    CHECK(r1 > 0.9, "CrshRt holds too little: %.2f of the samples repeat", r1);
+
+    plain(&a, NT_WHITE, NF_LP, 127, 0);                   /* Comb: it rings at the note's period (100 samples for A4) */
+    noise_set(&a, NOISE_COMB, 127);
+    noise_set(&a, NOISE_COMBFB, 110);
+    noise_note_on(&a, 69, 0);
+    render(&a, buf, SR);
+    r1 = autocorr(buf + SR / 4, SR / 2, 100);
+    r2 = autocorr(buf + SR / 4, SR / 2, 73);
+    CHECK(r1 > 0.3 && r1 > 2.0 * r2, "Comb does not ring at the note: lag 100 gives %.2f, lag 73 gives %.2f", r1, r2);
+
+    noise_set(&a, NOISE_COMB, 0);                         /* and with the comb off, nothing repeats */
+    noise_note_on(&a, 69, 0);
+    render(&a, buf, SR);
+    r1 = autocorr(buf + SR / 4, SR / 2, 100);
+    CHECK(fabs(r1) < 0.1, "a comb with no mix still repeats: %.2f", r1);
 
     plain(&a, NT_WHITE, NF_LP, 70, 40);                   /* the default level is about LEAD's: rms 0.17 on a note */
     noise_set(&a, NOISE_CUTOFF, 70);

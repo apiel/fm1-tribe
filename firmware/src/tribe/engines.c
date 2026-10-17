@@ -41,7 +41,7 @@ static const tribe_eng_t ENG[] = {
     E("ACID", EK_SYNTH, F_ACID, 0, 4),
     E("LEAD", EK_SYNTH, F_LEAD, 0, 8),                     /* long legato leads: a unison of detuned oscillators */                     /* appended: projects store engines by index */
     E("FM4", EK_SYNTH, F_FM4, 0, 5),                       /* a mono 4-operator FM synth (Digitone-style operators) */
-    E("NOISE", EK_SYNTH, F_NOISE, 0, 4),                   /* noise (white, pink or brown) through a filter, with the note on the cutoff: a tonal noise with a resonance */
+    E("NOISE", EK_SYNTH, F_NOISE, 0, 6),                   /* noise (white, pink, brown or dust) through a drive and a filter, crushed, with a comb that rings at the note */
 };
 #define NENG ((int)(sizeof ENG / sizeof ENG[0]))
 
@@ -101,7 +101,7 @@ const x0x_param_t *eng_param(int id, int i)
 int eng_group(int id, int i)
 {
     static const char *const hide[] = {"Rev", "Dly", "Pan", "Accent", "Veloc", "Volume", "Level", "Click", "ClkDec", 0};
-    static const char *const fx[] = {"Drive", "Dist", "DrvTyp", "Crush", "Fold", "Wfold", "Reson", "Boost", "Ring", "RingFq", 0};
+    static const char *const fx[] = {"Drive", "Dist", "DrvTyp", "Crush", "CrshRt", "Comb", "CombFb", "Fold", "Wfold", "Reson", "Boost", "Ring", "RingFq", 0};
     static const char *const env[] = {"Attack", "Decay", "P.Dpth", "Pitch", "AccDec", "EnvMod", "Slide", "Tail",
                                       "PchShp", "SwpShp", "SwpDpt", "Curve", "FMSnap", "Dur", "Sustain", "Release", 0};
     static const char *const lfo[] = {"LfoRt", "LfoDpt", "LfoShp", "LfoTgt", 0};

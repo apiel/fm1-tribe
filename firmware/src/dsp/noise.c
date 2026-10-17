@@ -7,6 +7,7 @@
 static const char *const ntype_names[] = { "White", "Pink", "Brown", "Dust" };
 static const char *const ftype_names[] = { "LP", "HP", "BP", "Notch" };
 static const char *const mod_names[] = { "Off", "Sine", "Rand", "Drift", "Gate" };
+static const char *const drv_names[] = { "Soft", "Hard", "Fold" };
 
 /* the pink and brown levels: measured, so each colour has the rms of white (0.577) on the raw filters */
 #define PINK_G 0.333f
@@ -16,6 +17,7 @@ static const char *const mod_names[] = { "Off", "Sine", "Rand", "Drift", "Gate" 
 #define DUST_LIM 0.998f
 #define NOISE_OUT 1.0f                /* level: the default matches LEAD's (rms 0.17 on a note); the soft limit keeps it bounded */
 #define MOD_OCT 24.0f                 /* the cutoff's modulation at full depth: 24 semitones (2 octaves) each way */
+#define COMB_FB_MAX 0.97f             /* the comb's feedback, at the top of its pot: stable below 1 */
 
 static const x0x_param_t params[NOISE_NPARAMS] = {
     { "NType", 3, 0, ntype_names },
@@ -31,7 +33,12 @@ static const x0x_param_t params[NOISE_NPARAMS] = {
     { "Sustain", 127, 110, 0 },      /* the level a held note settles at */
     { "Release", 127, 50, 0 },       /* 5 ms .. 3 s */
     { "EnvMod", 127, 50, 0 },        /* filter envelope depth, 0 .. 60 semitones */
-    { "Drive", 127, 0, 0 },          /* gain into the filter, 1 .. 8 */
+    { "Drive", 127, 0, 0 },          /* gain into the drive, 1 .. 16 */
+    { "DrvTyp", 2, 0, drv_names },   /* Soft, Hard, Fold */
+    { "Crush", 127, 0, 0 },          /* bit depth: off, then down to 3 bits */
+    { "CrshRt", 127, 0, 0 },         /* sample-rate reduction: off, then up to 48 samples held */
+    { "Comb", 127, 0, 0 },          /* the comb's mix: it rings at the note */
+    { "CombFb", 127, 80, 0 },        /* its feedback: how long it rings */
 };
 
 int noise_nparams(void) { return NOISE_NPARAMS; }
@@ -65,7 +72,12 @@ void noise_set(noise_t *b, int i, int v)
     case NOISE_SUSTAIN: b->sustain = n; break;
     case NOISE_RELEASE: b->rel_c = decay_mul(0.005f * fm_exp2f(n * 9.2f), 1.0f / NOISE_SR); break;
     case NOISE_ENVMOD: b->env_st = 60.0f * n; break;
-    case NOISE_DRIVE: b->drive_g = 1.0f + 7.0f * n * n; break;
+    case NOISE_DRIVE: b->drive_g = 1.0f + 15.0f * n * n; break;
+    case NOISE_DRVTYP: b->drvtyp = v; break;
+    case NOISE_CRUSH: b->crush_scale = v ? fm_exp2f(15.0f - 13.0f * n) : 0.0f; break;   /* 2^(bits - 1), bits 16 .. 3 */
+    case NOISE_CRSHRT: b->hold_n = 1.0f + 47.0f * n * n; break;
+    case NOISE_COMB: b->comb_mix = n; break;
+    case NOISE_COMBFB: b->comb_fb = COMB_FB_MAX * n; b->comb_norm = fm_sqrtf(1.0f - b->comb_fb * b->comb_fb); break;
     }
 }
 
@@ -76,6 +88,8 @@ void noise_init(noise_t *b)
     b->idle = 1;
     b->rng = 0x2545F491u;                                  /* any nonzero seed */
     b->mod_gain = 1.0f;
+    b->comb_len = 100.0f;
+    b->hold_n = 1.0f;
     svf_init(&b->fl);
     for (i = 0; i < NOISE_NPARAMS; i++)
         noise_set(b, i, params[i].def);
@@ -90,6 +104,11 @@ void noise_note_on(noise_t *b, int note, int slide)
         note = 127;
     legato = slide && b->gate && !b->idle;                 /* a slide over a held note: the envelope goes on */
     b->note_st = (float)(note - 69);
+    b->comb_len = NOISE_SR / (440.0f * fm_exp2f(b->note_st * (1.0f / 12.0f)));   /* the comb rings at the note */
+    if (b->comb_len < 2.0f)
+        b->comb_len = 2.0f;
+    if (b->comb_len > COMB_LEN - 2.0f)
+        b->comb_len = COMB_LEN - 2.0f;
     if (!legato) {
         b->stage = 0;                                      /* a new attack, from the level it is at */
         b->cc = 0;
@@ -176,7 +195,8 @@ void noise_render(noise_t *b, float *out, int n)
         return;
     }
     for (i = 0; i < n; i++) {
-        float w, nz, u, lp, bp, hp, y, e;
+        float w, nz, u, lp, bp, hp, y, e, d;
+        int ip, r0, r1;
         if (b->cc == 0) {
             control(b);
             b->cc = NOISE_CTRL;
@@ -203,7 +223,12 @@ void noise_render(noise_t *b, float *out, int n)
             break;
         }
 
-        u = fm_tanhf(nz * b->drive_g);                         /* the drive into the filter, bounded */
+        u = nz * b->drive_g;                                   /* the drive into the filter: soft, hard, or a sine fold */
+        switch (b->drvtyp) {
+        case ND_HARD: u = fm_clampf(u, -1.0f, 1.0f); break;
+        case ND_FOLD: u = fm_sinf(u * (FM_PI * 0.5f)); break;
+        default: u = fm_tanhf(u); break;
+        }
         svf_tick(&b->fl, u, &lp, &bp, &hp);
         switch (b->ftype) {
         case NF_HP: y = hp; break;
@@ -212,6 +237,26 @@ void noise_render(noise_t *b, float *out, int n)
         default: y = lp; break;
         }
         y = fm_tanhf(y);                                       /* a resonant peak is soft-limited, not cut */
+        if (b->crush_scale > 0.0f)                             /* the bit crusher: fewer levels */
+            y = fm_floorf(y * b->crush_scale + 0.5f) / b->crush_scale;
+        if (b->hold_n > 1.0f) {                                /* the sample-rate reduction: each sample held for hold_n */
+            b->hold_c += 1.0f;
+            if (b->hold_c >= b->hold_n) {
+                b->hold_c -= b->hold_n;
+                b->hold_v = y;
+            }
+            y = b->hold_v;
+        }
+        if (b->comb_mix > 0.0f) {                              /* the comb: a delay line with feedback, its length one period of the note */
+            ip = (int)b->comb_len;
+            r0 = (b->comb_w - ip) & (COMB_LEN - 1);
+            r1 = (b->comb_w - ip - 1) & (COMB_LEN - 1);
+            d = (1.0f - (b->comb_len - (float)ip)) * b->comb_buf[r0] + (b->comb_len - (float)ip) * b->comb_buf[r1];
+            b->comb_buf[b->comb_w] = y + b->comb_fb * d;
+            y = (1.0f - b->comb_mix) * y + b->comb_mix * b->comb_norm * d;
+            b->comb_w = (b->comb_w + 1) & (COMB_LEN - 1);
+            y = fm_tanhf(y);
+        }
 
         e = b->env;                                            /* the envelope: attack, decay to the sustain, release */
         if (b->stage == 0) {

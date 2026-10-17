@@ -99,9 +99,20 @@ It is not a second LFO. Each mode is a choice of Mod:
   instance pool (`NNOISE` 2), and the switch cases.
 - `tools/build.py`, `host/build_host.sh`, `web/emu/build.sh`, `tests/run_tests.sh`: the new sources.
 
+## Effects (the FX page)
+
+The chain is: noise, then the drive, the filter, the crusher, the sample-rate reduction, the comb, the
+envelope.
+
+- **Drive** (1 .. 16) with **DrvTyp**: Soft (tanh), Hard (clip), Fold (a sine fold, which adds harmonics as
+  the drive rises). Before the filter.
+- **Crush**: the bit depth, from off down to 3 bits (9 levels).
+- **CrshRt**: the sample-rate reduction: off, or up to 48 samples held.
+- **Comb** and **CombFb**: a delay line with feedback whose length is one period of the note, so the
+  noise rings at the note. The gain is normalised so a high feedback does not get louder.
+
+The delay line is 1024 samples per instance (4 KB), so RAM is now 86.7 KB of 98.3 KB.
+
 ## Out of scope, for later
 
-- Modulation of the noise beyond the LFO and the envelope (sample and hold, a formant sweep, a
-  comb or feedback delay for pitched noise).
-- A per-engine bit or sample-rate reduction. The master effects already include a crusher and a
-  decimator, which tracks can send to.
+- A formant sweep, and modulation of the comb's pitch or feedback.
