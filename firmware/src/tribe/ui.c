@@ -948,9 +948,9 @@ static void draw_seq(void)
         if (s < len && k > s - 8 && k >= 0) {
             int lq = k * 4 + (c->st[k].len ? c->st[k].len : 3) - s * 4;   /* quarters of this step that note sounds */
             int y = 80 - (c->st[k].note - lo) * 52 / span, w = lq >= 4 ? 15 : lq * 15 / 4;
-            uint16_t on = ui.edit == s ? C_WHITE : dim(col, 8 + c->st[k].vel * 8 / 127);
+            uint16_t on = dim(col, 8 + c->st[k].vel * 8 / 127);
             if (k == s) {                                 /* the onset, in the top row, and a slide into it from the note before (amber) */
-                box(x + 1, 5, 12, 9, on);
+                box(x + 1, 5, 12, 9, ui.edit == s ? C_WHITE : on);   /* the selected step: its top square is white */
                 for (p = s - 1; p >= 0 && !step_on(c, p); p--)
                     ;
                 if (p >= 0 && c->st[p].slide) {          /* the glide: an S-curve from the previous note's line to this one */
@@ -966,8 +966,6 @@ static void draw_seq(void)
         }
         if (dk_playing && phead == s)
             cv_rect(x, 94, 14, 3, C_WHITE);
-        if (ui.edit == s)
-            frame(x, 4, 14, 88, C_WHITE);
     }
     b[0] = 'P';
     put_i(b + 1, pg + 1);
