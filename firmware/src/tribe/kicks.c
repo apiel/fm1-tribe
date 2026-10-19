@@ -6,6 +6,7 @@
 #include "mem.h"
 #include "kicks.h"
 #include "../dsp/fastmath.h"
+#include "../dsp/cycle.h"
 
 #define SR 44100.0f
 #define NK 3                                  /* instances of each */
@@ -88,6 +89,8 @@ typedef struct {
     /* voice */
     float vel, pitch_mult, cph, mph, menv, fmenv, clickenv, comp, svf_lp, svf_bp, fold_buf;
     float crush_ph, crush_hold, boost_x, boost_y;
+    float tab[CYCLE_N + 1];                   /* KickWave: one period of the wave, rebuilt when a pot moves */
+    uint8_t tab_dirty;
     uint32_t noise;
     int32_t n, total;
 } kick_t;
@@ -108,6 +111,7 @@ static void decode(kick_t *k)
         k->crush = v[12] * 0.01f; k->curve = v[13] * 0.01f;
         /* pitchEnv = menv^(1 + shape*5), menv decaying with a 25 ms constant */
         k->c_mod = fm_expf(-(1.0f + k->pchshp * 5.0f) / (SR * 0.025f));
+        k->tab_dirty = 1;
     } else {
         k->freq = v[0]; k->dur_samples = v[1] * 0.001f * SR; k->click = 0.0f;        /* no click: v[2], v[3] stay as hidden pots */
         k->clkdec = v[3] * 0.001f; k->morph = v[4] * 0.01f; k->swpshp = v[5] * 0.01f; k->swpdpt = v[6] * 0.01f;
@@ -240,31 +244,19 @@ static inline float glue(float x, float *env)
 /* ---------------------------------------------------------------- KickWave --- */
 static float wave_sample(const kick_t *k, float ph)
 {
-    float p = ph + k->phase, sk = k->skew < 0.05f ? 0.05f : k->skew > 0.95f ? 0.95f : k->skew, w, s, sn, tri, saw, sq, sh = k->wave;
+    float p = ph + k->phase;
     p -= fm_floorf(p);
-    w = p < sk ? 0.5f * (p / sk) : 0.5f + 0.5f * ((p - sk) / (1.0f - sk));
-    sn = fm_sin_turns(w);
-    tri = w < 0.5f ? 4.0f * w - 1.0f : 3.0f - 4.0f * w;
-    saw = 1.0f - 2.0f * w;
-    sq = w < 0.5f ? 1.0f : -1.0f;
-    if (sh <= 0.3333f)
-        s = lerpf(sn, tri, sh / 0.3333f);
-    else if (sh <= 0.6666f)
-        s = lerpf(tri, saw, (sh - 0.3333f) / 0.3333f);
-    else
-        s = lerpf(saw, sq, (sh - 0.6666f) / 0.3333f);
-    if (fm_fabsf(k->h2) > 0.001f)
-        s += k->h2 * fm_sin_turns(w * 2.0f);
-    if (fm_fabsf(k->h3) > 0.001f)
-        s += k->h3 * fm_sin_turns(w * 3.0f);
-    if (k->fold > 0.001f)
-        s = fm_sinf(s * (1.0f + k->fold * 3.5f) * 1.57079632679f);
-    return s < -1.0f ? -1.0f : s > 1.0f ? 1.0f : s;
+    return cycle_read(k->tab, p);
 }
 
 static void render_wave(kick_t *k, float *out, int n)
 {
     int i;
+    if (k->tab_dirty) {
+        cycle_p c = { k->wave, k->skew, k->h2, k->h3, k->fold };
+        cycle_build(k->tab, &c);
+        k->tab_dirty = 0;
+    }
     for (i = 0; i < n; i++) {
         float env = k->n < k->total ? amp_env(k) : 0.0f, body = 0.0f, o;
         if (k->n < k->total)

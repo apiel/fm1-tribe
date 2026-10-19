@@ -27,6 +27,7 @@
 #include <stdint.h>
 #include "x0x_param.h"
 #include "svf.h"
+#include "cycle.h"
 
 #define TSYN_SR 44100.0f
 #define TSYN_CTRL 8                    /* control rate: the filter's coefficients */
@@ -49,6 +50,8 @@ typedef struct tsyn {
     /* derived from the pots */
     int ftype, fxtyp;
     float wave, skew, harm2, harm3, fold, phase;   /* the cycle: wave 0 .. 1 (sine .. square), skew 0.05 .. 0.95, harm2 and harm3 -1 .. 1, fold 0 .. 1, phase 0 .. 1 turn */
+    float tab[CYCLE_N + 1];          /* the cycle as a table, rebuilt when a shape pot moves (not while EnvWav folds it) */
+    int tab_dirty;
     float cut_st, reso_n, keytrk, env_st, env_wav;
     float att_step, dec_c, sustain, rel_c;
     float fx_drive;                  /* drive: the gain into tanh */

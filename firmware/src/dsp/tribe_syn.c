@@ -3,6 +3,7 @@
 #include "../tribe/mem.h"
 #include "tribe_syn.h"
 #include "fastmath.h"
+#include "cycle.h"
 
 static const char *const ftype_names[] = { "LP", "HP", "BP", "Notch" };
 static const char *const fx_names[] = { "Off", "Drive", "Crush", "Decim", "Ring" };
@@ -47,6 +48,8 @@ void tsyn_set(tsyn_t *b, int i, int v)
         v = params[i].max;
     b->pot[i] = (uint8_t)v;
     n = (float)v * (1.0f / 127.0f);
+    if (i == TS_WAVE || i == TS_SKEW || i == TS_HARM2 || i == TS_HARM3 || i == TS_WVFOLD)
+        b->tab_dirty = 1;
     switch (i) {
     case TS_WAVE: b->wave = n; break;
     case TS_SKEW: b->skew = 0.05f + 0.9f * n; break;
@@ -110,29 +113,11 @@ void tsyn_note_off(tsyn_t *b)
 }
 void tsyn_all_off(tsyn_t *b) { tsyn_note_off(b); }
 
-/* one sample of the cycle. The phase is warped by the skew (the peak moves), then the morph picks sine, triangle, saw or
- * square as the KickWave does; the second harmonic adds to it, and the fold bends it into harmonics */
+/* one sample of the cycle: the shared generator (cycle.c) */
 float tsyn_shape(float ph, float wave, float skew, float harm2, float harm3, float fold)
 {
-    float p = ph - fm_floorf(ph), sk = skew < 0.05f ? 0.05f : skew > 0.95f ? 0.95f : skew, w, s, sn, tri, saw, sq;
-    w = p < sk ? 0.5f * (p / sk) : 0.5f + 0.5f * ((p - sk) / (1.0f - sk));
-    sn = fm_sin_turns(w);
-    tri = w < 0.5f ? 4.0f * w - 1.0f : 3.0f - 4.0f * w;
-    saw = 1.0f - 2.0f * w;
-    sq = w < 0.5f ? 1.0f : -1.0f;
-    if (wave <= 0.3333f)
-        s = sn + (tri - sn) * (wave / 0.3333f);
-    else if (wave <= 0.6666f)
-        s = tri + (saw - tri) * ((wave - 0.3333f) / 0.3333f);
-    else
-        s = saw + (sq - saw) * ((wave - 0.6666f) / 0.3333f);
-    if (fm_fabsf(harm2) > 0.001f)
-        s += harm2 * fm_sin_turns(w * 2.0f);
-    if (fm_fabsf(harm3) > 0.001f)
-        s += harm3 * fm_sin_turns(w * 3.0f);
-    if (fold > 0.001f)
-        s = fm_sinf(s * (1.0f + fold * 3.5f) * 1.57079632679f);
-    return fm_clampf(s, -1.0f, 1.0f);
+    cycle_p c = { wave, skew, harm2, harm3, fold };
+    return cycle_shape(ph, &c);
 }
 
 /* the filter's coefficients: the cutoff with the envelope and the note, the damping from the resonance. The notch's Q stops
@@ -162,8 +147,17 @@ void tsyn_render(tsyn_t *b, float *out, int n)
         }
         b->cc--;
 
-        fold = fm_clampf(b->fold + b->env * b->env_wav, 0.0f, 1.0f);
-        s = tsyn_shape(b->ph + b->phase, b->wave, b->skew, b->harm2, b->harm3, fold);
+        if (b->env_wav > 0.0f) {                               /* the fold follows the envelope: the cycle is made per sample */
+            fold = fm_clampf(b->fold + b->env * b->env_wav, 0.0f, 1.0f);
+            s = tsyn_shape(b->ph + b->phase, b->wave, b->skew, b->harm2, b->harm3, fold);
+        } else {
+            if (b->tab_dirty) {
+                cycle_p c = { b->wave, b->skew, b->harm2, b->harm3, b->fold };
+                cycle_build(b->tab, &c);
+                b->tab_dirty = 0;
+            }
+            s = cycle_read(b->tab, b->ph + b->phase - fm_floorf(b->ph + b->phase));
+        }
         b->ph += b->inc;
         b->ph -= fm_floorf(b->ph);
 

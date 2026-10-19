@@ -13,8 +13,8 @@ for s in tests/scenarios/*.tribe; do
     if build/host/tribe_host "$s" build/scen >build/scen/$(basename "$s").log 2>&1; then echo "  ok   $(basename "$s")"
     else echo "  FAIL $(basename "$s")"; tail -5 build/scen/$(basename "$s").log | sed 's/^/       /'; FAIL=1; fi
 done
-SRCS_ALL="firmware/src/tribe/engine.c firmware/src/tribe/mfx.c firmware/src/tribe/store.c firmware/src/tribe/scatter.c firmware/src/tribe/engines.c firmware/src/tribe/kicks.c firmware/src/tribe/project.c firmware/src/dsp/drum909.c firmware/src/dsp/drum808.c firmware/src/dsp/acid.c firmware/src/dsp/lead.c firmware/src/dsp/fm4.c firmware/src/dsp/noise.c firmware/src/dsp/tribe_syn.c firmware/src/dsp/svf.c firmware/src/dsp/master.c"
-SRCS="firmware/src/tribe/engine.c firmware/src/tribe/mfx.c firmware/src/tribe/scatter.c firmware/src/tribe/engines.c firmware/src/tribe/kicks.c firmware/src/tribe/project.c firmware/src/dsp/drum909.c firmware/src/dsp/drum808.c firmware/src/dsp/acid.c firmware/src/dsp/lead.c firmware/src/dsp/fm4.c firmware/src/dsp/noise.c firmware/src/dsp/tribe_syn.c firmware/src/dsp/svf.c firmware/src/dsp/master.c"
+SRCS_ALL="firmware/src/tribe/engine.c firmware/src/tribe/mfx.c firmware/src/tribe/store.c firmware/src/tribe/scatter.c firmware/src/tribe/engines.c firmware/src/tribe/kicks.c firmware/src/tribe/project.c firmware/src/dsp/drum909.c firmware/src/dsp/drum808.c firmware/src/dsp/acid.c firmware/src/dsp/lead.c firmware/src/dsp/fm4.c firmware/src/dsp/noise.c firmware/src/dsp/tribe_syn.c firmware/src/dsp/cycle.c firmware/src/dsp/svf.c firmware/src/dsp/master.c"
+SRCS="firmware/src/tribe/engine.c firmware/src/tribe/mfx.c firmware/src/tribe/scatter.c firmware/src/tribe/engines.c firmware/src/tribe/kicks.c firmware/src/tribe/project.c firmware/src/dsp/drum909.c firmware/src/dsp/drum808.c firmware/src/dsp/acid.c firmware/src/dsp/lead.c firmware/src/dsp/fm4.c firmware/src/dsp/noise.c firmware/src/dsp/tribe_syn.c firmware/src/dsp/cycle.c firmware/src/dsp/svf.c firmware/src/dsp/master.c"
 rm -f build/scen/flash.bin
 if TRIBE_FLASH=build/scen/flash.bin build/host/tribe_host tests/scenarios/save1.tribe build/scen >build/scen/save1.log 2>&1 \
     && TRIBE_FLASH=build/scen/flash.bin build/host/tribe_host tests/scenarios/save2.tribe build/scen >build/scen/save2.log 2>&1; then echo "  ok   save and load (two runs)"
@@ -34,12 +34,15 @@ else echo "  FAIL FM4 engine (see build/scen/fm4.log, fm4_build.log)"; FAIL=1; f
 if cc -O2 -ffp-contract=off -std=gnu99 -Wall -Wextra -DX0X_HOST -Ifirmware/src/dsp -o build/host/svf_test tests/host/svf_test.c firmware/src/dsp/svf.c -lm 2>build/scen/svf_build.log \
     && build/host/svf_test >build/scen/svf.log 2>&1; then echo "  ok   SVF filter (DC, band-pass centre, notch, corners)"
 else echo "  FAIL SVF filter (see build/scen/svf.log, svf_build.log)"; FAIL=1; fi
-if cc -O2 -ffp-contract=off -std=gnu99 -Wall -Wextra -DX0X_HOST -Ifirmware/src/dsp -o build/host/noise_test tests/host/noise_test.c firmware/src/dsp/noise.c firmware/src/dsp/tribe_syn.c firmware/src/dsp/svf.c -lm 2>build/scen/noise_build.log \
+if cc -O2 -ffp-contract=off -std=gnu99 -Wall -Wextra -DX0X_HOST -Ifirmware/src/dsp -o build/host/noise_test tests/host/noise_test.c firmware/src/dsp/noise.c firmware/src/dsp/tribe_syn.c firmware/src/dsp/cycle.c firmware/src/dsp/svf.c -lm 2>build/scen/noise_build.log \
     && build/host/noise_test >build/scen/noise.log 2>&1; then echo "  ok   NOISE engine (morph law, pitch, noise anchors, filter types, colours, envelope)"
 else echo "  FAIL NOISE engine (see build/scen/noise.log, noise_build.log)"; FAIL=1; fi
-if cc -O2 -ffp-contract=off -std=gnu99 -Wall -Wextra -DX0X_HOST -Ifirmware/src/dsp -o build/host/tribe_syn_test tests/host/tribe_syn_test.c firmware/src/dsp/tribe_syn.c firmware/src/dsp/svf.c -lm 2>build/scen/tribe_syn_build.log \
+if cc -O2 -ffp-contract=off -std=gnu99 -Wall -Wextra -DX0X_HOST -Ifirmware/src/dsp -o build/host/tribe_syn_test tests/host/tribe_syn_test.c firmware/src/dsp/tribe_syn.c firmware/src/dsp/cycle.c firmware/src/dsp/svf.c -lm 2>build/scen/tribe_syn_build.log \
     && build/host/tribe_syn_test >build/scen/tribe_syn.log 2>&1; then echo "  ok   TRIBE synth (cycle morph, pitch, filter types, cutoff and envelope modulation, effect selector, envelope, level)"
 else echo "  FAIL TRIBE synth (see build/scen/tribe_syn.log, tribe_syn_build.log)"; FAIL=1; fi
+if cc -O2 -ffp-contract=off -std=gnu99 -Wall -Wextra -DX0X_HOST -Ifirmware/src -Ifirmware/src/dsp -Ifirmware/src/tribe -Ibuild/gen -o build/host/kick_wave_test tests/host/kick_wave_test.c firmware/src/tribe/kicks.c firmware/src/dsp/cycle.c -lm 2>build/scen/kick_wave_build.log \
+    && build/host/kick_wave_test >build/scen/kick_wave.log 2>&1; then echo "  ok   KickWave table (matches the per-sample wave it replaced)"
+else echo "  FAIL KickWave table (see build/scen/kick_wave.log)"; FAIL=1; fi
 if cc -O2 -ffp-contract=off -std=gnu99 -DX0X_HOST -Ifirmware/src -Ifirmware/src/dsp -Ibuild/gen -o build/host/store_test tests/host/store_test.c $SRCS_ALL -lm 2>build/scen/store_build.log \
     && build/host/store_test >build/scen/store.log 2>&1; then echo "  ok   clip store under power cuts"
 else echo "  FAIL clip store under power cuts (see build/scen/store.log)"; FAIL=1; fi

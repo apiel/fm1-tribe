@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "tribe_syn.h"
+#include "cycle.h"
 
 #define SR 44100
 static int fails;
@@ -88,6 +89,29 @@ int main(void)
         make(&c, 45, pv1, sizeof pv1 / sizeof pv1[0]);
         render(&c, buf2, N / 4);
         CHECK(diff(buf, buf2, N / 4) > 0.02, "Phase moves the start of the cycle");
+    }
+
+    /* the cycle table (cycle.c) reads the exact generator: close on the sine and the triangle, and within a sample's
+     * smearing on the saw and the square, whose corners the table cannot hold */
+    {
+        static const float waves[] = { 0.0f, 0.5f, 0.9f, 1.0f };
+        int wi;
+        for (wi = 0; wi < 4; wi++) {
+            cycle_p cp = { waves[wi], 0.5f, 0.2f, -0.1f, 0.3f };
+            static float tab[CYCLE_N + 1];
+            double e = 0, far = 0;
+            int j;
+            cycle_build(tab, &cp);
+            for (j = 0; j < 4000; j++) {
+                float ph = (float)j / 4000.0f;
+                double d = fabs((double)cycle_read(tab, ph) - cycle_shape(ph, &cp));
+                e += d;
+                if (d > 0.1) far += 1.0 / 4000.0;
+            }
+            e /= 4000.0;
+            CHECK(e < (wi < 2 ? 0.004 : 0.02), "the table reads the cycle (wave %.1f, mean error %.4f)", waves[wi], e);
+            CHECK(far < 0.05, "the table is off by more than 0.1 at only the corners (wave %.1f, %.3f of the phases)", waves[wi], far);
+        }
     }
 
     /* corners: every pot at its min and max, and a few random sets, on a few notes */
