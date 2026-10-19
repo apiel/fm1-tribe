@@ -921,6 +921,10 @@ static void seq_slide(int32_t xa, int32_t ya, int32_t xb, int32_t yb, uint16_t c
     }
 }
 
+/* a note's height in the lane: a fixed window of three octaves centred on C4 (42..78), so a note stays where it is when the others
+ * change; notes outside it sit on the edge */
+#define SEQ_Y(n) (80 - (((n) < 42 ? 0 : (n) > 78 ? 36 : (n) - 42) * 52 / 36))
+
 static void draw_seq(void)
 {
     clip_t *c = cur_clip();
@@ -929,15 +933,8 @@ static void draw_seq(void)
     char b[24];
     /* the page of 16 steps, as zicBox draws its notes: the top row has a cell for each step, a note's first step filled in the track's
      * colour (brighter = louder). The lane under it shows the length: a line from the note's first step over the steps it sounds (drawn
-     * to the quarter, a step is four quarters), at the note's pitch (the clip's lowest note at the bottom, its highest at the top). The
+     * to the quarter, a step is four quarters), at the note's pitch (higher notes up, on a fixed scale centred on C4). The
      * next note on the track cuts a line short, and a note that began on the page before still shows its line here */
-    int lo = 127, hi = 0, span;
-    for (i = 0; i < len; i++)
-        if (step_on(c, i)) {
-            lo = c->st[i].note < lo ? c->st[i].note : lo;
-            hi = c->st[i].note > hi ? c->st[i].note : hi;
-        }
-    span = hi - lo < 12 ? 12 : hi - lo;
     for (i = 0; i < 16; i++) {
         int s = p0 + i, x = i * 15;
         uint16_t bg = s < len ? ((i & 3) == 0 ? RGB(40, 40, 48) : C_LINE) : C_BLACK;
@@ -947,14 +944,14 @@ static void draw_seq(void)
             k--;
         if (s < len && k > s - 8 && k >= 0) {
             int lq = k * 4 + (c->st[k].len ? c->st[k].len : 3) - s * 4;   /* quarters of this step that note sounds */
-            int y = 80 - (c->st[k].note - lo) * 52 / span, w = lq >= 4 ? 15 : lq * 15 / 4;
+            int y = SEQ_Y(c->st[k].note), w = lq >= 4 ? 15 : lq * 15 / 4;
             uint16_t on = dim(col, 8 + c->st[k].vel * 8 / 127);
             if (k == s) {                                 /* the onset, in the top row, and a slide into it from the note before (amber) */
                 box(x + 1, 5, 12, 9, ui.edit == s ? C_WHITE : on);   /* the selected step: its top square is white */
                 for (p = s - 1; p >= 0 && !step_on(c, p); p--)
                     ;
                 if (p >= 0 && c->st[p].slide) {          /* the glide: an S-curve from the previous note's line to this one */
-                    int yp = 80 - (c->st[p].note - lo) * 52 / span;
+                    int yp = SEQ_Y(c->st[p].note);
                     int xe = ((p * 4 + (c->st[p].len ? c->st[p].len : 3)) - p0 * 4) * 15 / 4;
                     if (xe > x - 3)
                         xe = x - 3;                       /* at least a few pixels, even when the note runs right up to this step */
