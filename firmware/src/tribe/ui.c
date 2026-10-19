@@ -911,68 +911,88 @@ static void draw_header(void)
 static void draw_seq(void)
 {
     clip_t *c = cur_clip();
-    int i, t, len = LEN_OF(c), pg = ui.spage, phead = dk_pos[ui.trk];
+    int i, t, k, len = LEN_OF(c), pg = ui.spage, phead = dk_pos[ui.trk], p0 = pg * 16;
     uint16_t col = tcol(ui.trk);
     char b[24];
-    /* the page of 16 steps: bar height = velocity */
+    /* the page of 16 steps, as zicBox draws its notes: the top row has a cell for each step, a note's first step filled in the track's
+     * colour (brighter = louder). The lane under it shows the length: a line from the note's first step over the steps it sounds (drawn
+     * to the quarter, a step is four quarters), at the note's pitch (the clip's lowest note at the bottom, its highest at the top). The
+     * next note on the track cuts a line short, and a note that began on the page before still shows its line here */
+    int lo = 127, hi = 0, span;
+    for (i = 0; i < len; i++)
+        if (step_on(c, i)) {
+            lo = c->st[i].note < lo ? c->st[i].note : lo;
+            hi = c->st[i].note > hi ? c->st[i].note : hi;
+        }
+    span = hi - lo < 12 ? 12 : hi - lo;
     for (i = 0; i < 16; i++) {
-        int s = pg * 16 + i, x = i * 15, on = s < len && step_on(c, s);
+        int s = p0 + i, x = i * 15;
         uint16_t bg = s < len ? ((i & 3) == 0 ? RGB(40, 40, 48) : C_LINE) : C_BLACK;
-        box(x, 4, 14, 38, bg);
-        if (on) {
-            int h = 6 + c->st[s].vel * 32 / 127;
-            cv_rect(x + 1, 41 - h, 12, h, ui.edit == s ? C_WHITE : col);
+        box(x, 4, 14, 88, bg);                            /* one column: the onset on top, its length below, no gap between them */
+        k = s;
+        while (k > s - 8 && k >= 0 && !step_on(c, k))     /* the last note that starts at or before this step (a note lasts 8 steps at most) */
+            k--;
+        if (s < len && k > s - 8 && k >= 0) {
+            int lq = k * 4 + (c->st[k].len ? c->st[k].len : 3) - s * 4;   /* quarters of this step that note sounds */
+            int y = 80 - (c->st[k].note - lo) * 52 / span, w = lq >= 4 ? 15 : lq * 15 / 4;
+            uint16_t on = ui.edit == s ? C_WHITE : dim(col, 8 + c->st[k].vel * 8 / 127);
+            if (k == s)                                   /* the onset, in the top row */
+                box(x + 1, 5, 12, 9, on);
+            if (w > 0)                                    /* its length, in the lane: a thin line of the same colour, from its onset (or on from the step before) */
+                cv_rect(k == s ? x + 1 : x, y - 1, k == s ? w - 1 : w, 2, on);
         }
         if (dk_playing && phead == s)
-            cv_rect(x, 45, 14, 3, C_WHITE);
+            cv_rect(x, 94, 14, 3, C_WHITE);
         if (ui.edit == s)
-            frame(x, 4, 14, 38, C_WHITE);
+            frame(x, 4, 14, 88, C_WHITE);
     }
     b[0] = 'P';
     put_i(b + 1, pg + 1);
-    cv_text(0, vc(&FONT_XS, 50, 12), &FONT_XS, "PAGE", C_GRAY);
-    cv_text(30, vc(&FONT_XS, 50, 12), &FONT_XS, b + 1, C_WHITE);
+    cv_text(0, vc(&FONT_XS, 98, 10), &FONT_XS, "PAGE", C_GRAY);
+    cv_text(30, vc(&FONT_XS, 98, 10), &FONT_XS, b + 1, C_WHITE);
     put_s(b, "/");
     put_i(b + 1, len / 16);
-    cv_text(38, vc(&FONT_XS, 50, 12), &FONT_XS, b, C_GRAY);
-    cv_text(70, vc(&FONT_XS, 50, 12), &FONT_XS, "LEN", C_GRAY);
+    cv_text(38, vc(&FONT_XS, 98, 10), &FONT_XS, b, C_GRAY);
+    cv_text(70, vc(&FONT_XS, 98, 10), &FONT_XS, "LEN", C_GRAY);
     put_i(b, len);
-    cv_text(92, vc(&FONT_XS, 50, 12), &FONT_XS, b, C_WHITE);
+    cv_text(92, vc(&FONT_XS, 98, 10), &FONT_XS, b, C_WHITE);
     if (dk_trans[ui.trk]) {                              /* a live transposition from the ARP page is easy to forget */
         char *q2 = put_s(b, "TRSP ");
         if (dk_trans[ui.trk] > 0)
             *q2++ = '+';
         put_i(q2, dk_trans[ui.trk]);
-        text_r(238, vc(&FONT_XS, 50, 12), &FONT_XS, b, C_AMB);
+        text_r(238, vc(&FONT_XS, 98, 10), &FONT_XS, b, C_AMB);
     }
     if (ui.edit >= 0) {
         put_note(b, c->st[ui.edit].note);
-        cv_text(130, vc(&FONT_XS, 50, 12), &FONT_XS, "STEP", C_GRAY);
+        cv_text(130, vc(&FONT_XS, 98, 10), &FONT_XS, "STEP", C_GRAY);
         put_i(b, ui.edit + 1);
-        cv_text(160, vc(&FONT_XS, 50, 12), &FONT_XS, b, C_WHITE);
+        cv_text(160, vc(&FONT_XS, 98, 10), &FONT_XS, b, C_WHITE);
+        cv_text(178, vc(&FONT_XS, 98, 10), &FONT_XS, "SLIDE", C_GRAY);
+        put_i(b, c->st[ui.edit].slide);
+        cv_text(216, vc(&FONT_XS, 98, 10), &FONT_XS, b, C_WHITE);
     }
-    /* the ten tracks: meter, number, clip, muted */
-    cv_rect(0, 68, 240, 1, C_LINE);
+    /* the ten tracks: the clip and the number, then the meter, muted */
+    cv_rect(0, 113, 240, 1, C_LINE);
     for (t = 0; t < NTRK; t++) {
-        int x = t * 24, h = (int)(dk_peak[t] * 38u / 32768u), hit = dk_hit[t];
+        int x = t * 24, h = (int)(dk_peak[t] * 10u / 32768u);
         uint16_t tc = tcol(t);
-        if (h > 38)
-            h = 38;
+        if (h > 10)
+            h = 10;
         if (t == ui.trk)
-            box(x + 1, 72, 22, 62, RGB(30, 30, 38));
-        cv_rect(x + 9, 108 - h, 6, h, dk_muted[t] ? C_DIM : tc);
-        if (hit)
-            dot(x + 12, 76, 2, tc);
+            box(x + 1, 115, 22, 22, RGB(30, 30, 38));
         put_i(b, t + 1);
-        text_c(x + 12, vc(&FONT_B, 112, 12), &FONT_B, b, t == ui.trk ? C_WHITE : C_GRAY);
+        text_c(x + 6, vc(&FONT_XS, 116, 9), &FONT_XS, b, t == ui.trk ? C_WHITE : C_GRAY);
         put_i(b, dk_clip[t] + 1);
-        box(x + 5, 124, 14, 11, dk_queued[t] != 0xFF ? C_AMB : C_LINE);
-        text_c(x + 12, vc(&FONT_XS, 124, 11), &FONT_XS, b, dk_queued[t] != 0xFF ? C_BLACK : C_WHITE);
+        text_c(x + 17, vc(&FONT_XS, 116, 9), &FONT_XS, b, dk_queued[t] != 0xFF ? C_AMB : C_DIM);
+        cv_rect(x + 9, 136 - h, 6, h, dk_muted[t] ? C_DIM : tc);
         if (dk_muted[t]) {
-            cv_line(x + 4, 80, x + 20, 104, RGB(255, 90, 80));
-            cv_line(x + 20, 80, x + 4, 104, RGB(255, 90, 80));
+            cv_line(x + 4, 126, x + 20, 136, RGB(255, 90, 80));
+            cv_line(x + 20, 126, x + 4, 136, RGB(255, 90, 80));
         }
     }
+#undef SEQ_Y
+#undef SEQ_X
 }
 
 static void draw_param(void)
