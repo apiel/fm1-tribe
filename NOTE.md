@@ -1,6 +1,3 @@
-
-- Why kicks are not with all the other engines?
-
 - TRIBE engine more FX!!
  
 - Clip page
@@ -9,8 +6,6 @@
   - copy / paste: copy current patch, including unsaved change, and paste them to another clip.
   - Kind of song mode: We could make clip which are after each other play. They could play in loop or in one shot. The empty clip define the end of the loop --> so we should be able to delete clip.
   - Pressing long on a clip or home button give us more setting 
-
-- Sequencer view is too basic, espeically on synth engine like 303, LEAD, ... we need to see note length... reuse design from zicBox
 
 - Capture mode like ableton move!!
 

@@ -18,7 +18,7 @@ recipients its complete corresponding source under the same licence.
 | TB-3PO (`seq/tb3po*`) | ported from [schwung-tb3po](https://github.com/charlesvestal/schwung-tb3po), itself a port of the Phazerville Hemisphere Suite `TB_3PO` applet (djphazer and contributors) | GPL-3.0 |
 | Break generator (`dsp/breaks*`) | ported from [schwung-breakbeat](https://github.com/mestela/schwung-breakbeat) (BB Gen) by mestela, **used with the author's permission** (that repository carries no licence file) | GPL-3.0-only here, by permission |
 | The idea of a browser emulator for FM-1 firmware (`web/emu/`) | [Groove OS](https://www.groove-os.com/) by Peter Gombos, whose site runs its firmware in the browser; no code from it | credit only |
-| Kick engines KICK W and KICK P (`firmware/src/tribe/kicks.c`) and the scatter effects (`firmware/src/tribe/scatter.c`) | ported from [zicBox](https://github.com/apiel/zicBox) (apiel: zicModKick, `audio/Scatter.h`) | GPL-3.0 |
+| Kick engines KICK W and KICK P (`firmware/src/dsp/kicks.c`) and the scatter effects (`firmware/src/tribe/scatter.c`) | ported from [zicBox](https://github.com/apiel/zicBox) (apiel: zicModKick, `audio/Scatter.h`) | GPL-3.0 |
 | X0X's application layer (`firmware/src/{app,dsp,seq}`, `host/`) | [X0X](https://github.com/charlesvestal/fm1-x0x) by Charles Vestal | GPL-3.0-only |
 | TRIBE: the ten tracks, clips, sends and master effects, the UI and the save log (`firmware/src/tribe/`), `tests/`, `web/emu/`, the site and the manual | TRIBE | GPL-3.0-only |
 

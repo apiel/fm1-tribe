@@ -10,7 +10,7 @@ mkdir -p build/gen build/emu
 [ -f build/gen/felucca_font.h ] || python3 tools/gen_font.py build/gen/felucca_font.h >/dev/null
 [ -f build/gen/x0x_drum_samples.h ] || python3 tools/gen_drum_samples.py build/gen/x0x_drum_samples.h >/dev/null
 U="firmware/src/dsp/drum909.c firmware/src/dsp/drum808.c firmware/src/dsp/acid.c firmware/src/dsp/lead.c firmware/src/dsp/fm4.c firmware/src/dsp/noise.c firmware/src/dsp/tribe_syn.c firmware/src/dsp/cycle.c firmware/src/dsp/svf.c firmware/src/dsp/master.c
-   firmware/src/tribe/engine.c firmware/src/tribe/mfx.c firmware/src/tribe/scatter.c firmware/src/tribe/engines.c firmware/src/tribe/kicks.c firmware/src/tribe/project.c firmware/src/tribe/store.c"
+   firmware/src/tribe/engine.c firmware/src/tribe/mfx.c firmware/src/tribe/scatter.c firmware/src/tribe/engines.c firmware/src/dsp/kicks.c firmware/src/tribe/project.c firmware/src/tribe/store.c"
 # shellcheck disable=SC2086
 emcc -O2 -ffp-contract=off -std=gnu99 -Wall -Wno-unused-function -Wno-unused-parameter -Wno-unused-variable \
     -DX0X_HOST -DTRIBE_WEB -Ifirmware/src -Ifirmware/src/dsp -Ibuild/gen \

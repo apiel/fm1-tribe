@@ -15,7 +15,7 @@
 #include "../dsp/tribe_syn.h"
 #include "../dsp/lead.h"
 #include "../dsp/fastmath.h"
-#include "kicks.h"
+#include "../dsp/kicks.h"
 
 #ifndef POOLED
 #define POOLED X0X_POOL
