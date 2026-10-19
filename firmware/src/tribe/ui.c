@@ -908,10 +908,23 @@ static void draw_header(void)
     cv_commit(0, 0, 0);
 }
 
+/* a slide: a smooth S-curve from (xa, ya) to (xb, yb), as six short lines (smoothstep, in integers, so it is the same on the device) */
+static void seq_slide(int32_t xa, int32_t ya, int32_t xb, int32_t yb, uint16_t c)
+{
+    static const int32_t E[7] = {0, 16, 56, 108, 160, 200, 216};     /* i*i*(18 - 2*i), out of 216 = 6*6*6 */
+    int32_t i, px = xa, py = ya;
+    for (i = 1; i <= 6; i++) {
+        int32_t nx = xa + (xb - xa) * i / 6, ny = ya + (yb - ya) * E[i] / 216;
+        cv_line(px < 0 ? 0 : px, py, nx < 0 ? 0 : nx, ny, c);
+        px = nx;
+        py = ny;
+    }
+}
+
 static void draw_seq(void)
 {
     clip_t *c = cur_clip();
-    int i, t, k, len = LEN_OF(c), pg = ui.spage, phead = dk_pos[ui.trk], p0 = pg * 16;
+    int i, t, k, p, len = LEN_OF(c), pg = ui.spage, phead = dk_pos[ui.trk], p0 = pg * 16;
     uint16_t col = tcol(ui.trk);
     char b[24];
     /* the page of 16 steps, as zicBox draws its notes: the top row has a cell for each step, a note's first step filled in the track's
@@ -936,8 +949,18 @@ static void draw_seq(void)
             int lq = k * 4 + (c->st[k].len ? c->st[k].len : 3) - s * 4;   /* quarters of this step that note sounds */
             int y = 80 - (c->st[k].note - lo) * 52 / span, w = lq >= 4 ? 15 : lq * 15 / 4;
             uint16_t on = ui.edit == s ? C_WHITE : dim(col, 8 + c->st[k].vel * 8 / 127);
-            if (k == s)                                   /* the onset, in the top row */
+            if (k == s) {                                 /* the onset, in the top row, and a slide into it from the note before (amber) */
                 box(x + 1, 5, 12, 9, on);
+                for (p = s - 1; p >= 0 && !step_on(c, p); p--)
+                    ;
+                if (p >= 0 && c->st[p].slide) {          /* the glide: an S-curve from the previous note's line to this one */
+                    int yp = 80 - (c->st[p].note - lo) * 52 / span;
+                    int xe = ((p * 4 + (c->st[p].len ? c->st[p].len : 3)) - p0 * 4) * 15 / 4;
+                    if (xe > x - 3)
+                        xe = x - 3;                       /* at least a few pixels, even when the note runs right up to this step */
+                    seq_slide(xe, yp, x + 1, y, RGB(255, 180, 60));
+                }
+            }
             if (w > 0)                                    /* its length, in the lane: a thin line of the same colour, from its onset (or on from the step before) */
                 cv_rect(k == s ? x + 1 : x, y - 1, k == s ? w - 1 : w, 2, on);
         }
