@@ -16,7 +16,7 @@
 /* ------------------------------------------------------------- engines --- */
 enum { EK_DRUM, EK_SYNTH };             /* what the step editor offers (note/vel/prob  or  note/vel/len/slide) */
 enum { PG_FX, PG_ENV, PG_LFO, PG_EDIT, NPG, PG_HIDE = NPG };   /* parameter pages; HIDE: not shown */
-enum { F_NONE, F_909, F_808, F_KICKW, F_KICKP, F_ACID, F_LEAD, F_FM4, F_NOISE };         /* engine families */
+enum { F_NONE, F_909, F_808, F_KICKW, F_KICKP, F_ACID, F_LEAD, F_FM4, F_NOISE, F_TRIBE };         /* engine families */
 
 typedef struct {
     const char *name;                   /* <= 8 characters */

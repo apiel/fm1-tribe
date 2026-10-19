@@ -1,0 +1,95 @@
+# TRIBE synth: a wavetable engine
+
+## Goal
+
+From the TODO ("Make tribe engine"): a mono synth whose cycle is generated, not stored, with
+modulation, a filter with a choice of type, and one effect picked from a list. It is `EK_SYNTH`
+like LEAD, FM4 and NOISE, so it takes notes, an envelope, a slide and the clip's LFO.
+
+## Sound
+
+- **Wave** is the KickWave's morph: sine, triangle, saw, square (the same segments, the same
+  lerps as `kicks.c`'s `wave_sample`).
+- **Skew** moves where the cycle peaks (5 .. 95 %).
+- **Harm2** and **Harm3** add the second and third harmonics, bipolar (64 is none).
+- **WvFold** is a sine fold of the cycle: harmonics that grow with it.
+- **Phase** moves where the cycle starts, one turn at the top of its pot.
+
+The six cycle pots are KickWave's (Wave, Harm2, Harm3, Skew, Fold, Phase).
+
+The cycle is computed per sample (`tsyn_shape`), so the pots move it in real time.
+
+## Filter
+
+- **FType**: LP, HP, BP, Notch, as NOISE, on the shared SVF (`dsp/svf.{h,c}`).
+- **Cutoff**, **Reso**, **KeyTrk**: as NOISE. The filter is after the cycle and before the effect.
+
+## Modulation
+
+- **Envelope**: Attack, Decay, Sustain, Release, as NOISE.
+- **EnvMod** opens the cutoff with the envelope, up to 60 semitones.
+- **EnvWav** folds the cycle with the envelope, up to a full fold.
+- **LFO**: the clip's LFO already modulates any pot of any synth (its TARGET). No second LFO here.
+
+## Effects (the FX page)
+
+- **FxTyp** selects one effect: Off, Drive, Crush, Decim, Ring. It sits after the filter.
+- **FxPar** is the one parameter, read by whichever effect is selected:
+  - Drive: the gain into `tanh` (1 .. 16).
+  - Crush: the bit depth (off at 0, then down to 3 bits).
+  - Decim: samples held (1 .. 48).
+  - Ring: the ring-modulator frequency (30 Hz .. 3.8 kHz).
+
+Off ignores FxPar. Crush at FxPar 0 is off.
+
+## Parameters
+
+| Pot | Range | Default | Page | What it does |
+| --- | --- | --- | --- | --- |
+| Cutoff | 0..127 | 70 | EDIT 1 | 40 Hz .. 12 kHz, exponential |
+| Reso | 0..127 | 40 | EDIT 1 | Q 0.5 .. 24; the notch: Q 0.5 .. 4 |
+| FType | LP, HP, BP, Notch | LP | EDIT 1 | the filter type |
+| KeyTrk | 0..127 | 64 | EDIT 1 | the cutoff follows the note |
+| Wave | 0..127 | 0 | EDIT 2 | the morph: sine .. square |
+| Skew | 0..127 | 64 | EDIT 2 | where the cycle peaks |
+| Harm2 | 0..127 | 64 | EDIT 2 | the second harmonic; 64 is none |
+| Harm3 | 0..127 | 64 | EDIT 2 | the third harmonic; 64 is none |
+| WvFold | 0..127 | 0 | EDIT 3 | a sine fold of the cycle |
+| Phase | 0..127 | 0 | EDIT 3 | where the cycle starts, 0 .. 1 turn |
+| Attack | 0..127 | 20 | ENV 1 | 1 ms .. 2 s |
+| Decay | 0..127 | 64 | ENV 1 | 5 ms .. 2.5 s |
+| Sustain | 0..127 | 110 | ENV 1 | the level a held note settles at |
+| Release | 0..127 | 50 | ENV 1 | 5 ms .. 3 s |
+| EnvMod | 0..127 | 50 | ENV 2 | the envelope opens the cutoff, 0 .. 60 semitones |
+| EnvWav | 0..127 | 0 | ENV 2 | the envelope folds the cycle |
+| FxTyp | Off, Drive, Crush, Decim, Ring | Off | FX | the one effect |
+| FxPar | 0..127 | 64 | FX | that effect's parameter |
+
+## Wiring
+
+- `firmware/src/tribe/tribe.h`: `F_TRIBE` appended after `F_NOISE` (projects store engines by index).
+- `firmware/src/tribe/engines.c`: the table entry `TRIBE` (cost 5), the parameter tables, the
+  instance pool (`NTSYN` 2), the switch cases, and the page names (`FxTyp`, `FxPar` on FX;
+  `EnvWav` on ENV).
+- `tools/build.py`, `host/build_host.sh`, `web/emu/build.sh`, `tests/run_tests.sh`: the new source
+  and the new test.
+
+## Tests (`tests/host/tribe_syn_test.c`)
+
+- the cycle: sine at 45 degrees, the square's two halves, the triangle at a quarter turn, the fold
+  bends a sine;
+- every pot at its ends and 40 random sets: finite and bounded;
+- the pitch: A4 at 440 Hz with a wide-open low-pass;
+- the filter types: LP blocks a 440 Hz sine at the cutoff floor, HP and the notch pass it;
+- the cutoff brightens a saw; EnvMod brightens the attack;
+- EnvWav changes the cycle as the envelope rises;
+- each effect changes the sound; Off ignores FxPar; the crusher at FxPar 0 does nothing;
+- a slide keeps the envelope and a fresh note re-attacks; the release ends in silence;
+- two instances do not touch; a default note is about LEAD's level (rms 0.17).
+
+## Known limits
+
+- The cycle is not band-limited: the saw and the square alias at the top of the keyboard.
+  A PolyBLEP on the discontinuities is the next step if it is audible.
+- One effect at a time, and one parameter for it. A second effect would need a second FxPar.
+- The LFO is the clip's; it is not a second LFO inside the engine.
