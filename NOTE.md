@@ -1,15 +1,8 @@
 
-- make SEL first view
-
-- use wavetable for tribe and kickw
 - Why kicks are not with all the other engines?
 
-- TODO Make tribe engine
-    - in EDIT should have a kind of wavetable generator similar to our kick wave engine
-    - we need LFO and env modulation
-    - a Filter where we can select the filter type.
-    - and an effect selector: where we can select only one effect from a list of effects, and have only one param edit.
-
+- TRIBE engine more FX!!
+ 
 - Clip page
   - 4 pages ? or more?
   - i would like to have a way to save a clip to a speicific spot!

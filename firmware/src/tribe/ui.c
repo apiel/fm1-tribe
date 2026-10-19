@@ -1509,6 +1509,7 @@ void ui_init(void)
     }
     ui.grp = PG_EDIT;
     fix_group();
+    ui.view = V_COMMON;                                           /* the first screen is SEL: the mix */
 }
 
 void ui_input_only(void) { input(); }

@@ -1,4 +1,4 @@
-# the start-up screen: TRIBE, ten squares lighting up one after another, then the sequencer
+# the start-up screen: TRIBE, ten squares lighting up one after another, then SEL (the mix)
 splash
 wait 50
 shot splash_a.png
@@ -7,5 +7,5 @@ shot splash_b.png
 wait 700
 shot splash_c.png
 wait 400
-expect view 0
+expect view 6
 shot splash_done.png
