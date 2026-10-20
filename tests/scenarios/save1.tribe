@@ -2,7 +2,8 @@
 expect dirty 0
 tapkey b4
 expect trk 4
-# track 5 (index 4, 808 CP): a new step 3 and a new level on clip 1
+# track 5 (index 4, 808 CP): a new step 3 and a new level on clip 1 (the first screen is SEL: go to SEQ for the step)
+tap SEQ
 tapkey w3
 expect stepon 3
 tap SEL

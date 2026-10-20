@@ -12,7 +12,7 @@ const ex = instance.exports;
 if (ex._initialize) ex._initialize();
 ex.web_master(4096);
 ex.web_boot();
-const BTN = { PLAY: 10, SEQ: 9, FX: 0, HOME: 6 };
+const BTN = { PLAY: 10, SEQ: 9, SEL: 1, FX: 0, HOME: 6 };
 const render = (frames) => {
   let peak = 0;
   for (let n = 0; n < frames; n += 128) {
@@ -29,7 +29,7 @@ const peak = render(44100);
 ok(peak > 0.05 && peak < 1.5, `sound after PLAY (peak ${peak.toFixed(2)})`);
 const lit = ex.web_lit_buttons();
 ok((lit >> BTN.PLAY) & 1, "PLAY is lit");
-ok((lit >> BTN.SEQ) & 1, "SEQ is lit (the sequencer is home)");
+ok((lit >> BTN.SEL) & 1, "SEL is lit (the mix is the first screen)");
 ok(((ex.web_dim_buttons() >> BTN.FX) & 1) === 1, "FX is dim: the engine has FX pages");
 const fb = new Uint16Array(ex.memory.buffer, ex.web_fb(), 240 * 240);
 ok(fb.some((v) => v !== 0), "the framebuffer has pixels");
