@@ -1,0 +1,55 @@
+# the clip menu: a long press on a clip key opens it for that clip (the key does not launch). KNOB 1 picks SAVE, DELETE or EXIT,
+# SAVE confirms, any other button leaves. A short tap still launches, on release
+tap HOME
+tap PLAY
+wait 300
+tapkey w2
+wait 3000
+expect clip 2
+# a step on the loaded clip, not saved: the copy takes it along
+tap SEQ
+tapkey w3
+expect stepon 3
+tap HOME
+# a long press on clip 5: the menu opens for it, and the loaded clip (2) keeps playing
+holdkey w5 700
+expect menu 1
+expect menurow 0
+expect clip 2
+shot clip_menu_open.png
+# SAVE copies the loaded clip (its unsaved step too) into clip 5
+tap SAVE
+expect menu 0
+tapkey w5
+wait 3000
+expect clip 5
+tap SEQ
+expect stepon 3
+tap HOME
+# DELETE empties clip 5: KNOB 1 down one row, then SAVE
+holdkey w5 700
+turn K1 1
+expect menurow 1
+tap SAVE
+expect menu 0
+tapkey w5
+wait 3000
+expect clip 5
+tap SEQ
+expect stepoff 3
+tap HOME
+# another button leaves the menu, and is not used for anything else: HOME stays
+holdkey w6 700
+expect menu 1
+tap GLO
+expect menu 0
+expect view 2
+# SAVE on the loaded clip itself is refused
+tapkey w5
+wait 3000
+holdkey w5 700
+tap SAVE
+expect menu 0
+expect clip 5
+tap SEQ
+expect stepoff 3

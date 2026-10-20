@@ -22,9 +22,9 @@ int main(int argc, char **argv)
     double sum = 0, odd = 0, even = 0;
     int nodd = 0, neven = 0, up = 0, down = 0, maxp = 0, minp = 99;
     project_defaults();
-    proj.clip[0][0].rate = (uint8_t)rate;
-    proj.clip[0][0].dir = (uint8_t)dir;
-    proj.clip[0][0].swing = (uint8_t)swing;
+    act[0].rate = (uint8_t)rate;
+    act[0].dir = (uint8_t)dir;
+    act[0].swing = (uint8_t)swing;
     engine_init();
     dk_play(1);
     for (b = 0; b < 44100 * 12 / 256; b++) {

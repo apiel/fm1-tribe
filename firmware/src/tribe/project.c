@@ -43,12 +43,78 @@ static int find(const char *n)
 
 static void put(clip_t *c, int s, int note) { c->on[s >> 5] |= 1u << (s & 31); c->st[s].note = (uint8_t)note; }
 
-/* a starting point that makes noise: four-on-the-floor, backbeat, hats, an ACID line, a long legato lead */
-void project_defaults(void)
+/* the clip a track starts on, when the log has none: an empty clip with the track's engine. Clip 0 of each track has
+ * the starting steps: four-on-the-floor, backbeat, hats, an ACID line, a long legato lead, a 32-step kick fill */
+void default_clip(int t, int c, clip_t *out)
 {
     static const char *const names[NTRK] = {"KICK W", "909 SD", "909 CH", "909 OH", "808 CP", "ACID", "KICK P",
                                             "LEAD", "909 RS", "NONE"};
-    int t, c, s;
+    int s;
+    clip_init(out, find(names[t]));
+    if (c != 0)
+        return;
+    switch (t) {
+    case 0:
+        for (s = 0; s < 16; s += 4)
+            put(out, s, 48);
+        break;
+    case 1:
+        put(out, 4, 60);
+        put(out, 12, 60);
+        break;
+    case 2:
+        for (s = 0; s < 16; s += 2)
+            put(out, s, 60);
+        break;
+    case 3:
+        for (s = 2; s < 16; s += 4)
+            put(out, s, 60);
+        break;
+    case 5:
+        {
+            static const uint8_t line[16] = {36, 0, 36, 48, 0, 36, 39, 0, 36, 0, 43, 36, 0, 48, 0, 34};
+            for (s = 0; s < 16; s++) {
+                if (line[s]) {
+                    put(out, s, line[s]);
+                    out->st[s].len = 3;
+                    if (s == 3 || s == 10)
+                        out->st[s].slide = 1;
+                    if (s == 6)
+                        out->st[s].vel = 120;
+                }
+            }
+        }
+        break;
+    case 6:
+        out->lensel = 1;                             /* a 32-step kick fill on the second kick */
+        put(out, 22, 52);
+        put(out, 30, 55);
+        break;
+    case 7:
+        {   /* two bars of long notes that glide into each other (a slide step glides into the next note) */
+            static const struct { uint8_t step, note, len, slide, vel; } lead[] = {
+                {0, 57, 31, 1, 100}, {8, 60, 31, 1, 100}, {16, 64, 31, 1, 100}, {20, 62, 15, 0, 120},
+                {24, 60, 23, 1, 100}, {28, 59, 15, 0, 100},
+            };
+            unsigned i;
+            out->lensel = 1;
+            for (i = 0; i < sizeof lead / sizeof lead[0]; i++) {
+                put(out, lead[i].step, lead[i].note);
+                out->st[lead[i].step].len = lead[i].len;
+                out->st[lead[i].step].slide = lead[i].slide;
+                out->st[lead[i].step].vel = lead[i].vel;
+            }
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+/* the settings and the starting clips (the log replaces both, where it has them) */
+void project_defaults(void)
+{
+    int t;
     memset(&proj, 0, sizeof proj);
     proj.set.magic = 0x54524942u;
     proj.set.bpm_x10 = 1250;
@@ -76,44 +142,7 @@ void project_defaults(void)
         proj.set.send[0][t] = proj.set.send[1][t] = 0;      /* the sends start closed: raise a track's send to put it in the echo / the room */
         proj.set.arp_oct[t] = 1;
         proj.set.cur[t] = 0;
-        for (c = 0; c < NCLIP; c++)
-            clip_init(&proj.clip[t][c], find(names[t]));
+        default_clip(t, 0, &act[t]);                    /* the clip it plays until the log says otherwise */
+        dk_clip[t] = 0;
     }
-    for (s = 0; s < 16; s += 4)
-        put(&proj.clip[0][0], s, 48);
-    put(&proj.clip[1][0], 4, 60);
-    put(&proj.clip[1][0], 12, 60);
-    for (s = 2; s < 16; s += 4)
-        put(&proj.clip[3][0], s, 60);
-    for (s = 0; s < 16; s += 2)
-        put(&proj.clip[2][0], s, 60);
-    for (s = 0; s < 16; s++) {
-        static const uint8_t line[16] = {36, 0, 36, 48, 0, 36, 39, 0, 36, 0, 43, 36, 0, 48, 0, 34};
-        if (line[s]) {
-            put(&proj.clip[5][0], s, line[s]);
-            proj.clip[5][0].st[s].len = 3;
-            if (s == 3 || s == 10)
-                proj.clip[5][0].st[s].slide = 1;
-            if (s == 6)
-                proj.clip[5][0].st[s].vel = 120;
-        }
-    }
-    {   /* track 8: the LEAD, two bars of long notes that glide into each other (a slide step glides into the next note) */
-        static const struct { uint8_t step, note, len, slide, vel; } lead[] = {
-            {0, 57, 31, 1, 100}, {8, 60, 31, 1, 100}, {16, 64, 31, 1, 100}, {20, 62, 15, 0, 120},
-            {24, 60, 23, 1, 100}, {28, 59, 15, 0, 100},
-        };
-        clip_t *l = &proj.clip[7][0];
-        unsigned i;
-        l->lensel = 1;
-        for (i = 0; i < sizeof lead / sizeof lead[0]; i++) {
-            put(l, lead[i].step, lead[i].note);
-            l->st[lead[i].step].len = lead[i].len;
-            l->st[lead[i].step].slide = lead[i].slide;
-            l->st[lead[i].step].vel = lead[i].vel;
-        }
-    }
-    proj.clip[6][0].lensel = 1;                      /* a 32-step kick fill on the second kick */
-    put(&proj.clip[6][0], 22, 52);
-    put(&proj.clip[6][0], 30, 55);
 }

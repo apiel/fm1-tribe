@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* TRIBE: ten mono tracks, any engine on any track, sixteen clips per track.
+/* TRIBE: ten mono tracks, any engine on any track, sixty-four clips per track (four banks of sixteen on the keys).
  *
  * The project is plain data (no pointers). The UI edits it in place from the main loop; the
  * audio ISR (engine_render) reads it and owns every engine's state. UI -> ISR traffic that is
@@ -9,7 +9,8 @@
 #include "../dsp/x0x_param.h"
 
 #define NTRK 10
-#define NCLIP 16
+#define NCLIP 64
+#define NBANK 4                         /* the clips of a track, sixteen at a time, on the keys */
 #define NSTEPS 64
 #define NPAR 24                         /* parameters stored per clip (an engine may have fewer) */
 
@@ -69,6 +70,9 @@ enum { MX_REVERB, MX_DELAY, MX_DRIVE, MX_DIST, MX_FUZZ, MX_WAVE, MX_CRUSH, MX_DE
 #define MX_STATEFUL(t) ((t) == MX_REVERB || (t) == MX_DELAY)     /* one buffer each: only one of FX 1 / FX 2 can be one of these */
 #define NKNOB 4
 #define PIX_LEVEL 100                   /* a parameter slot that is a track's LEVEL, not an engine pot */
+/* song mode: a track plays the clips after each other, from the one it is on, while they have steps. The first clip
+ * without steps ends a run: LOOP plays the run again from its first clip, ONE SHOT goes on to that empty clip and stays */
+enum { SONG_OFF, SONG_LOOP, SONG_ONE, NSONG };
 typedef struct { uint8_t kind, rsv; } kslot_t;
 
 typedef struct {
@@ -84,17 +88,23 @@ typedef struct {
     uint8_t comp[6];                    /* the master compressor, always on: THRESH RATIO ATTACK RELEASE MAKEUP MIX (master.h pots) */
     uint8_t send[2][NTRK];              /* each track's send to the delay (0) and the reverb (1), 0..127 */
     kslot_t knob[NKNOB];
+    uint8_t song[NTRK];                 /* song mode per track: SONG_* (CLIPS, KNOB 4). Last: a settings record of 112 bytes is this struct's prefix */
 } dsettings_t;
 
 typedef struct {
     dsettings_t set;
-    clip_t clip[NTRK][NCLIP];
 } dproj_t;
 
 extern dproj_t proj;
+/* the clip each track is playing: the audio side reads it, the UI edits it. The others are read from the log when they are
+ * needed (store_fetch), and only the one playing is in RAM. */
+extern clip_t act[NTRK];
+/* the clip a track starts on, when none is saved */
+void default_clip(int trk, int clip, clip_t *out);
 #define LEN_OF(c) (16 << (c)->lensel)
 static inline int step_on(const clip_t *c, int s) { return (int)(c->on[s >> 5] >> (s & 31)) & 1; }
 static inline void step_flip(clip_t *c, int s) { c->on[s >> 5] ^= 1u << (s & 31); }
+static inline int clip_has(const clip_t *c) { int i, n = 0; for (i = 0; i < NSTEPS / 32; i++) n |= (int)c->on[i]; return n != 0; }   /* a clip with steps (an empty one ends a song) */
 
 void project_defaults(void);
 void clip_init(clip_t *c, int eng);     /* an empty clip with the engine's default pots */
@@ -124,7 +134,8 @@ void dk_play(int on);
 void dk_bpm(int bpm_x10);
 void dk_set(int trk, int i, int value);                 /* a pot of the track's current clip */
 void dk_engine(int trk, int eng);                       /* change the current clip's engine (pots reset to defaults) */
-void dk_launch(int trk, int clip, int now);             /* queue a clip (switches at the end of the pattern); now: at once */
+/* queue a clip (switches at the end of the pattern); now: at once. buf: the prepared copy of the clip (nxt[trk][buf], see clip_prepare) */
+void dk_launch(int trk, int clip, int buf, int now);
 void dk_mute(int trk, int on);
 void dk_note(int trk, int note, int vel);               /* a live note on (vel 0 = off) */
 void dk_master_set(int i, int value);                   /* a master pot (master.h) */
@@ -134,6 +145,9 @@ void dk_scatter(int trk, int slot, int on);             /* a scatter effect on (
 /* ISR -> UI, read freely */
 extern volatile uint8_t dk_pos[NTRK];                   /* each track's playhead */
 extern volatile uint8_t dk_clip[NTRK], dk_queued[NTRK]; /* playing clip; queued clip or 0xFF */
+#define NCLIP_BUF 3                                      /* prepared copies of a clip per track: the UI fills one before it launches it */
+extern clip_t clip_prep[NTRK][NCLIP_BUF];
+extern volatile uint32_t dk_pat_n[NTRK];                /* counts each track's pattern starts (the UI follows the song at each one) */
 extern volatile uint8_t dk_muted[NTRK], dk_playing;
 extern volatile uint8_t dk_scat[NTRK], dk_scat_g;        /* the scatter slot (+1) each track plays; the mix's (slot - 7) */
 extern volatile int8_t dk_trans[NTRK];                   /* each track's live transposition, semitones */
@@ -161,11 +175,13 @@ extern volatile uint32_t eng_notes[NTRK];                /* notes started on eac
 void eng_render_all(float *buf, int off, int n);   /* buf[trk * 256 + off ...] */
 
 /* ------------------------------------------------------------- the clip store --- */
-int store_load(void);                   /* fills proj from the flash log; returns the records found (0: nothing saved yet) */
-int store_save(int trk, int clip);      /* trk < 0: every changed clip + settings; else that clip. Records written, or < 0 */
-void store_poll(void);                  /* call once a frame: finds changed clips, one a frame */
-int store_clip_dirty(int trk, int clip);   /* does this clip differ from what was saved? */
+int store_load(void);                   /* the settings and each track's clip from the flash log; returns the records found (0: nothing saved yet) */
+int store_fetch(int trk, int clip, clip_t *out);   /* a clip as it is saved (or its starting clip): 1 when the log has it */
+int store_has(int trk, int clip);       /* does the saved clip have steps? (the one being played: clip_has(&act[trk])) */
+int store_write(int trk, int clip, const clip_t *c);   /* the clip into the log when it differs from what is saved: 1, 0, or < 0 */
+int store_clip_dirty(int trk, int clip);   /* is the clip being played changed since it was saved? */
+int store_save_track(int trk);          /* the clip a track is playing, if changed: records written, or < 0 */
 int store_set_dirty(void);              /* the settings (GLO; not the MASTER knob's volume) */
 int store_save_set(void);               /* only the settings: 1 saved, 0 unchanged, < 0 error */
-int store_revert(int trk, int clip);    /* the clip back to its saved state: 1, or 0 when it was never saved */
+int store_save_all(void);               /* every track's clip that changed, and the settings: records written, or < 0 */
 int store_dirty(void);                  /* clips (and settings) changed since the last save */

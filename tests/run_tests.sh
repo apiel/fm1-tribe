@@ -9,7 +9,7 @@ FAIL=0
 sh host/build_host.sh >/dev/null || exit 1
 mkdir -p build/scen
 for s in tests/scenarios/*.tribe; do
-    case "$s" in *save1.tribe|*save2.tribe) continue;; esac
+    case "$s" in *save1.tribe|*save2.tribe|*song_save1.tribe|*song_save2.tribe|*migrate_v3.tribe) continue;; esac
     if build/host/tribe_host "$s" build/scen >build/scen/$(basename "$s").log 2>&1; then echo "  ok   $(basename "$s")"
     else echo "  FAIL $(basename "$s")"; tail -5 build/scen/$(basename "$s").log | sed 's/^/       /'; FAIL=1; fi
 done
@@ -19,6 +19,17 @@ rm -f build/scen/flash.bin
 if TRIBE_FLASH=build/scen/flash.bin build/host/tribe_host tests/scenarios/save1.tribe build/scen >build/scen/save1.log 2>&1 \
     && TRIBE_FLASH=build/scen/flash.bin build/host/tribe_host tests/scenarios/save2.tribe build/scen >build/scen/save2.log 2>&1; then echo "  ok   save and load (two runs)"
 else echo "  FAIL save and load (see build/scen/save1.log, save2.log)"; FAIL=1; fi
+# song mode is a setting: saved with GLO's settings, and back after a restart
+rm -f build/scen/flash_song.bin
+if TRIBE_FLASH=build/scen/flash_song.bin build/host/tribe_host tests/scenarios/song_save1.tribe build/scen >build/scen/song_save1.log 2>&1 \
+    && TRIBE_FLASH=build/scen/flash_song.bin build/host/tribe_host tests/scenarios/song_save2.tribe build/scen >build/scen/song_save2.log 2>&1; then echo "  ok   song mode is saved"
+else echo "  FAIL song mode is saved (see build/scen/song_save1.log, song_save2.log)"; FAIL=1; fi
+# the clip log of the released build (tests/fixtures/v3_clip_log.bin: 16 clips a track, 512-byte records, saved by save1.tribe) is converted
+# by this build: save2 must find the clips and the settings that the released build saved, and a second run must still find them
+cp tests/fixtures/v3_clip_log.bin build/scen/v3_clip_log.bin
+if TRIBE_FLASH=build/scen/v3_clip_log.bin build/host/tribe_host tests/scenarios/migrate_v3.tribe build/scen >build/scen/v3_migrate.log 2>&1 \
+    && TRIBE_FLASH=build/scen/v3_clip_log.bin build/host/tribe_host tests/scenarios/migrate_v3.tribe build/scen >build/scen/v3_migrate2.log 2>&1; then echo "  ok   clip log of version 3 converts"
+else echo "  FAIL clip log of version 3 converts (see build/scen/v3_migrate.log, v3_migrate2.log)"; FAIL=1; fi
 if cc -O2 -ffp-contract=off -std=gnu99 -Wall -Wextra -DX0X_HOST -Ifirmware/src/dsp -o build/host/acid_test tests/host/acid_test.c firmware/src/dsp/acid.c firmware/src/dsp/lead.c firmware/src/dsp/fm4.c -lm 2>build/scen/acid_build.log \
     && build/host/acid_test >build/scen/acid.log 2>&1; then echo "  ok   ACID engine (pitch, decay, filter, slide)"
 else echo "  FAIL ACID engine (see build/scen/acid.log, acid_build.log)"; FAIL=1; fi
@@ -44,7 +55,8 @@ if cc -O2 -ffp-contract=off -std=gnu99 -Wall -Wextra -DX0X_HOST -Ifirmware/src -
     && build/host/kick_wave_test >build/scen/kick_wave.log 2>&1; then echo "  ok   KickWave table (matches the per-sample wave it replaced)"
 else echo "  FAIL KickWave table (see build/scen/kick_wave.log)"; FAIL=1; fi
 if cc -O2 -ffp-contract=off -std=gnu99 -DX0X_HOST -Ifirmware/src -Ifirmware/src/dsp -Ibuild/gen -o build/host/store_test tests/host/store_test.c $SRCS_ALL -lm 2>build/scen/store_build.log \
-    && build/host/store_test >build/scen/store.log 2>&1; then echo "  ok   clip store under power cuts"
+    && build/host/store_test >build/scen/store.log 2>&1 \
+    && build/host/store_test full >>build/scen/store.log 2>&1; then echo "  ok   clip store under power cuts (and with every clip full)"
 else echo "  FAIL clip store under power cuts (see build/scen/store.log)"; FAIL=1; fi
 if cc -O2 -ffp-contract=off -std=gnu99 -DX0X_HOST -Ifirmware/src -Ifirmware/src/dsp -Ibuild/gen -o build/host/scatter_test tests/host/scatter_test.c $SRCS -lm 2>build/scen/scatter_build.log \
     && build/host/scatter_test base build/scen/scatter_base.f32; then

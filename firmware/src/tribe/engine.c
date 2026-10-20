@@ -17,6 +17,9 @@ volatile uint8_t dk_arp_n[NTRK];
 volatile int8_t dk_trans[NTRK];
 volatile uint32_t dk_gstep;
 volatile uint8_t dk_pos[NTRK], dk_clip[NTRK], dk_queued[NTRK], dk_muted[NTRK], dk_playing;
+clip_t act[NTRK];                       /* the clip each track is playing (the UI edits it) */
+clip_t clip_prep[NTRK][NCLIP_BUF] X0X_POOL;   /* copies the UI prepared from the log: a launch takes one of them */
+volatile uint32_t dk_pat_n[NTRK];
 volatile uint16_t dk_peak[NTRK];
 volatile uint8_t dk_hit[NTRK];
 
@@ -45,15 +48,15 @@ void dk_play(int on) { push(C_PLAY, 0, on, 0); }
 void dk_bpm(int x10) { proj.set.bpm_x10 = (uint16_t)x10; push(C_BPM, 0, x10, 0); }
 void dk_set(int t, int i, int v)
 {
-    proj.clip[t][dk_clip[t]].par[i] = (uint8_t)v;
+    act[t].par[i] = (uint8_t)v;
     push(C_SET, t, i, v);
 }
 void dk_engine(int t, int eng)
 {
-    clip_set_engine(&proj.clip[t][dk_clip[t]], eng);      /* the steps stay */
+    clip_set_engine(&act[t], eng);      /* the steps stay */
     push(C_RELOAD, t, 0, 0);
 }
-void dk_launch(int t, int c, int now) { push(C_LAUNCH, t, c, now); }
+void dk_launch(int t, int c, int buf, int now) { push(C_LAUNCH, t, c, (now ? 1 : 0) | (buf << 1)); }
 void dk_mute(int t, int on) { push(C_MUTE, t, on, 0); }
 void dk_note(int t, int note, int vel) { push(C_NOTE, t, note, vel); }
 void dk_master_set(int i, int v) { push(C_MSET, 0, i, v); }
@@ -70,7 +73,7 @@ static uint32_t gtick, next_tick[NTRK], last_tick[NTRK];
 static uint8_t cur_int[NTRK], cnt[NTRK], nxt[NTRK];
 static int8_t pdir[NTRK];
 static uint8_t playing_;
-static uint8_t pos[NTRK], queued[NTRK], muted[NTRK];
+static uint8_t pos[NTRK], queued[NTRK], qbuf[NTRK], muted[NTRK];
 static int32_t gate_left[NTRK];                 /* samples until the gate ends (0 = none) */
 static uint32_t rnd = 0x1234567u;
 
@@ -104,7 +107,7 @@ static void set_bpm(int x10)
 /* load a clip's engine and pots into the track */
 static void load_clip(int t)
 {
-    const clip_t *c = &proj.clip[t][dk_clip[t]];
+    const clip_t *c = &act[t];
     int i, n;
     if (eng_bound(t) != c->eng)
         eng_bind(t, c->eng);
@@ -117,25 +120,28 @@ static void load_clip(int t)
     gate_left[t] = 0;
 }
 
-static void switch_clip(int t, int c)
+static void switch_clip(int t, int c, int buf)
 {
+    memcpy(&act[t], &clip_prep[t][buf], sizeof(clip_t));
     dk_clip[t] = (uint8_t)c;
     queued[t] = 0xFF;
     dk_queued[t] = 0xFF;
     load_clip(t);
 }
 
-static void launch(int t, int c, int now)
+static void launch(int t, int c, int now, int buf)
 {
-    if (c == dk_clip[t] && queued[t] == 0xFF)
-        return;
-    if (now || !playing_) {
-        switch_clip(t, c);
+    if (c == dk_clip[t]) {                          /* the clip that plays: a queued change to another one is dropped, its edits stay */
         queued[t] = 0xFF;
         dk_queued[t] = 0xFF;
         return;
     }
+    if (now || !playing_) {
+        switch_clip(t, c, buf);
+        return;
+    }
     queued[t] = (uint8_t)c;
+    qbuf[t] = (uint8_t)buf;
     dk_queued[t] = (uint8_t)c;
 }
 
@@ -277,7 +283,7 @@ static void drain(void)
         case C_BPM: set_bpm(c.a); break;
         case C_SET: eng_set(c.trk, c.a, c.b); break;
         case C_RELOAD: load_clip(c.trk); break;
-        case C_LAUNCH: launch(c.trk, c.a, c.b); break;
+        case C_LAUNCH: launch(c.trk, c.a, c.b & 1, (c.b >> 1) & 3); break;
         case C_MUTE:
             muted[c.trk] = (uint8_t)c.a;
             dk_muted[c.trk] = (uint8_t)c.a;
@@ -307,7 +313,7 @@ static void drain(void)
 /* a pattern begins: the first step to play (by direction), the step counter at zero */
 static void pattern_start(int t)
 {
-    const clip_t *cl = &proj.clip[t][dk_clip[t]];
+    const clip_t *cl = &act[t];
     int len = LEN_OF(cl);
     cnt[t] = 0;
     pdir[t] = 1;
@@ -343,11 +349,14 @@ static void step_track(int t)
     const clip_t *cl;
     const dstep_t *s;
     int p, len, hit = 0, period, off, par;
-    if (cnt[t] == 0 && queued[t] != 0xFF) {             /* a clip waits for the pattern's end */
-        switch_clip(t, queued[t]);
-        pattern_start(t);
+    if (cnt[t] == 0) {
+        dk_pat_n[t]++;                                  /* the UI looks at each pattern start (song mode queues the next clip then) */
+        if (queued[t] != 0xFF) {                        /* a clip waits for the pattern's end */
+            switch_clip(t, queued[t], qbuf[t]);
+            pattern_start(t);
+        }
     }
-    cl = &proj.clip[t][dk_clip[t]];
+    cl = &act[t];
     len = LEN_OF(cl);
     p = nxt[t];
     if (p >= len)
@@ -449,7 +458,7 @@ static void lfo_update(int n)
 {
     int t;
     for (t = 0; t < NTRK; t++) {
-        const clip_t *c = &proj.clip[t][dk_clip[t]];
+        const clip_t *c = &act[t];
         int eng = eng_bound(t), tgt = c->lfo[LFO_TARGET], np = eng_nparams(eng), depth = c->lfo[LFO_DEPTH];
         if (lfo_sent[t] >= 0 && (!depth || tgt != lfo_tgt[t] || !eng)) {      /* switched off, or aimed elsewhere: the pot goes home */
             if (lfo_tgt[t] < eng_nparams(eng) && eng)
@@ -569,8 +578,7 @@ void engine_init(void)
     for (t = 0; t < NTRK; t++) {
         queued[t] = 0xFF;
         dk_queued[t] = 0xFF;
-        dk_clip[t] = proj.set.cur[t] < NCLIP ? proj.set.cur[t] : 0;
-        load_clip(t);
+        load_clip(t);                                   /* the clip store_load() put in act[] */
     }
 }
 

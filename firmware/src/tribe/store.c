@@ -1,26 +1,39 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
+/* SPDX-License-Identifier: GPL-3.0-only */
 /* TRIBE's clip store: there is no project file, the clips are the data.
  *
- * The flash holds a log of 512-byte records, eight to a 4 KiB sector: one per saved clip (and one for the
+ * The flash holds a log of 396-byte records, ten to a 4 KiB sector: one per saved clip (and one for the
  * settings), each with a sequence number and a CRC. The newest valid record of a clip wins. A save writes
  * only the clips that changed since they were last saved or loaded, each into a free slot, payload first and
  * the header (which makes it valid) last, so a power cut leaves the older copy of that clip in charge.
- * When the current sector is full the next one is an erased spare; an erased spare is always kept in
- * hand: taking the last one first moves the live records of the least-used sector into it and erases that
- * sector (garbage collection). The device's RAM tables below are rebuilt by scanning the log at boot. */
+ * A sector is filled in order. Before a write the log keeps two sectors' worth of free slots: when it has less, the
+ * sector with the fewest live records is cleaned (its live records move to free slots elsewhere, then it is erased).
+ * If every sector is full of live records the write is refused (-1) and the log is left as it was.
+ * The device's RAM tables below are rebuilt by scanning the log at boot. */
 #include "tribe.h"
 #include "../app/plat.h"
 #include "mem.h"
 
-#define SLOT_SZ 512u
-#define PER_SEC 8
+#define HDR_SZ 32u
+#define SLOT_SZ (HDR_SZ + (uint32_t)sizeof(clip_t))   /* a header and a clip: 396 bytes, ten to a sector */
+#define PER_SEC ((int)(4096u / SLOT_SZ))
 #define NSEC PLAT_LOG_SECTORS
 #define NSLOT (NSEC * PER_SEC)
 #define NKEY (NTRK * NCLIP + 1)            /* 0..NKEY-2: a clip (trk * NCLIP + clip); NKEY-1: the settings */
 #define KEY_SET (NKEY - 1)
+#define NO_KEY 0xFFFFu                     /* a slot with no record */
+#define RESERVE (2 * PER_SEC)              /* free slots kept for cleaning: two sectors' worth */
 #define REC_MAGIC 0x31434C54u              /* "TLC1" */
-#define HDR_SZ 32u
-#define REC_VER 3                          /* 3: LEAD lost Accent, Legato and Vib; 1 and 2 are still read (see unpack_clip) */
+#define SET_OLD_LEN __builtin_offsetof(dsettings_t, song)   /* the settings before song mode: a record of this length is a prefix of today's */
+#define REC_VER 4                          /* 4: 64 clips a track, 396-byte records. Only this version is read here: 1 to 3 are the old log (legacy_load) */
+
+/* the log of version 3: 512-byte records, eight to a sector, 48 sectors, 16 clips a track */
+#define LEG_SLOT_SZ 512u
+#define LEG_PER_SEC 8
+#define LEG_NSEC 48
+#define LEG_CLIPS 16
+#define LEG_NKEY (NTRK * LEG_CLIPS + 1)
+#define LEG_KEY_SET (LEG_NKEY - 1)
 
 typedef struct {
     uint32_t magic, seq, crc;
@@ -29,16 +42,17 @@ typedef struct {
     uint32_t pad[3];
 } rec_hdr_t;
 
-static uint8_t slot_used[NSLOT], slot_key[NSLOT];
-static uint32_t slot_seq[NSLOT];
+/* the tables are rebuilt from the log at boot. They sit in the pool: the RAM is for the clip being played */
+static uint8_t slot_used[NSLOT] X0X_POOL;
+static uint16_t slot_key[NSLOT] X0X_POOL;   /* the key of the record in each slot, NO_KEY when none (a key is up to 640) */
+static uint32_t slot_seq[NSLOT] X0X_POOL;
 static uint8_t sec_used[NSEC];
-static uint32_t best_seq[NKEY];
-static int16_t best_slot[NKEY];
-static uint32_t saved_crc[NKEY], seq_next;
-static int cur_sec = -1, cur_idx;
+static uint32_t best_seq[NKEY] X0X_POOL;
+static int16_t best_slot[NKEY] X0X_POOL;
+static uint32_t saved_crc[NKEY] X0X_POOL;   /* what each key holds in the log (or its starting clip): a clip differs when its crc does */
+static uint8_t has_bits[(NKEY + 7) / 8];   /* the clips with steps, for the clip grid and the song */
+static uint32_t seq_next;
 static uint8_t rec_buf[SLOT_SZ];
-static uint8_t dirty_bit[NKEY];
-static int dirty_n, poll_i;
 
 static uint32_t crc32(const void *p, uint32_t n)
 {
@@ -69,25 +83,32 @@ static void copy_master(dsettings_t *dst, const dsettings_t *src)
     }
 }
 
-static const void *key_data(int key, uint32_t *len)
+/* the settings as they are saved: whatever the MASTER knob is set to do is not saved (it is read from the pot at start-up) */
+static const void *set_image(uint32_t *len)
 {
-    if (key == KEY_SET) {                /* whatever the MASTER knob is set to do is not saved: it is read from the pot at start-up */
-        static dsettings_t img;
-        static const dsettings_t none;
-        img = proj.set;
-        copy_master(&img, &none);
-        *len = sizeof img;
-        return &img;
-    }
-    *len = sizeof(clip_t);
-    return &proj.clip[key / NCLIP][key % NCLIP];
+    static dsettings_t img;
+    static const dsettings_t none;
+    img = proj.set;
+    copy_master(&img, &none);
+    *len = sizeof img;
+    return &img;
 }
-static uint32_t key_crc(int key)
+static uint32_t set_crc(void)
 {
     uint32_t n;
-    const void *d = key_data(key, &n);
+    const void *d = set_image(&n);
     return crc32(d, n);
 }
+static uint32_t clip_crc(const clip_t *c) { return crc32(c, sizeof *c); }
+
+static void has_set(int key, int v)
+{
+    if (v)
+        has_bits[key >> 3] |= (uint8_t)(1u << (key & 7));
+    else
+        has_bits[key >> 3] &= (uint8_t)~(1u << (key & 7));
+}
+static int has_get(int key) { return (has_bits[key >> 3] >> (key & 7)) & 1; }
 
 static int slot_sec(int s) { return s / PER_SEC; }
 static int read_slot(int s, uint32_t off, void *dst, uint32_t n)
@@ -104,19 +125,27 @@ static int hdr_blank(const rec_hdr_t *h)
 /* a record's key, and whether its payload is intact; the payload is left in rec_buf + HDR_SZ */
 static int check_slot(int s, rec_hdr_t *h)
 {
-    if (read_slot(s, 0, h, sizeof *h) || h->magic != REC_MAGIC || h->len > SLOT_SZ - HDR_SZ || (h->ver < 1 || h->ver > REC_VER))
+    if (read_slot(s, 0, h, sizeof *h) || h->magic != REC_MAGIC || h->len > SLOT_SZ - HDR_SZ || h->ver != REC_VER)
         return -1;
     if (read_slot(s, HDR_SZ, rec_buf + HDR_SZ, h->len) || crc32(rec_buf + HDR_SZ, h->len) != h->crc)
         return -1;
     if (h->type == 0)   /* a clip saved before the LFO was a little shorter: it loads, the LFO off */
         return h->trk < NTRK && h->clip < NCLIP && h->len >= 356 && h->len <= sizeof(clip_t) ? h->trk * NCLIP + h->clip : -1;
-    return h->type == 1 && h->len == sizeof proj.set ? KEY_SET : -1;
+    return h->type == 1 && (h->len == sizeof proj.set || h->len == SET_OLD_LEN) ? KEY_SET : -1;
 }
 
 static int is_live(int s)
 {
     int k = slot_key[s];
-    return slot_used[s] && k != 0xFF && best_slot[k] == s && best_seq[k] == slot_seq[s];
+    return slot_used[s] && k != NO_KEY && best_slot[k] == s && best_seq[k] == slot_seq[s];
+}
+static int any_live(void)
+{
+    int s;
+    for (s = 0; s < NSLOT; s++)
+        if (is_live(s))
+            return 1;
+    return 0;
 }
 static int live_in(int sec)
 {
@@ -129,23 +158,21 @@ static int live_in(int sec)
 static void note_slot(int s, int key, uint32_t seq)
 {
     slot_used[s] = 1;
-    slot_key[s] = (uint8_t)key;
+    slot_key[s] = (uint16_t)key;
     slot_seq[s] = seq;
-    if (key != 0xFF && (best_seq[key] == 0 || seq >= best_seq[key])) {
+    if (key != NO_KEY && (best_seq[key] == 0 || seq >= best_seq[key])) {
         best_seq[key] = seq;
         best_slot[key] = (int16_t)s;
     }
 }
-
-static int gc(void);
-static int make_spare_dead(void);
 
 /* rebuild every table from the log */
 static void scan(void)
 {
     int s, k;
     memset(slot_used, 0, sizeof slot_used);
-    memset(slot_key, 0xFF, sizeof slot_key);
+    for (s = 0; s < NSLOT; s++)
+        slot_key[s] = NO_KEY;
     memset(slot_seq, 0, sizeof slot_seq);
     memset(sec_used, 0, sizeof sec_used);
     memset(best_seq, 0, sizeof best_seq);
@@ -177,27 +204,6 @@ static void scan(void)
                 seq_next = h.seq + 1u;
         }
     }
-    /* the sector to write in: the fullest one that still has room, else none (the next write takes a spare) */
-    cur_sec = -1;
-    cur_idx = 0;
-    for (s = 0; s < NSEC; s++)
-        if (sec_used[s] > 0 && sec_used[s] < PER_SEC && (cur_sec < 0 || sec_used[s] > sec_used[cur_sec]))
-            cur_sec = s;
-    if (cur_sec >= 0) {                              /* its first blank slot (they fill in order) */
-        for (cur_idx = 0; cur_idx < PER_SEC && slot_used[cur_sec * PER_SEC + cur_idx]; cur_idx++)
-            ;
-    }
-    {   /* no erased sector left (a collection was cut short): finish it, or erase what holds nothing live */
-        int e = 0;
-        for (s = 0; s < NSEC; s++)
-            e += s != cur_sec && sec_used[s] == 0;
-        if (!e) {
-            if (cur_sec >= 0 && cur_idx < PER_SEC)
-                (void)gc();
-            else
-                (void)make_spare_dead();
-        }
-    }
 }
 
 static int write_slot(int s, const rec_hdr_t *h, const void *payload)
@@ -221,113 +227,84 @@ static int write_slot(int s, const rec_hdr_t *h, const void *payload)
     return 0;
 }
 
-/* make room: the live records of the least-used sector move into the new current sector, and it is erased */
-static int gc(void)
+/* a slot for a record: the free tail of a sector that is partly written, else the first slot of an erased one. Records
+ * fill a sector in order, so its free slots are always its tail. Never in sector `not`, the one being cleaned. */
+static int alloc_slot(int not, int *slot)
 {
-    int v = -1, vl = 99, s, i;
+    int s;
     for (s = 0; s < NSEC; s++)
-        if (s != cur_sec && sec_used[s] > 0) {
-            int l = live_in(s);
-            if (l < vl) {
-                vl = l;
-                v = s;
-            }
+        if (s != not && sec_used[s] > 0 && sec_used[s] < PER_SEC) {
+            *slot = s * PER_SEC + sec_used[s];
+            return 0;
         }
-    if (v < 0 || vl > PER_SEC - 1 || cur_sec < 0)
-        return -1;                                   /* everything in the log is live: nothing to free */
+    for (s = 0; s < NSEC; s++)
+        if (s != not && sec_used[s] == 0) {
+            *slot = s * PER_SEC;
+            return 0;
+        }
+    return -2;
+}
+
+static int total_free(void)
+{
+    int s, f = 0;
+    for (s = 0; s < NSEC; s++)
+        f += PER_SEC - sec_used[s];
+    return f;
+}
+
+/* clean one sector: the one with the fewest live records among those with garbage. Its live records move to free slots
+ * elsewhere, then it is erased. Returns 0, or -1 when no sector has garbage to gain (every one is full of live records). A copy keeps its
+ * sequence number, so a cut between the copies and the erase leaves both, and the newer copy wins at boot. */
+static int gc_one(void)
+{
+    int v = -1, vl = PER_SEC, s, i;
+    for (s = 0; s < NSEC; s++)                       /* only a sector with garbage in it gains anything by cleaning */
+        if (sec_used[s] > 0 && live_in(s) < sec_used[s] && live_in(s) < vl) {
+            vl = live_in(s);
+            v = s;
+        }
+    if (v < 0)
+        return -1;
     for (i = 0; i < PER_SEC; i++) {
-        int src = v * PER_SEC + i;
+        int src = v * PER_SEC + i, dst, rc;
         rec_hdr_t h;
-        int rc;
+        uint8_t keep[SLOT_SZ - HDR_SZ];
         if (!is_live(src))
             continue;
-        if (check_slot(src, &h) < 0)
-            continue;
-        {
-            uint8_t keep[SLOT_SZ - HDR_SZ];
-            memcpy(keep, rec_buf + HDR_SZ, h.len);
-            rc = write_slot(cur_sec * PER_SEC + cur_idx, &h, keep);
-        }
-        if (rc)
+        if (check_slot(src, &h) < 0)                 /* a live record that does not read back: the sector is kept */
+            return -3;
+        memcpy(keep, rec_buf + HDR_SZ, h.len);
+        if ((rc = alloc_slot(v, &dst)) != 0)
             return rc;
-        cur_idx++;
+        if ((rc = write_slot(dst, &h, keep)) != 0)
+            return rc;
     }
     if (plat_log_erase((uint32_t)v))
         return -3;
     for (i = 0; i < PER_SEC; i++) {
         slot_used[v * PER_SEC + i] = 0;
-        slot_key[v * PER_SEC + i] = 0xFF;
+        slot_key[v * PER_SEC + i] = NO_KEY;
         slot_seq[v * PER_SEC + i] = 0;
     }
     sec_used[v] = 0;
     return 0;
 }
 
-/* an erased sector to have in hand when none is: a sector holding nothing live (garbage, a torn record, a
- * half-erased sector) is simply erased */
-static int make_spare_dead(void)
-{
-    int s;
-    for (s = 0; s < NSEC; s++)
-        if (s != cur_sec && sec_used[s] > 0 && live_in(s) == 0) {
-            int i;
-            if (plat_log_erase((uint32_t)s))
-                return -3;
-            for (i = 0; i < PER_SEC; i++) {
-                slot_used[s * PER_SEC + i] = 0;
-                slot_key[s * PER_SEC + i] = 0xFF;
-                slot_seq[s * PER_SEC + i] = 0;
-            }
-            sec_used[s] = 0;
-            return 0;
-        }
-    return -2;
-}
-
-/* the next free slot, taking a spare sector (and freeing another) when the current one is full */
-static int next_slot(int *slot)
-{
-    if (cur_sec >= 0 && cur_idx < PER_SEC) {
-        *slot = cur_sec * PER_SEC + cur_idx;
-        return 0;
-    }
-    {
-        int s, e = 0, spare = -1, rc;
-        cur_sec = -1;
-        for (s = 0; s < NSEC; s++)
-            if (sec_used[s] == 0) {
-                e++;
-                if (spare < 0)
-                    spare = s;
-            }
-        if (spare < 0) {
-            if ((rc = make_spare_dead()) != 0)
-                return rc;
-            for (s = 0; s < NSEC; s++)
-                if (sec_used[s] == 0) {
-                    spare = s;
-                    break;
-                }
-            e = 1;
-            if (spare < 0)
-                return -2;
-        }
-        cur_sec = spare;
-        cur_idx = 0;
-        if (e == 1 && (rc = gc()) != 0)              /* that was the last one: free another before going on */
-            return rc;
-        *slot = cur_sec * PER_SEC + cur_idx;
-        return 0;
-    }
-}
-
-static int put(int key)
+/* one record of a clip or the settings. First the room is made (RESERVE free slots: with at most 641 live records the
+ * least-used sector has at most nine, and cleaning it always finds room for them), then the record goes in a free slot.
+ * -1: the log is full of live records, nothing is written */
+/* one record: a clip (has: it has steps, kept in the header for the clip grid) or the settings. First the room is made
+ * (RESERVE free slots: with at most 641 live records the least-used sector has at most nine, and cleaning it always
+ * finds room for them), then the record goes in a free slot. -1: the log is full of live records, nothing is written */
+static int put_rec(int key, const void *d, uint32_t len, int has)
 {
     rec_hdr_t h;
-    uint32_t len;
-    const void *d = key_data(key, &len);
     int s, rc;
-    if ((rc = next_slot(&s)) != 0)
+    while (total_free() <= RESERVE)
+        if ((rc = gc_one()) != 0)
+            return rc;
+    if ((rc = alloc_slot(-1, &s)) != 0)
         return rc;
     memset(&h, 0xFF, sizeof h);
     h.magic = REC_MAGIC;
@@ -338,13 +315,11 @@ static int put(int key)
     h.clip = key == KEY_SET ? 0 : (uint8_t)(key % NCLIP);
     h.ver = REC_VER;
     h.len = (uint16_t)len;
-    h.rsv = 0;
-    if ((rc = write_slot(s, &h, d)) != 0) {
-        cur_idx++;                                   /* a slot that failed is not tried again */
+    h.rsv = has ? 1 : 0;
+    if ((rc = write_slot(s, &h, d)) != 0)
         return rc;
-    }
-    cur_idx++;
     saved_crc[key] = h.crc;
+    has_set(key, has);
     return 0;
 }
 
@@ -394,110 +369,206 @@ static void unpack_clip(clip_t *c, const rec_hdr_t *h)
     fix_clip(c);
 }
 
-int store_load(void)
+/* ---- the log of version 3 ----
+ * Its records are 512 bytes apart, so today's scan cannot read them. When today's log holds no record at all, the
+ * old one is read here (its clips into leg[], its settings into proj.set), the old sectors are erased, and the clips
+ * and the settings are written in today's layout. */
+static clip_t leg[NTRK][LEG_CLIPS] X0X_POOL;
+static uint8_t leg_ok[NTRK][LEG_CLIPS];
+
+static int read_legacy(int s, rec_hdr_t *h)
 {
-    int k, n = 0;
-    scan();
-    for (k = 0; k < NKEY; k++) {
+    uint32_t sec = (uint32_t)(s / LEG_PER_SEC), off = (uint32_t)(s % LEG_PER_SEC) * LEG_SLOT_SZ;
+    if (plat_log_read(sec, off, h, sizeof *h) || h->magic != REC_MAGIC || h->ver < 1 || h->ver > 3 || h->len > LEG_SLOT_SZ - HDR_SZ)
+        return -1;
+    if (plat_log_read(sec, off + HDR_SZ, rec_buf + HDR_SZ, h->len) || crc32(rec_buf + HDR_SZ, h->len) != h->crc)
+        return -1;
+    if (h->type == 1)
+        return h->len == sizeof proj.set || h->len == SET_OLD_LEN ? LEG_KEY_SET : -1;
+    return h->trk < NTRK && h->clip < LEG_CLIPS && h->len >= 356 && h->len <= sizeof(clip_t) ? h->trk * LEG_CLIPS + h->clip : -1;
+}
+
+/* the newest record of each old clip (into leg[]) and of the settings (into proj.set); the number that came over */
+static int legacy_load(void)
+{
+    static uint32_t seq[LEG_NKEY];
+    static int16_t slot[LEG_NKEY];
+    int s, k, n = 0;
+    for (k = 0; k < LEG_NKEY; k++) {
+        slot[k] = -1;
+        seq[k] = 0;
+    }
+    for (s = 0; s < LEG_NSEC * LEG_PER_SEC; s++) {
         rec_hdr_t h;
-        if (best_slot[k] < 0)
+        int key = read_legacy(s, &h);
+        if (key >= 0 && (slot[key] < 0 || h.seq >= seq[key])) {
+            slot[key] = (int16_t)s;
+            seq[key] = h.seq;
+        }
+    }
+    memset(leg_ok, 0, sizeof leg_ok);
+    for (k = 0; k < LEG_NKEY; k++) {
+        rec_hdr_t h;
+        if (slot[k] < 0 || read_legacy(slot[k], &h) < 0)
             continue;
-        if (check_slot(best_slot[k], &h) < 0)
-            continue;
-        if (k == KEY_SET) {
+        if (k == LEG_KEY_SET) {
             dsettings_t old = proj.set;
-            memcpy(&proj.set, rec_buf + HDR_SZ, sizeof proj.set);
+            memcpy(&proj.set, rec_buf + HDR_SZ, h.len);
             copy_master(&proj.set, &old);
         } else {
-            unpack_clip(&proj.clip[k / NCLIP][k % NCLIP], &h);
+            unpack_clip(&leg[h.trk][h.clip], &h);
+            leg_ok[h.trk][h.clip] = 1;
         }
         n++;
     }
-    for (k = 0; k < NKEY; k++) {                     /* what is in memory now is, by definition, saved */
-        saved_crc[k] = key_crc(k);
-        dirty_bit[k] = 0;
-    }
-    dirty_n = 0;
-    poll_i = 0;
     return n;
 }
 
-static void recount(void)
+/* the old sectors are erased (all of them: what came over is in RAM until it is written below), then the clips and
+ * the settings are written in today's layout */
+static void legacy_migrate(void)
+{
+    int s, t, c;
+    for (s = 0; s < NSEC; s++)
+        if (sec_used[s])
+            (void)plat_log_erase((uint32_t)s);
+    scan();
+    for (t = 0; t < NTRK; t++)
+        for (c = 0; c < LEG_CLIPS; c++)
+            if (leg_ok[t][c])
+                (void)put_rec(t * NCLIP + c, &leg[t][c], sizeof(clip_t), clip_has(&leg[t][c]));
+    {
+        uint32_t n;
+        const void *d = set_image(&n);
+        (void)put_rec(KEY_SET, d, n, 0);
+    }
+}
+
+/* after the scan: each key's saved crc and steps flag from its newest record, or from its starting clip when it has
+ * none; the settings from their record. Then the clip being played on each track is loaded */
+static void finish_load(void)
 {
     int k;
-    dirty_n = 0;
-    for (k = 0; k < NKEY; k++)
-        dirty_n += dirty_bit[k];
+    for (k = 0; k < NKEY; k++) {
+        rec_hdr_t h;
+        if (k == KEY_SET) {
+            if (best_slot[k] >= 0 && check_slot(best_slot[k], &h) >= 0) {
+                dsettings_t old = proj.set;
+                memcpy(&proj.set, rec_buf + HDR_SZ, h.len);     /* an older record: the fields it does not have keep their defaults */
+                copy_master(&proj.set, &old);
+                saved_crc[k] = h.crc;
+            } else
+                saved_crc[k] = set_crc();
+        } else if (best_slot[k] >= 0 && read_slot(best_slot[k], 0, &h, sizeof h) == 0) {
+            saved_crc[k] = h.crc;
+            has_set(k, h.rsv & 1);
+        } else {
+            clip_t d;
+            default_clip(k / NCLIP, k % NCLIP, &d);
+            saved_crc[k] = clip_crc(&d);
+            has_set(k, clip_has(&d));
+        }
+    }
 }
 
-int store_clip_dirty(int trk, int clip) { return key_crc(trk * NCLIP + clip) != saved_crc[trk * NCLIP + clip]; }
-int store_set_dirty(void) { return key_crc(KEY_SET) != saved_crc[KEY_SET]; }
-
-/* only the settings (GLO) */
-int store_save_set(void)
+/* the log decides what the tracks start with: the clip each track was on at the last save (clip 0 without one) */
+int store_load(void)
 {
-    int rc;
-    if (!store_set_dirty())
-        return 0;
-    if ((rc = put(KEY_SET)) != 0)
-        return rc;
-    dirty_bit[KEY_SET] = 0;
-    recount();
-    return 1;
+    int n = 0, t;
+    scan();
+    if (!any_live()) {                                /* nothing in today's layout: maybe the log of version 3 */
+        n = legacy_load();
+        if (n > 0) {
+            legacy_migrate();
+            scan();
+        }
+    }
+    finish_load();
+    for (t = 0; t < NTRK; t++) {
+        int c = proj.set.cur[t] < NCLIP ? proj.set.cur[t] : 0;
+        dk_clip[t] = (uint8_t)c;
+        (void)store_fetch(t, c, &act[t]);
+    }
+    return n;
 }
 
-/* a clip goes back to what was last saved (0: nothing was ever saved for it, it is left as it is) */
-int store_revert(int trk, int clip)
+/* the clip as it is saved: the log's newest copy, or the track's starting clip. Returns 1 when the log has it */
+int store_fetch(int trk, int clip, clip_t *out)
 {
     int k = trk * NCLIP + clip;
     rec_hdr_t h;
-    clip_t *c = &proj.clip[trk][clip];
-    if (best_slot[k] < 0 || check_slot(best_slot[k], &h) < 0)
+    if (best_slot[k] >= 0 && check_slot(best_slot[k], &h) == k) {
+        unpack_clip(out, &h);
+        return 1;
+    }
+    default_clip(trk, clip, out);
+    return 0;
+}
+
+int store_has(int trk, int clip) { return has_get(trk * NCLIP + clip); }
+
+/* a clip is written when it differs from what is saved (returns 1), or not (0); < 0 is a flash error or a full log */
+int store_write(int trk, int clip, const clip_t *c)
+{
+    int k = trk * NCLIP + clip;
+    if (clip_crc(c) == saved_crc[k])
         return 0;
-    unpack_clip(c, &h);
+    if (put_rec(k, c, sizeof *c, clip_has(c)) != 0)
+        return -1;
     return 1;
 }
 
-/* trk < 0: every changed clip and the settings; else that one clip (if it changed). Returns the records
- * written, or a negative error (-1 the log is full of live records, -2 no spare sector, else a flash error) */
-int store_save(int trk, int clip)
+/* the clip a track is playing differs from what is saved (the others are never changed: a clip is left as it is) */
+int store_clip_dirty(int trk, int clip)
 {
-    int k, n = 0, rc;
-    if (trk >= 0) {
-        k = trk * NCLIP + clip;
-        if (key_crc(k) == saved_crc[k])
-            return 0;
-        if ((rc = put(k)) != 0)
-            return rc;
-        dirty_bit[k] = 0;
-        recount();
-        return 1;
-    }
-    for (k = 0; k < NKEY; k++)
-        if (key_crc(k) != saved_crc[k]) {
-            if ((rc = put(k)) != 0)
-                return rc;
-            dirty_bit[k] = 0;
-            n++;
-        }
-    dirty_n = 0;
-    for (k = 0; k < NKEY; k++)
-        dirty_n += dirty_bit[k];
-    return n;
+    return clip == dk_clip[trk] && clip_crc(&act[trk]) != saved_crc[trk * NCLIP + clip];
 }
 
-/* four clips a frame (the whole set in about 0.7 s): does each differ from what was saved? (the SAVE light) */
-void store_poll(void)
+int store_save_track(int trk)
 {
-    int n;
-    for (n = 0; n < 4; n++) {
-        int k = poll_i;
-        uint8_t d = key_crc(k) != saved_crc[k];
-        if (d != dirty_bit[k]) {
-            dirty_bit[k] = d;
-            dirty_n += d ? 1 : -1;
-        }
-        poll_i = k + 1 < NKEY ? k + 1 : 0;
-    }
+    int c = dk_clip[trk];
+    if (!store_clip_dirty(trk, c))
+        return 0;
+    return store_write(trk, c, &act[trk]);
 }
-int store_dirty(void) { return dirty_n; }
+
+int store_set_dirty(void) { return set_crc() != saved_crc[KEY_SET]; }
+
+/* the settings (GLO) with the clip each track is on: the one the next start loads */
+int store_save_set(void)
+{
+    uint32_t n;
+    const void *d;
+    int t;
+    for (t = 0; t < NTRK; t++)
+        proj.set.cur[t] = dk_clip[t];
+    if (!store_set_dirty())
+        return 0;
+    d = set_image(&n);
+    if (put_rec(KEY_SET, d, n, 0) != 0)
+        return -1;
+    return 1;
+}
+
+/* every track's clip that changed, and the settings: returns the records written, or < 0 */
+int store_save_all(void)
+{
+    int t, n = 0, r;
+    for (t = 0; t < NTRK; t++) {
+        if ((r = store_save_track(t)) < 0)
+            return r;
+        n += r;
+    }
+    if ((r = store_save_set()) < 0)
+        return r;
+    return n + r;
+}
+
+/* what is unsaved: the clips being played that changed, and the settings */
+int store_dirty(void)
+{
+    int t, n = store_set_dirty();
+    for (t = 0; t < NTRK; t++)
+        n += store_clip_dirty(t, dk_clip[t]);
+    return n;
+}

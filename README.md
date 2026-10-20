@@ -3,7 +3,7 @@
 # TRIBE
 
 Custom firmware for the [M-VAVE FM-1](https://www.m-vave.com): a ten-track groovebox where **any engine
-plays on any track**. Kicks, the 909 and 808 voices and ACID, sixteen clips per track, scatter
+plays on any track**. Kicks, the 909 and 808 voices and ACID, sixty-four clips per track, scatter
 effects, two master effects every track sends to, and four master knobs you assign to the volume,
 a DJ filter, the effects or the tempo.
 
@@ -29,7 +29,7 @@ The FM-1's screen, from the same code (the [manual](https://apiel.github.io/fm1-
 <table>
 <tr>
 <td align="center"><img src="docs/img/screen-seq.png" width="230" alt="Sequencer"><br>Steps and a track's knobs</td>
-<td align="center"><img src="docs/img/screen-clips.png" width="230" alt="Clips"><br>Ten tracks, sixteen clips each</td>
+<td align="center"><img src="docs/img/screen-clips.png" width="230" alt="Clips"><br>Ten tracks, a bank of sixteen clips</td>
 <td align="center"><img src="docs/img/screen-sel.png" width="230" alt="Mix"><br>Engines and the mix</td>
 </tr>
 <tr>
@@ -42,7 +42,7 @@ The FM-1's screen, from the same code (the [manual](https://apiel.github.io/fm1-
 ## What it does
 
 - **10 tracks, 28 engines:** two kicks (KICK W, KICK P), the 909 and 808 drum voices, ACID, LEAD, FM4, NOISE.
-- **16 clips per track**, launched at the end of the pattern or at once. 16, 32 or 64 steps, six rates, four directions, swing.
+- **64 clips per track** in four banks of sixteen, launched at the end of the pattern or at once. 16, 32 or 64 steps, six rates, four directions, swing.
 - **Scatter effects** on the keys while it plays: loops, reverse, gate, crush, distortion, ring, filters, on a track or the whole mix.
 - **FX 1 and FX 2:** reverb, delay, drive, distortion, fuzz, wavefolder, crusher, decimator or ring modulator, fed by each track's sends.
 - **Four master knobs**, assignable: volume, DJ filter, resonance, FX amounts, BPM.

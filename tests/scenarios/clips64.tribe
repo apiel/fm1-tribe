@@ -1,0 +1,33 @@
+# HOME: the keys show one bank of sixteen clips. OCT+ and OCT- move the bank (four banks, no wrap); a key launches clip bank * 16 + key
+tap HOME
+expect bank 0
+tapkey w1
+tap PLAY
+wait 3000
+expect clip 1
+tap OCT+
+expect bank 1
+tapkey w1
+wait 3000
+expect clip 17
+tap OCT+
+tap OCT+
+tap OCT+
+expect bank 3
+tapkey w15
+wait 3000
+expect clip 63
+shot clips64_bank4.png
+tap OCT-
+expect bank 2
+tapkey w0
+wait 3000
+expect clip 32
+tap OCT-
+tap OCT-
+tap OCT-
+expect bank 0
+tapkey w5
+wait 3000
+expect clip 5
+shot clips64_bank1.png

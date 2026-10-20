@@ -1,0 +1,25 @@
+# the clip log of the released build (tests/fixtures/v3_clip_log.bin, saved by its save1.tribe) converts: its clips and
+# settings come through, and the converted log loads again the second time
+expect dirty 0
+tapkey b4
+expect trk 4
+expect level 80
+tap HOME
+tap PLAY
+wait 300
+tapkey w0
+wait 3000
+expect clip 0
+tap SEQ
+expect stepon 3
+tap HOME
+tapkey w2
+wait 3000
+expect clip 2
+tap SEQ
+expect nsteps 2
+expect stepon 5
+expect stepon 9
+# the volume number came back (the MASTER knob's own job, the DJ filter, starts from the pot)
+expectvol 70
+expectknob 0 1

@@ -50,8 +50,9 @@ enum { OBJ_SET, OBJ_SOUND, OBJ_PAT0, OBJ_PAT1, OBJ_PANEL, OBJ_SONG, OBJ_MOTION, 
  * OBJ_MOTION 0xDE000 (all inside Felucca's data area, 0x97000..0xDFFFF) */
 
 /* TRIBE's clip log: PLAT_LOG_SECTORS 4 KiB sectors of flash (device: from 0x97000), raw NOR semantics:
- * a program can only clear bits, an erase sets a whole sector to 0xFF. 0 = ok. (tribe/store.c) */
-#define PLAT_LOG_SECTORS 48
+ * a program can only clear bits, an erase sets a whole sector to 0xFF. 0 = ok. (tribe/store.c)
+ * 69 sectors, the most before OBJ_PANEL (0xDC000): 641 records (640 clips and the settings) take 65 of them. */
+#define PLAT_LOG_SECTORS 69
 int plat_log_read(uint32_t sector, uint32_t off, void *dst, uint32_t n);
 int plat_log_erase(uint32_t sector);
 int plat_log_prog(uint32_t sector, uint32_t off, const void *src, uint32_t n);

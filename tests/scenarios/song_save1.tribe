@@ -1,0 +1,9 @@
+# first run: track 3's song mode is LOOP, saved with the settings (the second run, song_save2, must find it)
+tap HOME
+tapkey b2
+turn K4 1
+expect song 1
+tap SAVE
+tap SAVE
+wait 300
+expect dirty 0

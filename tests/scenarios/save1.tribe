@@ -12,6 +12,11 @@ expect level 80
 wait 1000
 expect dirty 2
 leds
+# SAVE saves what is changed: the clip on track 5 and the level (a clip that is left unsaved is not kept)
+tap SAVE
+tap SAVE
+wait 300
+expect dirty 0
 # a clip on another slot: HOME, queue clip 3 (index 2), edit there
 tap HOME
 tapkey w2
@@ -23,14 +28,14 @@ tapkey w5
 tapkey w9
 expect nsteps 2
 wait 1000
-expect dirty 3
+expect dirty 1
 # SAVE opens the pick: a track key saves that track's clip on screen (the settings and the rest stay), SAVE again saves everything left
 tap SAVE
 shot save_pick.png
 leds
 tapkey b4
 wait 300
-expect dirty 2
+expect dirty 0
 tap SAVE
 shot save_pick2.png
 tap SAVE

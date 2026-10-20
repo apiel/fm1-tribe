@@ -206,21 +206,32 @@ engine's parameters. There is one per clip, saved with it.
 
 ## 7. Clips
 
-Press **HOME**. Each track has **sixteen clips**; a clip holds everything of the track: pattern,
-engine, sound, LFO and sequencer settings. The grid shows ten rows (the tracks) of sixteen
-(the clips); a filled square is a clip with notes in it, the playing one is lit.
+Press **HOME**. Each track has **sixty-four clips**, in four banks of sixteen; a clip holds everything of
+the track: pattern, engine, sound, LFO and sequencer settings. The white keys show one bank at a time:
+**OCT-** and **OCT+** move between the banks (the dots at the right of the screen show which one). The grid
+shows ten rows (the tracks) of the bank's sixteen clips; a filled square is a clip with notes in it, the
+playing one is lit.
 
 The white keys launch a clip of the selected track:
 
-- The first press **queues** it (it blinks) and it takes over at the end of the pattern.
+- The first press **queues** it (it blinks) and it takes over at the end of the pattern. It is launched when you let go of the key.
 - Press the same key again while it is queued to switch **at once**.
+- Hold a clip key for about half a second to open its **clip menu**. KNOB 1 picks a row: **SAVE** copies the clip the track is playing, with its unsaved changes, into this one; **DELETE** empties this one; **EXIT** closes the menu. Press **SAVE** to confirm. Any other button closes the menu without doing anything.
 
-KNOB 1 on this page is the track's level.
+KNOB 1 on this page is the track's level. KNOB 4 is the track's **song** setting:
 
-![The clips: ten tracks, sixteen clips each](img/screen-clips.png)
+- **OFF**: a clip plays on its own.
+- **LOOP**: the track plays its clips one after another, from the clip it is on, each for one pattern. The first empty clip ends the run, and the run starts again from its first clip.
+- **ONE SHOT**: the same, but after the run's last clip the track goes on to the empty clip and stays silent there.
 
-> **Changed and not saved?** If you edit a clip, leave it and launch it again before saving, it
-> comes back as it was last saved. Save first (or save with the pick) to keep an edit.
+Empty clips are how you end a run, so delete a clip (or leave it empty) where a song should stop.
+
+![The clips: ten tracks, a bank of sixteen clips each](img/screen-clips.png)
+
+> **Changed and not saved?** Only the clip a track is playing keeps its edits. When that track
+> launches another clip, the unsaved edits are lost, and the screen says so. Save first (SAVE, then
+> SAVE again, or the pick) to keep an edit. A song moves on by itself: save a clip before a song
+> plays on from it.
 
 ---
 

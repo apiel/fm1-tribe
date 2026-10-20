@@ -1,0 +1,79 @@
+# song mode (CLIPS, KNOB 4: OFF, LOOP, ONE SHOT): the track plays its clips after each other, from the one it is on, while they
+# have steps. The first clip without steps ends the run: LOOP starts the run again, ONE SHOT goes on to that empty clip and stays there.
+# Clips are numbered from 0 here, as the tests show them: clip 0 has its starting steps, clips 1 and 2 get one step, clip 3 stays empty
+tap HOME
+tap PLAY
+wait 300
+tapkey b0
+tapkey w1
+waitpos 0 0
+wait 100
+expect clip 1
+tap SEQ
+tapkey w0
+tap SAVE
+tap SAVE
+tap HOME
+tapkey w2
+waitpos 0 0
+wait 100
+expect clip 2
+tap SEQ
+tapkey w0
+tap SAVE
+tap SAVE
+tap HOME
+tapkey w3
+waitpos 0 0
+wait 100
+expect clip 3
+expect stepoff 0
+# LOOP: the run is clips 0, 1 and 2; after clip 2 it starts again at clip 0
+turn K4 1
+expect song 1
+tapkey w0
+waitpos 0 0
+wait 100
+expect clip 0
+expect queued 1
+waitpos 0 0
+wait 100
+expect clip 1
+expect queued 2
+waitpos 0 0
+wait 100
+expect clip 2
+expect queued 0
+waitpos 0 0
+wait 100
+expect clip 0
+expect queued 1
+# ONE SHOT: from clip 0 on, the run ends on the empty clip 3, which plays nothing and stays there
+turn K4 1
+expect song 2
+waitpos 0 0
+wait 100
+expect clip 1
+expect queued 2
+waitpos 0 0
+wait 100
+expect clip 2
+expect queued 3
+waitpos 0 0
+wait 100
+expect clip 3
+expect queued 255
+waitpos 0 0
+wait 100
+expect clip 3
+# OFF: nothing follows the clip
+turn K4 -2
+expect song 0
+tapkey w0
+waitpos 0 0
+wait 100
+expect clip 0
+expect queued 255
+waitpos 0 0
+wait 100
+expect clip 0

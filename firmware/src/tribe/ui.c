@@ -44,6 +44,10 @@ static struct {
     int8_t press;                        /* a tap on an "on" step waiting to turn it off, -1 none */
     uint32_t press_t;
     int8_t oct;                          /* the keyboard's octave offset, -2..2 */
+    uint8_t bank;                        /* HOME: the sixteen clips on the keys are bank * 16 .. +15 (OCT- / OCT+ change it) */
+    int8_t hold_w;                       /* HOME: the clip key held down, -1 none; it launches on release, or opens the clip menu after a long press */
+    uint32_t hold_t;
+    uint8_t menu, menu_row, menu_clip;   /* the clip menu (a long press on a clip key): open, its row, the clip it is for */
     uint8_t glo, gtop;                   /* GLO: the item, and the first row on screen */
     int16_t pot_ref;                     /* MASTER as a control: where the pot was when it was last used */
     uint8_t pot_armed;
@@ -78,13 +82,14 @@ static void say(const char *a, const char *b)
     ui.msg_until = plat_ms() + 1300u;
 }
 
-static clip_t *cur_clip(void) { return &proj.clip[ui.trk][dk_clip[ui.trk]]; }
-static int clip_has(const clip_t *c) { return c->on[0] | c->on[1]; }
+static clip_t *cur_clip(void) { return &act[ui.trk]; }
+#define BANK_N (NCLIP / NBANK)                  /* the clips the sixteen keys show */
 static int nsteps_page(void) { return LEN_OF(cur_clip()) / 16; }
 static uint16_t tcol(int t) { return TRK_COL[t % NTRK]; }
 
 /* the pages of a group: the engine's pots (the track's level is on the SEL page, and on CLIPS) */
 #define PIX_LFO 110                                    /* the LFO's six controls: PIX_LFO + LFO_* */
+#define PIX_SONG 120                                   /* CLIPS, KNOB 4: the track's song mode */
 static int grp_count(int g)
 {
     int n = eng_nparams(cur_clip()->eng), i, c = 0;
@@ -238,8 +243,8 @@ static void seqcfg_turn(int i, int d)
 static int param_ix(int slot)
 {
     int k = ui.page[ui.grp] * 4 + slot;
-    if (ui.view == V_HOME)                              /* CLIPS: KNOB 1 is the track's level */
-        return slot == 0 ? PIX_LEVEL : -1;
+    if (ui.view == V_HOME)                              /* CLIPS: KNOB 1 is the track's level, KNOB 4 its song mode */
+        return slot == 0 ? PIX_LEVEL : slot == 3 ? PIX_SONG : -1;
     if (ui.grp == PG_LFO)
         return k < NLFO ? PIX_LFO + k : -1;
     return eng_param_at(cur_clip()->eng, ui.grp, k / 4, k % 4);
@@ -261,6 +266,13 @@ static void turn_param(int slot, int d)
     if (i == PIX_LEVEL) {
         v = proj.set.level[ui.trk] + d * 2;
         proj.set.level[ui.trk] = (uint8_t)(v < 0 ? 0 : v > 127 ? 127 : v);
+        ui.touched = (int8_t)slot;
+        ui.touch_until = plat_ms() + 900u;
+        return;
+    }
+    if (i == PIX_SONG) {
+        v = proj.set.song[ui.trk] + d;
+        proj.set.song[ui.trk] = (uint8_t)(v < 0 ? 0 : v >= NSONG ? NSONG - 1 : v);
         ui.touched = (int8_t)slot;
         ui.touch_until = plat_ms() + 900u;
         return;
@@ -449,7 +461,7 @@ static void master_pot(void)
 
 static void write_step(int t, int s, int note, int vel)
 {
-    clip_t *c = &proj.clip[t][dk_clip[t]];
+    clip_t *c = &act[t];
     if (!step_on(c, s)) {                             /* a fresh step: plain defaults, not what was left in it */
         c->st[s].prob = 100;
         c->st[s].len = 3;
@@ -466,7 +478,7 @@ static void rec_release(int k)
     clip_t *c;
     if (!ui.rec_step[k])
         return;
-    c = &proj.clip[ui.held_trk[k]][dk_clip[ui.held_trk[k]]];
+    c = &act[ui.held_trk[k]];
     if (eng_info(c->eng)->kind == EK_SYNTH) {
         uint32_t step_ms = 150000u / (proj.set.bpm_x10 ? proj.set.bpm_x10 : 1200u), q;
         q = (plat_ms() - ui.rec_t0[k]) * 4u / step_ms;
@@ -528,13 +540,39 @@ static void save_say(int n, const char *what)
 /* does track t's clip on screen differ from what was saved? */
 static int trk_dirty(int t) { return store_clip_dirty(t, dk_clip[t]); }
 
+/* the clip menu's rows: SAVE copies the track's loaded clip (with its unsaved changes) into the clip, DELETE empties it */
+enum { CM_SAVE, CM_DELETE, CM_EXIT, CM_N };
+#define HOLD_MS 400u                    /* a clip key held this long opens the clip menu (the SEQ config uses the same) */
+
+/* HOME: the clip of key w (of the bank) starts; a clip that was changed and not saved comes back as it was */
+/* the next copy of a track's clip: read from the log now, the launch takes it (a pattern is time enough for the flash) */
+static uint8_t prep_rot[NTRK];
+static void launch_clip(int t, int c, int now)
+{
+    int b = prep_rot[t];
+    prep_rot[t] = (uint8_t)((b + 1) % NCLIP_BUF);
+    if (c != dk_clip[t])
+        (void)store_fetch(t, c, &clip_prep[t][b]);
+    dk_launch(t, c, b, now);
+}
+
+static void home_launch(int w)
+{
+    int c = ui.bank * BANK_N + w;
+    if (c != dk_clip[ui.trk] && store_clip_dirty(ui.trk, dk_clip[ui.trk]))
+        say("UNSAVED CHANGES LOST", 0);
+    launch_clip(ui.trk, c, dk_queued[ui.trk] == c);   /* again on the queued clip: now */
+}
+
 static void key_down(int k)
 {
     int w = WHITE_OF[k], b = BLACK_OF[k];
     uint32_t now = plat_ms();
+    if (ui.menu)                                        /* the clip menu is up: the keys wait for it to close */
+        return;
     if (ui.save_mode) {                                 /* a track key saves that track's clip on screen; any other key leaves */
         if (b >= 0 && b < NTRK && trk_dirty(b))
-            save_say(store_save(b, dk_clip[b]), "CLIP SAVED");
+            save_say(store_save_track(b), "CLIP SAVED");
         ui.save_mode = 0;
         return;
     }
@@ -575,10 +613,9 @@ static void key_down(int k)
         }
         break;
     }
-    case V_HOME:
-        if (w != dk_clip[ui.trk] && store_clip_dirty(ui.trk, w))   /* loading a clip that was changed and not saved: it comes back as it was */
-            store_revert(ui.trk, w);
-        dk_launch(ui.trk, w, dk_queued[ui.trk] == w);   /* again on the queued clip: now */
+    case V_HOME:                                         /* launched on release, so that a long press can open the clip menu */
+        ui.hold_w = (int8_t)w;
+        ui.hold_t = now;
         break;
     case V_PARAM:
     case V_GLO:
@@ -601,6 +638,11 @@ static void key_down(int k)
 static void key_up(int k)
 {
     int w = WHITE_OF[k];
+    if (w >= 0 && ui.hold_w == w) {                     /* a clip key let go before the long press: its clip starts */
+        ui.hold_w = -1;
+        if (ui.view == V_HOME)
+            home_launch(w);
+    }
     if (ui.held_note[k]) {
         rec_release(k);
         dk_note(ui.held_trk[k], ui.held_note[k] - 1, 0);
@@ -621,7 +663,7 @@ static void key_up(int k)
 static void save_all(void)
 {
     char b[24];
-    int n = store_save(-1, 0);
+    int n = store_save_all();
     if (n < 0) {
         char *q = put_s(b, "SAVE FAILED ");
         put_i(q, n);
@@ -635,9 +677,53 @@ static void save_all(void)
     }
 }
 
+/* the clip menu's buttons: SAVE confirms the row, any other button leaves it */
+static void menu_button(int b)
+{
+    int trk = ui.trk, c = ui.menu_clip, n;
+    char m[24], *q;
+    clip_t e;
+    ui.menu = 0;
+    if (b != B_SAVE || ui.menu_row == CM_EXIT)
+        return;
+    if (ui.menu_row == CM_SAVE) {                    /* the loaded clip (its unsaved changes too) into the target */
+        if (c == dk_clip[trk]) {
+            say("SAME CLIP", 0);
+            return;
+        }
+        n = store_write(trk, c, &act[trk]);
+    } else {                                         /* the target without steps: the loaded one, or the saved one */
+        if (c == dk_clip[trk]) {
+            memset(act[trk].on, 0, sizeof act[trk].on);
+            n = store_write(trk, c, &act[trk]);
+        } else {
+            (void)store_fetch(trk, c, &e);
+            memset(e.on, 0, sizeof e.on);
+            n = store_write(trk, c, &e);
+        }
+    }
+    if (dk_queued[trk] == c)                         /* a copy of it waits for the pattern's end: that copy is now out of date */
+        launch_clip(trk, c, 0);
+    if (n < 0) {
+        q = put_s(m, "SAVE FAILED ");
+        put_i(q, n);
+    } else if (!n)
+        put_s(m, "NOTHING CHANGED");
+    else {
+        q = put_s(m, "CLIP ");
+        q = put_i(q, c + 1);
+        put_s(q, ui.menu_row == CM_SAVE ? " SAVED" : " EMPTIED");
+    }
+    say(m, 0);
+}
+
 static void button_down(int b)
 {
     int g;
+    if (ui.menu) {
+        menu_button(b);
+        return;
+    }
     if (ui.save_mode) {                                 /* SAVE: GLO saves the settings, SAVE again everything, any other button leaves */
         if (b == B_GLO) {
             int n = store_save_set();
@@ -703,6 +789,9 @@ static void button_down(int b)
         } else if (ui.view == V_PARAM) {
             int n = npages(ui.grp);
             ui.page[ui.grp] = (uint8_t)((ui.page[ui.grp] + n + d) % n);
+        } else if (ui.view == V_HOME) {                  /* the clips on the keys: one bank of sixteen at a time, no wrap */
+            if ((d > 0 && ui.bank < NBANK - 1) || (d < 0 && ui.bank > 0))
+                ui.bank = (uint8_t)(ui.bank + d);
         } else {
             int n = nsteps_page();
             ui.spage = (uint8_t)((ui.spage + n + d) % n);
@@ -742,10 +831,26 @@ static void input(void)
         ui.edit = ui.press;                                      /* held: edit it, and it stays on */
         ui.press = -1;
     }
+    if (ui.hold_w >= 0 && !((ui.kprev >> WHITE_K[ui.hold_w]) & 1u)) {   /* let go in the frame it went down: it launches now */
+        if (ui.view == V_HOME)
+            home_launch(ui.hold_w);
+        ui.hold_w = -1;
+    }
+    if (ui.hold_w >= 0 && plat_ms() - ui.hold_t > HOLD_MS) {    /* a clip key held: its menu (and the key does not launch) */
+        ui.menu = 1;
+        ui.menu_row = CM_SAVE;
+        ui.menu_clip = (uint8_t)(ui.bank * BANK_N + ui.hold_w);
+        ui.hold_w = -1;
+    }
     for (i = 0; i < 4; i++) {
         int d = plat_enc(EN_K1 + i);
         if (!d)
             continue;
+        if (ui.menu) {                                   /* the clip menu: KNOB 1 picks its row */
+            if (i == 0)
+                ui.menu_row = (uint8_t)(((ui.menu_row + d) % CM_N + CM_N) % CM_N);
+            continue;
+        }
         if (ui.cfg) {
             seqcfg_turn(i, d);
             continue;
@@ -1049,6 +1154,32 @@ static void draw_param(void)
     }
 }
 
+/* the clip menu: the clip, its three rows (the one picked is lit), what the row does, and how to leave */
+static void draw_clip_menu(void)
+{
+    static const char *const ROW[CM_N] = {"SAVE", "DELETE", "EXIT"};
+    char b[24], *q;
+    int r;
+    box(14, 8, 212, 126, RGB(20, 20, 28));
+    q = put_s(b, "CLIP ");
+    put_i(q, ui.menu_clip + 1);
+    text_c(120, vc(&FONT_B, 14, 20), &FONT_B, b, C_HI);
+    for (r = 0; r < CM_N; r++) {
+        int y = 38 + r * 22, on = ui.menu_row == r;
+        if (on)
+            box(60, y, 120, 18, C_HI);
+        text_c(120, vc(&FONT_S, y, 18), &FONT_S, ROW[r], on ? C_BLACK : C_GRAY);
+    }
+    if (ui.menu_row == CM_SAVE) {
+        q = put_s(b, ui.menu_clip == dk_clip[ui.trk] ? "THIS CLIP" : "COPY CLIP ");
+        if (ui.menu_clip != dk_clip[ui.trk])
+            put_i(q, dk_clip[ui.trk] + 1);
+        text_c(120, vc(&FONT_XS, 106, 11), &FONT_XS, b, C_GRAY);
+    } else if (ui.menu_row == CM_DELETE)
+        text_c(120, vc(&FONT_XS, 106, 11), &FONT_XS, "EMPTY THIS CLIP", C_GRAY);
+    text_c(120, vc(&FONT_XS, 122, 11), &FONT_XS, "SAVE CONFIRMS, OTHER BUTTONS LEAVE", C_HI);
+}
+
 static void draw_home(void)
 {
     int t, cl;
@@ -1058,8 +1189,9 @@ static void draw_home(void)
         uint16_t tc = tcol(t);
         put_i(b, t + 1);
         text_r(20, vc(&FONT_XS, y, 11), &FONT_XS, b, t == ui.trk ? C_WHITE : C_GRAY);
-        for (cl = 0; cl < NCLIP; cl++) {
-            int x = 26 + cl * 13, now = dk_clip[t] == cl, q = dk_queued[t] == cl, has = clip_has(&proj.clip[t][cl]);
+        for (cl = 0; cl < BANK_N; cl++) {
+            int c = ui.bank * BANK_N + cl, x = 26 + cl * 13, now = dk_clip[t] == c, q = dk_queued[t] == c;
+            int has = c == dk_clip[t] ? clip_has(&act[t]) : store_has(t, c);
             cv_rect(x, y, 12, 11, t == ui.trk ? RGB(40, 40, 48) : C_LINE);
             if (now)
                 cv_rect(x, y, 12, 11, dk_muted[t] ? C_DIM : tc);
@@ -1255,7 +1387,11 @@ static void draw_main(void)
     switch (ui.view) {
     case V_SEQ: if (ui.cfg) draw_seqcfg(); else draw_seq(); break;
     case V_PARAM: draw_param(); draw_scatter(); break;
-    case V_HOME: draw_home(); break;
+    case V_HOME:
+        draw_home();
+        if (ui.menu)
+            draw_clip_menu();
+        break;
     case V_GLO: draw_glo(); break;
     case V_COMMON: draw_common(); break;
     default: {                                          /* ARP / KEYS / REC: the keyboard plays the track */
@@ -1311,7 +1447,8 @@ static void draw_knobs(void)
     cv_begin(240, KNOB_H, C_BLACK);
     {   /* where you are: the tag and the page dots at the right of the rule */
         const char *tag = ui.view == V_GLO ? "GLO" : ui.view == V_REC ? "REC" : scfg ? "SEQUENCER" : ui.view == V_SEQ && !editing ? "TAP A STEP" : cov ? "COMMON" : arpv ? "ARP" : editing ? "STEP" : ui.view == V_HOME ? "MIX" : GRP_N[ui.grp];
-        int np = editing || arpv || cov || ui.view == V_SEQ || ui.view == V_HOME || ui.view == V_GLO || ui.view == V_REC ? 1 : npages(ui.grp), dots = np > 1;
+        int np = ui.view == V_HOME ? NBANK : editing || arpv || cov || ui.view == V_SEQ || ui.view == V_GLO || ui.view == V_REC ? 1 : npages(ui.grp), dots = np > 1;
+        int cur = ui.view == V_HOME ? ui.bank : ui.page[ui.grp];
         int32_t xd = 237 - (dots ? np * 5 : 0), xt = xd - (dots ? 5 : 0) - tw(&FONT_XS, tag);
         {   /* the battery, at the left end of the rule: three bars; amber at one, red and blinking when it is empty; USB: plugged in */
             int bat = plat_battery(), bars = bat == 4 ? 3 : bat < 0 ? 0 : bat;
@@ -1326,7 +1463,7 @@ static void draw_knobs(void)
         }
         cv_text(xt, vc(&FONT_XS, 0, 11), &FONT_XS, tag, C_HI);
         for (i = 0; dots && i < np; i++)
-            cv_rect(xd + i * 5, 4, 3, 3, i == ui.page[ui.grp] ? C_HI : C_LINE);
+            cv_rect(xd + i * 5, 4, 3, 3, i == cur ? C_HI : C_LINE);
     }
     for (i = 0; i < 4; i++) {
         int cx = i * 60 + 30, touched = ui.touched == i && (int32_t)(ui.touch_until - plat_ms()) > 0;
@@ -1404,6 +1541,13 @@ static void draw_knobs(void)
                 u = (float)proj.set.level[ui.trk] / 127.0f;
                 goto draw_one;
             }
+            if (pi == PIX_SONG) {
+                static const char *const SONG_T[NSONG] = {"OFF", "LOOP", "ONE SHOT"};
+                lab = "Song";
+                put_s(val, SONG_T[proj.set.song[ui.trk]]);
+                u = (float)proj.set.song[ui.trk] / (float)(NSONG - 1);
+                goto draw_one;
+            }
             lab = eng_param(c->eng, pi)->name;
             eng_format(c->eng, pi, c->par[pi], val);
             u = (float)c->par[pi] / (float)(eng_param(c->eng, pi)->max ? eng_param(c->eng, pi)->max : 1);
@@ -1459,7 +1603,7 @@ static void leds(void)
             uint32_t m = 1u << BLACK_K[t];
             if (t == ui.trk && !(dk_muted[t] && blink))
                 k |= m;
-            else if (!dk_muted[t] && clip_has(&proj.clip[t][dk_clip[t]]))
+            else if (!dk_muted[t] && clip_has(&act[t]))
                 kd |= m;
         }
         if (ui.kprev & (1u << BLACK_K[10]))
@@ -1493,11 +1637,12 @@ static void leds(void)
                     kf |= m;
             }
         } else if (ui.view == V_HOME) {
-            for (i = 0; i < NCLIP; i++) {
+            for (i = 0; i < BANK_N; i++) {
                 uint32_t m = 1u << WHITE_K[i];
-                if (dk_clip[ui.trk] == i || (dk_queued[ui.trk] == i && blink))
+                int c = ui.bank * BANK_N + i;
+                if (dk_clip[ui.trk] == c || (dk_queued[ui.trk] == c && blink))
                     k |= m;
-                else if (clip_has(&proj.clip[ui.trk][i]))
+                else if (c == dk_clip[ui.trk] ? clip_has(&act[ui.trk]) : store_has(ui.trk, c))
                     kd |= m;
             }
         }
@@ -1510,6 +1655,12 @@ static void leds(void)
             b |= 1u << B_OCTDN;
     } else if ((ui.view == V_SEQ && nsteps_page() > 1) || (ui.view == V_PARAM && npages(ui.grp) > 1))
         bd |= (1u << B_OCTDN) | (1u << B_OCTUP);          /* OCT- / OCT+ page through the steps or the parameters */
+    else if (ui.view == V_HOME) {                         /* OCT- / OCT+ move the bank: dim where it can go */
+        if (ui.bank > 0)
+            bd |= 1u << B_OCTDN;
+        if (ui.bank < NBANK - 1)
+            bd |= 1u << B_OCTUP;
+    }
     if (store_dirty())
         bd |= 1u << B_SAVE;                               /* SAVE glows: something is not saved */
     if (ui.save_mode) {          /* SAVE: only what can be saved blinks (the tracks whose clip changed, GLO); SAVE at half = everything */
@@ -1540,6 +1691,7 @@ void ui_init(void)
         trk_grp[t] = PG_EDIT;
     ui.edit = -1;
     ui.press = -1;
+    ui.hold_w = -1;
     ui.pot_ref = -1;
     {   /* what the MASTER knob does is not saved: it starts where the pot is */
         int pos = (int)(fm_sqrtf((float)plat_master() * 256.0f) * (1.0f / 8.0f));
@@ -1552,11 +1704,52 @@ void ui_init(void)
 
 void ui_input_only(void) { input(); }
 
+/* song mode, in the main loop: at each pattern start a track with a song queues the clip that follows the one it plays.
+ * The copy is read from the log here, a whole pattern before it switches. LOOP: the next clip with steps, or the first
+ * clip of the run when the run ends (an empty clip after it). ONE SHOT: the next clip with steps, or the empty clip
+ * that ends the run (silent, and it stays there). */
+static uint32_t pat_seen[NTRK];
+static uint8_t clip_seen[NTRK];
+static int song_next(int t)
+{
+    int c = dk_clip[t], n = c + 1, s;
+    if (!clip_has(&act[t]))
+        return -1;
+    if (n < NCLIP && store_has(t, n))
+        return n;
+    if (proj.set.song[t] == SONG_LOOP) {
+        for (s = c; s > 0 && store_has(t, s - 1); s--)
+            ;
+        return s;
+    }
+    return n < NCLIP ? n : -1;
+}
+
+static void song_tick(void)
+{
+    int t, n;
+    for (t = 0; t < NTRK; t++) {
+        if (dk_clip[t] != clip_seen[t]) {                 /* the clip changed: a track that is on screen shows its bank */
+            clip_seen[t] = dk_clip[t];
+            if (t == ui.trk)
+                ui.bank = (uint8_t)(dk_clip[t] / BANK_N);
+        }
+        if (dk_pat_n[t] == pat_seen[t])
+            continue;
+        pat_seen[t] = dk_pat_n[t];
+        if (proj.set.song[t] == SONG_OFF || dk_queued[t] != 0xFF)
+            continue;
+        n = song_next(t);
+        if (n >= 0)
+            launch_clip(t, n, 0);
+    }
+}
+
 void ui_frame(void)
 {
     int t;
     input();
-    store_poll();
+    song_tick();
     if ((ui.frame & 127u) == 127u)
         dk_load_peak = 0;                                 /* the CPU peak is of the last ~2 s */
     for (t = 0; t < NTRK; t++) {

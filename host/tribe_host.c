@@ -143,8 +143,10 @@ static void flash_file(const char *path, int write)
         return;
     if (write)
         fwrite(logmem, 1, sizeof logmem, f);
-    else if (fread(logmem, 1, sizeof logmem, f) != sizeof logmem)
+    else {                                           /* a file from a build with fewer sectors: the rest of the log is blank */
         memset(logmem, 0xFF, sizeof logmem);
+        (void)!fread(logmem, 1, sizeof logmem, f);
+    }
     fclose(f);
 }
 #endif
@@ -388,9 +390,13 @@ static int expect(const char *what, const char *val, int line)
     else if (!strcmp(what, "view")) got = ui.view;
     else if (!strcmp(what, "trk")) got = ui.trk;
     else if (!strcmp(what, "clip")) got = dk_clip[t];
+    else if (!strcmp(what, "bank")) got = ui.bank;
+    else if (!strcmp(what, "song")) got = proj.set.song[t];
+    else if (!strcmp(what, "menu")) got = ui.menu;
+    else if (!strcmp(what, "menurow")) got = ui.menu_row;
     else if (!strcmp(what, "queued")) got = dk_queued[t];
     else if (!strcmp(what, "pos")) got = dk_pos[t];
-    else if (!strcmp(what, "eng")) got = proj.clip[t][dk_clip[t]].eng;
+    else if (!strcmp(what, "eng")) got = act[t].eng;
     else if (!strcmp(what, "bound")) got = dk_bound[t];
     else if (!strcmp(what, "muted")) got = dk_muted[t];
     else if (!strcmp(what, "edit")) got = ui.edit;
@@ -400,7 +406,7 @@ static int expect(const char *what, const char *val, int line)
     else if (!strcmp(what, "bpm")) got = proj.set.bpm_x10;
     else if (!strcmp(what, "dirty")) got = store_dirty();
     else if (!strcmp(what, "level")) got = proj.set.level[t];
-    else if (!strcmp(what, "nsteps")) got = __builtin_popcount(proj.clip[t][dk_clip[t]].on[0]) + __builtin_popcount(proj.clip[t][dk_clip[t]].on[1]);
+    else if (!strcmp(what, "nsteps")) got = __builtin_popcount(act[t].on[0]) + __builtin_popcount(act[t].on[1]);
     else if (!strcmp(what, "scat")) got = dk_scat[t];
     else if (!strcmp(what, "scatg")) got = dk_scat_g;
     else if (!strcmp(what, "arpn")) got = dk_arp_n[t];
@@ -408,12 +414,12 @@ static int expect(const char *what, const char *val, int line)
     else if (!strcmp(what, "arprate")) got = proj.set.arp_rate[t];
     else if (!strcmp(what, "cfg")) got = ui.cfg;
     else if (!strcmp(what, "trans")) got = dk_trans[t];
-    else if (!strcmp(what, "lensel")) got = proj.clip[t][dk_clip[t]].lensel;
-    else if (!strcmp(what, "seqrate")) got = proj.clip[t][dk_clip[t]].rate;
-    else if (!strcmp(what, "seqdir")) got = proj.clip[t][dk_clip[t]].dir;
-    else if (!strcmp(what, "seqswing")) got = proj.clip[t][dk_clip[t]].swing;
-    else if (!strcmp(what, "stepon")) got = step_on(&proj.clip[t][dk_clip[t]], atoi(val)) ? want : -1;     /* expect stepon N */
-    else if (!strcmp(what, "stepoff")) got = step_on(&proj.clip[t][dk_clip[t]], atoi(val)) ? -1 : want;
+    else if (!strcmp(what, "lensel")) got = act[t].lensel;
+    else if (!strcmp(what, "seqrate")) got = act[t].rate;
+    else if (!strcmp(what, "seqdir")) got = act[t].dir;
+    else if (!strcmp(what, "seqswing")) got = act[t].swing;
+    else if (!strcmp(what, "stepon")) got = step_on(&act[t], atoi(val)) ? want : -1;     /* expect stepon N */
+    else if (!strcmp(what, "stepoff")) got = step_on(&act[t], atoi(val)) ? -1 : want;
     else if (!strcmp(what, "peak_db_min") || !strcmp(what, "peak_db_max")) {
         got = (long)(peak_out > 0.0f ? 20.0 * log10((double)peak_out) : -200.0);
         if (!strcmp(what, "peak_db_min")) { op = '>'; } else { op = '<'; }
@@ -527,10 +533,10 @@ int main(int argc, char **argv)
             int got = proj.set.send[atoi(a[1]) & 1][atoi(a[2]) % NTRK];
             if (got != atoi(a[3])) { fprintf(stderr, "line %d: send %s of track %s is %d, not %s\n", line, a[1], a[2], got, a[3]); fails++; }
         } else if (!strcmp(a[0], "expectlfo")) {         /* expectlfo K VALUE: a control of the LFO of the clip on screen */
-            int got = proj.clip[ui.trk][dk_clip[ui.trk]].lfo[atoi(a[1]) % NLFO];
+            int got = act[ui.trk].lfo[atoi(a[1]) % NLFO];
             if (got != atoi(a[2])) { fprintf(stderr, "line %d: lfo %s is %d, not %s\n", line, a[1], got, a[2]); fails++; }
         } else if (!strcmp(a[0], "expectstep")) {        /* expectstep S NOTE LENMIN LENMAX: a step of the track on screen */
-            const dstep_t *st = &proj.clip[ui.trk][dk_clip[ui.trk]].st[atoi(a[1]) % NSTEPS];
+            const dstep_t *st = &act[ui.trk].st[atoi(a[1]) % NSTEPS];
             if (st->note != atoi(a[2]) || st->len < atoi(a[3]) || st->len > atoi(a[4])) {
                 fprintf(stderr, "line %d: step %s is note %d len %d (wanted %s, len %s..%s)\n", line, a[1], st->note, st->len, a[2], a[3], a[4]);
                 fails++;
@@ -548,7 +554,7 @@ int main(int argc, char **argv)
             int got = proj.set.knob[atoi(a[1]) & 3].kind;
             if (got != atoi(a[2])) { fprintf(stderr, "line %d: knob %s is kind %d, not %s\n", line, a[1], got, a[2]); fails++; }
         } else if (!strcmp(a[0], "expectpar")) {        /* expectpar TRK IDX VALUE: a pot of the playing clip */
-            int t = atoi(a[1]) % NTRK, got = proj.clip[t][dk_clip[t]].par[atoi(a[2]) % NPAR];
+            int t = atoi(a[1]) % NTRK, got = act[t].par[atoi(a[2]) % NPAR];
             if (got != atoi(a[3])) { fprintf(stderr, "line %d: track %s pot %s is %d, not %s\n", line, a[1], a[2], got, a[3]); fails++; }
         } else if (!strcmp(a[0], "expectlevel")) {      /* expectlevel TRK VALUE */
             int got = proj.set.level[atoi(a[1]) % NTRK];

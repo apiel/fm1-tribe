@@ -3,6 +3,15 @@ expect dirty 0
 tapkey b4
 expect trk 4
 expect level 80
+# track 5 starts on the clip it was on at the last save (clip 2): clip 0, with step 3, is saved too
+expect clip 2
+expect stepon 5
+expect stepon 9
+tap HOME
+tap PLAY
+wait 300
+tapkey w0
+wait 3000
 expect stepon 3
 tap HOME
 tap PLAY

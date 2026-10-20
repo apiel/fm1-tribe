@@ -71,7 +71,7 @@ int main(int argc, char **argv)
         proj.set.fxpar[sl] = (uint8_t)atoi(argv[5]);
         proj.set.send[sl][5] = (uint8_t)atoi(argv[6]);
     } else if (!strcmp(argv[1], "lfo")) {
-        clip_t *c = &proj.clip[5][0];
+        clip_t *c = &act[5];
         c->lfo[LFO_SHAPE] = (uint8_t)atoi(argv[2]);
         c->lfo[LFO_RATE] = (uint8_t)atoi(argv[3]);
         c->lfo[LFO_DEPTH] = (uint8_t)atoi(argv[4]);

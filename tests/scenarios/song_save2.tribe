@@ -1,0 +1,6 @@
+# second run, same flash: the song mode of track 3 is back, the others are OFF
+tap HOME
+tapkey b2
+expect song 1
+tapkey b0
+expect song 0
