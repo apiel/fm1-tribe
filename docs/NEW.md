@@ -3,6 +3,14 @@
 The newest version first. Install it with the [web installer](../install/); the
 [manual](../#manual) covers everything in detail.
 
+## 0.3 beta
+
+### Highlights
+- **Sixty-four clips per track**, in four banks of sixteen: OCT- and OCT+ on HOME move between the banks.
+- **Clip menu:** hold a clip key for about half a second to copy the track's clip into it, or to empty it.
+- **Song mode** (CLIPS, KNOB 4): a track plays its clips one after another, from the clip it is on. LOOP starts again; ONE SHOT stops at the first empty clip.
+- **Capture:** while a track plays, the notes you play on ARP or REC are kept. SAVE, then REC, writes them into the clip on screen and saves it.
+
 ## 0.1 beta
 
 The first public version of TRIBE, a fork of [X0X](https://github.com/charlesvestal/fm1-x0x) that
