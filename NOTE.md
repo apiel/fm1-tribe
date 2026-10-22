@@ -1,7 +1,3 @@
-- TRIBE engine more FX!!
- 
-- Capture mode like ableton move!!
-
 - TODO midi
   
 - Video generated

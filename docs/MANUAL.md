@@ -275,6 +275,12 @@ how long you held the key). Stopped, REC just plays.
 
 ![REC](img/screen-rec.png)
 
+**Capture** keeps what you play, even when you are not recording. While the track plays, the keys on
+ARP and REC are kept: the last 32 notes of the track, each at its nearest step, with the length you
+held it (a synth; a drum keeps its own). Nothing is written into the clip yet. Press **SAVE**, then
+**REC**: the capture goes into the clip on screen and that clip is saved. Keys played while the track
+is stopped are not kept, and a clip launch clears the capture.
+
 ---
 
 ## 10. The mix: SEL
@@ -375,8 +381,9 @@ what can be saved blinks:
 
 ![The save pick](img/screen-save.png)
 
-Press a blinking **track key** to save that clip, or **GLO** to save the settings. Press **SAVE
-again** to save everything that changed, including clips that are not on screen. Any other button
+Press a blinking **track key** to save that clip, or **GLO** to save the settings. **REC** saves the
+track's capture (section 9) into its clip on screen; REC blinks when there is one. Press **SAVE**
+again to save everything that changed, including clips that are not on screen. Any other button
 or key cancels. With nothing to save, SAVE only says so.
 
 The setting the **MASTER knob** is doing is never saved (its volume, if it is the volume): the pot

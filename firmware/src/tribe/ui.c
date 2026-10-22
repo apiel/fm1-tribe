@@ -59,12 +59,46 @@ static struct {
     uint8_t held_trk[NKEYS];
     uint8_t held_scat[NKEYS];            /* scatter slot of a held key + 1 */
     uint8_t rec_step[NKEYS];             /* REC: the step a held key wrote + 1 */
+    uint8_t cap_ser[NKEYS];              /* CAPTURE: the serial of the note a held key put in the capture, 0 none */
     uint32_t rec_t0[NKEYS];
     char msg[24];
     uint32_t msg_until, frame;
     int8_t touched;                      /* the knob last turned, for its highlight */
     uint32_t touch_until;
 } ui;
+
+/* CAPTURE: the last notes a track played live while its clip ran (ARP or REC keys), quantised like REC. SAVE then REC
+ * writes them into the clip on screen. A clip launch clears the track's capture. */
+#define CAP_N 32
+typedef struct {
+    uint8_t step, note, len, ser;        /* len 0: no held length (a drum, or the key is still down); ser 1..255, 0 never used */
+} cap_ev_t;
+static struct {
+    cap_ev_t ev[CAP_N];
+    uint8_t n, head, ser;                /* the notes kept, where the next goes, the last serial given */
+} cap[NTRK];
+
+static uint8_t cap_put(int t, int s, int note)
+{
+    cap_ev_t *e = &cap[t].ev[cap[t].head];
+    cap[t].ser = (uint8_t)(cap[t].ser % 255 + 1);
+    e->step = (uint8_t)s;
+    e->note = (uint8_t)note;
+    e->len = 0;
+    e->ser = cap[t].ser;
+    cap[t].head = (uint8_t)((cap[t].head + 1) % CAP_N);
+    if (cap[t].n < CAP_N)
+        cap[t].n++;
+    return cap[t].ser;
+}
+
+static void cap_set_len(int t, uint8_t ser, uint8_t len)
+{
+    int i;
+    for (i = 0; i < CAP_N; i++)
+        if (cap[t].ev[i].ser == ser)
+            cap[t].ev[i].len = len;
+}
 
 static int tw_len(const char *s)
 {
@@ -472,19 +506,25 @@ static void write_step(int t, int s, int note, int vel)
     c->st[s].vel = (uint8_t)vel;
 }
 
-/* REC: a synth note lasts as long as the key was held */
+/* REC and CAPTURE: a synth note lasts as long as the key was held */
 static void rec_release(int k)
 {
     clip_t *c;
-    if (!ui.rec_step[k])
+    if (!ui.rec_step[k] && !ui.cap_ser[k])
         return;
     c = &act[ui.held_trk[k]];
     if (eng_info(c->eng)->kind == EK_SYNTH) {
         uint32_t step_ms = 150000u / (proj.set.bpm_x10 ? proj.set.bpm_x10 : 1200u), q;
+        uint8_t len;
         q = (plat_ms() - ui.rec_t0[k]) * 4u / step_ms;
-        c->st[ui.rec_step[k] - 1].len = (uint8_t)(q < 1 ? 1 : q > 32 ? 32 : q);
+        len = (uint8_t)(q < 1 ? 1 : q > 32 ? 32 : q);
+        if (ui.rec_step[k])
+            c->st[ui.rec_step[k] - 1].len = len;
+        if (ui.cap_ser[k])
+            cap_set_len(ui.held_trk[k], ui.cap_ser[k], len);
     }
     ui.rec_step[k] = 0;
+    ui.cap_ser[k] = 0;
 }
 
 static void key_note(int k, int down)
@@ -508,15 +548,20 @@ static void key_note(int k, int down)
         ui.held_note[k] = (uint8_t)(note + 1);
         ui.held_trk[k] = ui.trk;
         ui.rec_step[k] = 0;
-        if (ui.view == V_REC && dk_playing) {         /* quantised to the nearest step: the first half of a step rounds back,
-                                                       * the second half forward (and that note sounds when its step comes) */
+        ui.cap_ser[k] = 0;
+        if (dk_playing) {                             /* quantised to the nearest step: the first half of a step rounds back,
+                                                       * the second half forward (and that note sounds when its step comes, in REC) */
             int len = LEN_OF(cur_clip()), p = dk_pos[ui.trk] % len;
             fwd = dk_tphase[ui.trk] >= 128;
             if (fwd)
                 p = dk_next[ui.trk] % len;                 /* the step the clip plays next, in its own direction */
-            write_step(ui.trk, p, note, 100);
-            ui.rec_step[k] = (uint8_t)(p + 1);
+            ui.cap_ser[k] = cap_put(ui.trk, p, note);
             ui.rec_t0[k] = plat_ms();
+            if (ui.view == V_REC) {
+                write_step(ui.trk, p, note, 100);
+                ui.rec_step[k] = (uint8_t)(p + 1);
+            } else
+                fwd = 0;                              /* ARP plays the key now: only REC defers it to its step */
         }
         if (!fwd)
             dk_note(ui.trk, note, 100);
@@ -551,8 +596,10 @@ static void launch_clip(int t, int c, int now)
 {
     int b = prep_rot[t];
     prep_rot[t] = (uint8_t)((b + 1) % NCLIP_BUF);
-    if (c != dk_clip[t])
+    if (c != dk_clip[t]) {
+        cap[t].n = 0;                                  /* the capture was of the clip that is going */
         (void)store_fetch(t, c, &clip_prep[t][b]);
+    }
     dk_launch(t, c, b, now);
 }
 
@@ -677,6 +724,25 @@ static void save_all(void)
     }
 }
 
+/* SAVE then REC: the track's capture goes into the clip on screen, and that clip is saved */
+static void save_capture(void)
+{
+    int t = ui.trk, i, n = cap[t].n, len = LEN_OF(&act[t]);
+    if (!n) {
+        say("NOTHING CAPTURED", 0);
+        return;
+    }
+    for (i = 0; i < n; i++) {                          /* oldest first */
+        const cap_ev_t *e = &cap[t].ev[(cap[t].head + CAP_N - n + i) % CAP_N];
+        if (e->step >= len)                            /* the clip got shorter since */
+            continue;
+        write_step(t, e->step, e->note, 100);
+        if (e->len)
+            act[t].st[e->step].len = e->len;
+    }
+    save_say(store_save_track(t), "CAPTURE SAVED");
+}
+
 /* the clip menu's buttons: SAVE confirms the row, any other button leaves it */
 static void menu_button(int b)
 {
@@ -724,10 +790,15 @@ static void button_down(int b)
         menu_button(b);
         return;
     }
-    if (ui.save_mode) {                                 /* SAVE: GLO saves the settings, SAVE again everything, any other button leaves */
+    if (ui.save_mode) {                                 /* SAVE: GLO saves the settings, REC the capture, SAVE again everything, any other button leaves */
         if (b == B_GLO) {
             int n = store_save_set();
             save_say(n, "GLO SAVED");
+            ui.save_mode = 0;
+            return;
+        }
+        if (b == B_REC) {
+            save_capture();
             ui.save_mode = 0;
             return;
         }
@@ -737,7 +808,7 @@ static void button_down(int b)
             return;
         }
     } else if (b == B_SAVE) {
-        if (store_dirty() || store_set_dirty())
+        if (store_dirty() || store_set_dirty() || cap[ui.trk].n)     /* a capture waits to be saved (REC) */
             ui.save_mode = 1;
         else
             say("NOTHING TO SAVE", 0);
@@ -1432,7 +1503,7 @@ static void draw_main(void)
     if (ui.save_mode) {                                  /* the SAVE pick stays up until something is picked */
         rbox(6, 26, 228, 86, 8, C_HI);                   /* one solid green panel with rounded corners */
         text_c(120, vc(&FONT_B, 34, 20), &FONT_B, "SAVE", C_BLACK);
-        text_c(120, vc(&FONT_S, 58, 16), &FONT_S, "PICK A TRACK OR GLO", C_BLACK);
+        text_c(120, vc(&FONT_S, 58, 16), &FONT_S, "PICK A TRACK, GLO OR REC", C_BLACK);
         text_c(120, vc(&FONT_S, 80, 16), &FONT_S, "SAVE AGAIN = SAVE ALL", C_BLACK);
         text_c(120, vc(&FONT_XS, 98, 12), &FONT_XS, "ANY OTHER KEY CANCELS", RGB(10, 70, 40));
     }
@@ -1671,6 +1742,8 @@ static void leds(void)
         bd |= 1u << B_SAVE;
         if (blink && store_set_dirty())
             b |= 1u << B_GLO;
+        if (blink && cap[ui.trk].n)                      /* REC blinks when the track has a capture */
+            b |= 1u << B_REC;
         for (t = 0; t < NTRK; t++)
             if (blink && trk_dirty(t))
                 k |= 1u << BLACK_K[t];

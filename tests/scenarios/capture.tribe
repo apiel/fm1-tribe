@@ -1,0 +1,45 @@
+# CAPTURE: while a track plays, the keys on ARP or REC are kept (the last 32 notes, quantised like REC, with their held
+# lengths). SAVE then REC writes them into the clip on screen and saves it. Keys played while stopped are not kept.
+tapkey b9
+expect trk 9
+expect nsteps 0
+tap ARP
+tap PLAY
+waitpos 9 2
+wait 20
+holdkey 12 300
+waitpos 9 4
+wait 20
+holdkey 14 480
+tap PLAY
+tapkey 15
+expect nsteps 0
+# SAVE shows the pick with REC in it; REC saves the capture: the two notes, at their steps (a drum keeps its length)
+tap SAVE
+shot capture_pick.png
+tap REC
+expect view 4
+expect stepon 2
+expect stepon 4
+expect nsteps 2
+expectstep 2 65 3 3
+expectstep 4 67 3 3
+expect dirty 0
+# a synth keeps the length each key was held: 300 ms = 10 quarter steps, 480 ms = 16 (at 125 BPM)
+tap SEQ
+tapkey b5
+expect trk 5
+tap ARP
+tap PLAY
+waitpos 5 2
+wait 20
+holdkey 12 300
+waitpos 5 4
+wait 20
+holdkey 14 480
+tap PLAY
+tap SAVE
+tap REC
+expectstep 2 65 9 11
+expectstep 4 67 15 18
+expect dirty 0
