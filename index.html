@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TRIBE for the FM-1</title>
+<meta name="description" content="Ten-track groovebox firmware for the M-VAVE FM-1: any engine on any track, 16 clips per track, scatter effects, two master effects.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600&family=Barlow+Semi+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400&display=swap">
+<style>
+:root {
+  --ground: #f4f5f6; --sheet: #ffffff; --ink: #1c1f23; --muted: #5b626a; --rule: #d9dde1;
+  --accent: #c8700a; --code-bg: #eef0f2; --swatch-ring: rgba(0,0,0,.18);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #131518; --sheet: #1a1d21; --ink: #e6e8eb; --muted: #9aa1a9; --rule: #2d3137;
+    --accent: #f0a043; --code-bg: #24282d; --swatch-ring: rgba(255,255,255,.22);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --ground: #131518; --sheet: #1a1d21; --ink: #e6e8eb; --muted: #9aa1a9; --rule: #2d3137;
+  --accent: #f0a043; --code-bg: #24282d; --swatch-ring: rgba(255,255,255,.22);
+  color-scheme: dark;
+}
+body {
+  background: var(--ground); color: var(--ink); margin: 0;
+  font: 400 17px/1.6 "Barlow", "Helvetica Neue", Arial, sans-serif;
+  padding-inline: 16px; padding-block: 32px 64px;
+}
+main { max-width: 46rem; margin: 0 auto; }
+h1, h2, h3 { font-family: "Barlow Semi Condensed", "Barlow", "Arial Narrow", sans-serif; text-wrap: balance; line-height: 1.15; }
+h1 { font-size: 2.3rem; font-weight: 700; margin: 0 0 .3rem; letter-spacing: -.01em; }
+h2 { font-size: 1.55rem; font-weight: 600; margin: 3rem 0 .8rem; padding-top: 1rem; border-top: 1px solid var(--rule); }
+h2 .num { color: var(--accent); margin-right: .35em; font-variant-numeric: tabular-nums; }
+h3 { font-size: 1.2rem; font-weight: 600; margin: 2rem 0 .5rem; }
+p, li { max-width: 65ch; }
+p { margin: 0 0 1rem; }
+ul, ol { padding-left: 1.3rem; margin: 0 0 1rem; }
+li { margin: .2rem 0; }
+strong { font-weight: 600; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+code, pre { font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace; font-size: .86em; }
+code { background: var(--code-bg); padding: .08em .35em; border-radius: 4px; }
+pre { background: var(--code-bg); padding: 14px 16px; border-radius: 8px; overflow-x: auto; line-height: 1.45; margin: 0 0 1.2rem; }
+pre code { background: none; padding: 0; font-size: inherit; }
+hr { display: none; }
+.table { overflow-x: auto; margin: 0 0 1.3rem; }
+table { border-collapse: collapse; width: 100%; font-size: .95rem; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; vertical-align: top; padding: .45rem .7rem .45rem 0; border-bottom: 1px solid var(--rule); }
+th { font-family: "Barlow Semi Condensed", "Barlow", sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; font-size: .82rem; color: var(--muted); }
+td:first-child { white-space: nowrap; }
+.lede { color: var(--muted); margin-bottom: 1.6rem; }
+.status { background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; padding: 12px 16px; }
+.status p { margin: 0; }
+a.home { color: inherit; text-decoration: none; }
+main > a.home { display: inline-block; font: 700 1rem "Barlow Semi Condensed", "Barlow", sans-serif; letter-spacing: .03em; color: var(--muted); margin: 0 0 .4rem; }
+a.home:hover { color: var(--accent); }
+.callout { border-left: 3px solid var(--accent); background: var(--sheet); border-radius: 0 8px 8px 0; padding: 10px 16px; margin: 0 0 1.2rem; max-width: 65ch; }
+.callout p { margin: 0; }
+details { border: 1px solid var(--rule); border-radius: 8px; padding: 0 16px; margin: 0 0 1.2rem; }
+details > summary { cursor: pointer; padding: 10px 0; font-weight: 600; color: var(--muted); }
+details[open] > summary { margin-bottom: .4rem; }
+details > :last-child { margin-bottom: 1rem; }
+.swatch { display: inline-block; width: .7em; height: .7em; border-radius: 3px; margin-right: .4em; vertical-align: .02em; box-shadow: 0 0 0 1px var(--swatch-ring); }
+nav.contents ol { columns: 2 14rem; column-gap: 2rem; padding-left: 1.3rem; }
+.figs { display: flex; flex-wrap: wrap; gap: 20px; margin: .4rem 0 1.6rem; }
+figure { margin: 0; flex: 0 1 auto; }
+figure img { display: block; max-width: 100%; height: auto; border-radius: 10px; }
+figure.shot img { width: 300px; box-shadow: 0 0 0 1px var(--rule); }
+figure.wide { flex-basis: 100%; }
+figure.wide img { width: 100%; }
+figcaption { color: var(--muted); font-size: .88rem; margin-top: .4rem; max-width: 300px; }
+figure.wide figcaption { max-width: none; }
+nav.contents li { break-inside: avoid; }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+
+html { scroll-padding-top: 64px; }
+main { max-width: 74rem; }
+body { padding-block: 32px 64px; }
+h1 { font-size: 3rem; margin: 0 0 .4rem; }
+.topbar { position: sticky; top: 0; z-index: 5; margin: 0 -16px 1.6rem; padding: 10px 16px; background: var(--ground);
+          border-bottom: 1px solid var(--rule); display: flex; flex-wrap: wrap; gap: 6px 22px; align-items: center;
+          font: 600 1.05rem "Barlow Semi Condensed", "Barlow", sans-serif; letter-spacing: .03em; }
+.topbar a { text-decoration: none; }
+.topbar a:hover { text-decoration: underline; }
+.topbar .brand { color: var(--ink); font-weight: 700; font-size: 1.2rem; margin-right: 6px; }
+.topbar .spacer { flex: 1; }
+a.discord { display: inline-flex; align-items: center; gap: .5em; background: #5865f2; color: #fff; border-radius: 999px;
+            padding: .5em 1.2em; font: 600 1.05rem "Barlow Semi Condensed", "Barlow", sans-serif; letter-spacing: .03em; text-decoration: none; }
+a.discord:hover, a.discord:focus-visible { background: #4752c4; text-decoration: none; outline: none; }
+a.discord svg { width: 1.3em; height: 1.3em; fill: currentColor; }
+.topbar a.discord { padding: .25em .9em; }
+.hero { display: flex; gap: 32px; align-items: center; margin: 0 0 1.6rem; }
+.hero img { width: 200px; height: auto; border-radius: 12px; box-shadow: 0 0 0 1px var(--rule); flex: none; }
+.hero .lede { margin: 0 0 1.2rem; max-width: 42rem; font-size: 1.1rem; }
+.cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+a.btn { display: inline-block; background: var(--accent); color: #1b1205; border-radius: 999px; padding: .5em 1.2em;
+        font: 600 1.05rem "Barlow Semi Condensed", "Barlow", sans-serif; letter-spacing: .03em; text-decoration: none; }
+a.btn.alt { background: none; color: var(--ink); box-shadow: inset 0 0 0 1px var(--rule); }
+a.btn:hover, a.btn:focus-visible { filter: brightness(1.1); outline: none; }
+@media (max-width: 640px) { .hero { flex-direction: column; align-items: flex-start; gap: 16px; } .hero img { width: 140px; } h1 { font-size: 2.4rem; } }
+.status { margin: 0 0 2rem; max-width: 60rem; }
+.shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 0 0 1rem; }
+.shots img { width: 100%; height: auto; border-radius: 8px; display: block; background: #000; }
+p.small { color: var(--muted); font-size: .9rem; }
+section.app > h2 { margin-top: 3rem; }
+section.app iframe { display: block; width: 100%; max-width: 62rem; border: 0; min-height: 360px; }
+section.app > p { max-width: 60rem; }
+.dl { margin: 1rem 0 0; }
+#manual { max-width: 56rem; }
+.callout-discord { margin: 3rem 0 0; padding: 24px 28px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 14px;
+                   display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: center; justify-content: space-between; }
+.callout-discord h2 { border: 0; margin: 0 0 .2rem; padding: 0; }
+.callout-discord p { margin: 0; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+<nav class="topbar" aria-label="On this page"><a class="brand" href="#top">TRIBE</a>
+  <a href="#emulator">Emulator</a> <a href="#install">Install</a> <a href="#manual">Manual</a> <a href="new/">What's new</a>
+  <a href="https://github.com/apiel/fm1-tribe">Source</a><span class="spacer"></span>
+  <a class="discord" href="https://discord.gg/fzHTbjh6x"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.2.5a18.3 18.3 0 0 0-6.4 0L8.6 3A19.8 19.8 0 0 0 3.7 4.4C.6 9 -.2 13.5.2 18a19.9 19.9 0 0 0 6 3l.5-.8c-.9-.3-1.7-.7-2.5-1.2l.6-.5a14.2 14.2 0 0 0 12.4 0l.6.5c-.8.5-1.6.9-2.5 1.2l.5.8a19.9 19.9 0 0 0 6-3c.5-5.2-.8-9.7-3.5-13.6ZM8.3 15.3c-1.2 0-2.1-1.1-2.1-2.4s.9-2.4 2.1-2.4 2.1 1.1 2.1 2.4-.9 2.4-2.1 2.4Zm7.4 0c-1.2 0-2.1-1.1-2.1-2.4s.9-2.4 2.1-2.4 2.1 1.1 2.1 2.4-.9 2.4-2.1 2.4Z"/></svg> Discord</a></nav>
+<div class="hero" id="top">
+  <img src="img/screen-splash.png" alt="The TRIBE splash screen">
+  <div>
+    <h1>TRIBE</h1>
+    <p class="lede">Groovebox firmware for the M-VAVE FM-1. Ten tracks, and any engine on any track: kicks, the 909 and
+808 voices, the 303. Sixteen clips per track, scatter effects, two master effects every track can send to, and four
+master knobs you assign to the volume, a DJ filter, the effects or the tempo.</p>
+    <div class="cta"><a class="btn" href="#emulator">Try it in the browser</a> <a class="btn alt" href="#install">Install v0.3-beta</a>
+      <a class="btn alt" href="new/">What's new</a> <a class="discord" href="https://discord.gg/fzHTbjh6x"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.2.5a18.3 18.3 0 0 0-6.4 0L8.6 3A19.8 19.8 0 0 0 3.7 4.4C.6 9 -.2 13.5.2 18a19.9 19.9 0 0 0 6 3l.5-.8c-.9-.3-1.7-.7-2.5-1.2l.6-.5a14.2 14.2 0 0 0 12.4 0l.6.5c-.8.5-1.6.9-2.5 1.2l.5.8a19.9 19.9 0 0 0 6-3c.5-5.2-.8-9.7-3.5-13.6ZM8.3 15.3c-1.2 0-2.1-1.1-2.1-2.4s.9-2.4 2.1-2.4 2.1 1.1 2.1 2.4-.9 2.4-2.1 2.4Zm7.4 0c-1.2 0-2.1-1.1-2.1-2.4s.9-2.4 2.1-2.4 2.1 1.1 2.1 2.4-.9 2.4-2.1 2.4Z"/></svg> Join the Discord</a></div>
+  </div>
+</div>
+<div class="shots">
+  <img src="img/screen-seq.png" alt="The sequencer: sixteen steps and a track's knobs">
+  <img src="img/screen-clips.png" alt="The clips: ten tracks, sixteen clips each">
+  <img src="img/screen-sel.png" alt="The mix: every track's level and its two sends">
+  <img src="img/screen-glo-fx.png" alt="The global settings: FX 1 and FX 2">
+</div>
+<div class="status">TRIBE is a beta, built on X0X and Felucca. It installs and uninstalls the way they do, and the installer can put
+M-VAVE's own firmware back. Installing is at your own risk.</div>
+
+<section class="app" aria-labelledby="emulator">
+<h2 id="emulator">Try it in the browser</h2>
+<p>The same code the FM-1 runs, with sound. Mouse, touch or keyboard; no FM-1 needed.</p>
+<iframe src="emu/?embed" title="TRIBE emulator" class="embed" allow="autoplay; midi" loading="lazy"></iframe>
+</section>
+
+<section class="app" aria-labelledby="install">
+<h2 id="install">Install v0.3-beta on your FM-1</h2>
+<p>From Chrome or Edge, with the FM-1 connected by USB. Nothing to install on the computer.
+<a href="new/">What's new in this version?</a></p>
+<iframe src="install/?embed" title="TRIBE web installer" class="embed" allow="midi" loading="lazy"></iframe>
+<p class="small dl">For the command-line installer: <a href="firmware/tribe-0.3-beta.fwsc">download tribe-0.3-beta.fwsc</a>, then
+<code>python3 tools/fm1_install.py tribe-0.3-beta.fwsc</code>. To go back to the official firmware, use the installer's stock-firmware step above, or M-VAVE's updater, M-UPGRADE, from
+<a href="https://www.m-vave.com/download">m-vave.com/download</a>. M-VAVE and FM-1 are trademarks of their owners.</p>
+</section>
+
+<div id="manual">
+<p>New in this version: see <a href="new/">What's new</a>.</p>
+<div class="figs"><figure class="wide"><img src="img/fm1-panel.svg" alt="The FM-1 (a drawing), running TRIBE, each control labelled" loading="lazy"><figcaption>The FM-1 (a drawing), running TRIBE, each control labelled</figcaption></figure></div>
+<hr>
+<nav class="contents" aria-label="Contents"><h2 id="contents">Contents</h2>
+<ol><li><a href="#s1">Install</a></li><li><a href="#s2">Getting started</a></li><li><a href="#s3">Controls</a></li><li><a href="#s4">Tracks and engines</a></li><li><a href="#s5">The sequencer</a></li><li><a href="#s6">Sound pages and the LFO</a></li><li><a href="#s7">Clips</a></li><li><a href="#s8">Scatter effects</a></li><li><a href="#s9">Keys, arpeggiator and recording</a></li><li><a href="#s10">The mix: SEL</a></li><li><a href="#s11">Global settings and the master knobs</a></li><li><a href="#s12">Saving</a></li><li><a href="#s13">Troubleshooting</a></li><li><a href="#s14">Parameters</a></li><li><a href="#s15">Credits</a></li></ol>
+</nav>
+<hr>
+<h2 id="s1"><span class="num">1</span>Install</h2>
+<p><strong>Try it first:</strong> the <a href="emu/">TRIBE emulator</a> runs the same code in the browser, with sound, played with the mouse, a touch screen or the keyboard.</p>
+<p><strong>Install:</strong> open the <a href="install/">web installer</a> in Chrome or Edge, connect the FM-1 with a USB data cable and press Install. Don't unplug it while it's writing; when it finishes, the FM-1 restarts into TRIBE.</p>
+<p><strong>Go back:</strong> "Back to the stock firmware", at the bottom of the same page, puts M-VAVE's firmware back (download the FM-1 V15 file from the link there, choose it, press the button). M-VAVE's own updater, M-UPGRADE, works too.</p>
+<div class="callout"><p>Installing other firmware is at your own risk. If the FM-1 ever won't start, see <a href="#recovering-an-fm-1-that-won-t-start">Recovering an FM-1 that won't start</a>.</p></div>
+<p>Your saved clips stay in the FM-1's memory when you install a newer version. The settings (tempo, levels, effects, knob setup) go back to their defaults after an install that changes how they are stored; the what's-new page says when that happens.</p>
+<details><summary>Install from the command line</summary>
+<p>Download the firmware file (for example <code>tribe-0.1-beta.fwsc</code>) from the <a href="https://github.com/apiel/fm1-tribe/releases">releases page</a>, get the TRIBE source from GitHub, install Python 3 with <code>pip3 install mido python-rtmidi</code>, and run:</p>
+<pre><code>python3 tools/fm1_install.py tribe-0.1-beta.fwsc</code></pre>
+<p><code>tools/flash.sh</code> does the same for a build you made yourself (see BUILDING.md).</p>
+</details>
+<hr>
+<h2 id="s2"><span class="num">2</span>Getting started</h2>
+<p>TRIBE starts with a small beat already in it, so there is something to hear straight away.</p>
+<ol><li>Press <strong>PLAY</strong>. Ten tracks are lined up, and several already have a pattern.</li><li>Press a black key to pick a track. The black keys are the tracks, 1 to 10, left to right. The screen's header names the track and its engine.</li><li>The white keys are the sixteen steps of the track. Press one to switch a step on, press it again to switch it off. Hold an "on" step to edit it: the three or four knobs become its note, velocity, probability (and length and slide on an ACID).</li><li>Press <strong>EDIT</strong>, <strong>ENV</strong> or <strong>FX</strong> to shape the track's sound with the four knobs.</li><li>Hold the eleventh black key (<strong>MUTE</strong>) and tap a track key to mute or unmute that track.</li><li>Press <strong>HOME</strong> for the clips: sixty-four per track, in banks of sixteen. Press <strong>HOME</strong> again for the next bank. Press a white key to launch one. It switches at the end of the pattern; press it again to switch at once.</li><li>Press <strong>SEL</strong> for the mix: each track's volume, its two sends and engine.</li><li>Press <strong>SAVE</strong> when you like what you hear.</li></ol>
+<hr>
+<h2 id="s3"><span class="num">3</span>Controls</h2>
+<p>The drawing at the top of the manual names every control. In more detail:</p>
+<div class="table"><table><thead><tr><th>Control</th><th>What it does</th></tr></thead><tbody><tr><td>MASTER</td><td>A pot. The master volume until you assign it something else in GLO.</td></tr><tr><td>SELECT, PRESETS, ALGORITHM</td><td>Three encoders, free for you to assign in GLO. By default SELECT is the DJ filter, PRESETS the amount of FX 1 and ALGORITHM the amount of FX 2.</td></tr><tr><td>OCT-, OCT+</td><td>Page through the steps (SEQ) or the sound pages (FX, ENV, LFO, EDIT). On the keyboard (ARP, REC), the octave.</td></tr><tr><td>KNOB 1–4</td><td>The four values at the bottom of the screen.</td></tr><tr><td>FX, ENV, LFO, EDIT</td><td>The track's sound, in four groups of parameters. Press the same button again for the next page of four. A button is dark when the engine has nothing in that group.</td></tr><tr><td>SEL</td><td>The mix: volume, sends and engine of every track.</td></tr><tr><td>GLO</td><td>The global settings.</td></tr><tr><td>HOME</td><td>The clips. Again: the next bank of sixteen.</td></tr><tr><td>SAVE</td><td>The save pick (see Saving).</td></tr><tr><td>ARP</td><td>The keyboard plays the track; arpeggiator and transposition.</td></tr><tr><td>SEQ</td><td>The steps. Hold it for the sequencer's settings.</td></tr><tr><td>PLAY</td><td>Start and stop.</td></tr><tr><td>REC</td><td>Record notes while it plays.</td></tr><tr><td>White keys</td><td>Steps. On HOME, clips. While it plays on a sound page or GLO, scatter effects. On ARP and REC, notes.</td></tr><tr><td>Black keys</td><td>Tracks 1–10. The eleventh is MUTE.</td></tr></tbody></table></div>
+<p>A button that opens a screen always opens the same one. The screen's name is in the strip above the knobs.</p>
+<div class="figs"><figure class="wide"><img src="img/fm1-keys.svg" alt="What the keys do" loading="lazy"><figcaption>What the keys do</figcaption></figure></div>
+<hr>
+<h2 id="s4"><span class="num">4</span>Tracks and engines</h2>
+<p>There are ten tracks. Each plays one <strong>engine</strong>, which belongs to the clip, so changing clips can change the engine too. Choose it on the SEL page, with KNOB 4.</p>
+<div class="table"><table><thead><tr><th>Engine</th><th>What it is</th></tr></thead><tbody><tr><td>NONE</td><td>An empty track.</td></tr><tr><td>KICK W</td><td>A kick built on a waveform: frequency, FM, folding, harmonics.</td></tr><tr><td>KICK P</td><td>A kick with a morphing oscillator and an FM pair.</td></tr><tr><td>909 BD, SD, LT, MT, HT, RS, CP, CH, OH, CR, RD</td><td>The 909 voices: kick, snare, three toms, rim, clap, closed and open hat, crash, ride.</td></tr><tr><td>808 BD, SD, LT, MT, HT, RS, CP, CB, CY, OH, CH</td><td>The 808 voices: kick, snare, three toms, rim, clap, cowbell, cymbal, open and closed hat.</td></tr><tr><td>ACID</td><td>The bass synth: the zicCycle 303, with accent, slide, a colour and a pitch envelope, and its LFO.</td></tr><tr><td>FM4</td><td>A mono 4-operator FM synth laid out like the Digitone's FM: operators C, A and B1/B2, eight algorithms with two outputs (X and Y, mixed by MIX), HARM and DTUN, two envelopes with end levels, a filter and an overdrive.</td></tr><tr><td>NOISE</td><td>A mono noise synth: white, pink, brown or dust (sparse clicks) through a drive (soft, hard or fold) and a filter (LP, HP, BP or notch), with key tracking, a built-in modulation (sine, random, drift or gate), an envelope, a bit and sample-rate crusher, and a comb that rings at the note.</td></tr></tbody></table></div>
+<p>Every drum engine is pitched: the note of a step changes its tune, which is what makes the kicks useful. A synth step has a note, a velocity, a length and a slide.</p>
+<p>A voice exists once. Each 909 and 808 voice can be on one track at a time (a second track that picks a voice already in use shows <strong>BUSY</strong> in the header and stays silent), there are two ACIDs, two LEADs and three kicks (KICK W and KICK P share them).</p>
+<div class="figs"><figure class="shot"><img src="img/screen-303.png" alt="An ACID track: note, velocity, length and slide for the held step" loading="lazy"><figcaption>An ACID track: note, velocity, length and slide for the held step</figcaption></figure></div>
+<hr>
+<h2 id="s5"><span class="num">5</span>The sequencer</h2>
+<p>Press <strong>SEQ</strong>. The sixteen white keys are the steps of the selected track, with the step the track is playing lit. Press a key to switch a step on or off. <strong>Hold</strong> an "on" step (about a third of a second) and it stays selected: the knobs become that step's.</p>
+<div class="figs"><figure class="shot"><img src="img/screen-step.png" alt="A step held: its note, velocity and probability" loading="lazy"><figcaption>A step held: its note, velocity and probability</figcaption></figure></div>
+<ul><li><strong>Drums:</strong> NOTE, VELOCITY, PROBABILITY (the chance it plays, 0–100%).</li><li><strong>ACID:</strong> NOTE, VELOCITY, LENGTH (in quarter steps), SLIDE (the note glides into the next).</li></ul>
+<p>With no step selected the knobs are greyed and do nothing. A track can be <strong>16, 32 or 64 steps</strong>; OCT- and OCT+ page through them, sixteen at a time.</p>
+<p><strong>Hold SEQ</strong> (about half a second) for the sequencer's settings of the clip, saved with it. Let go to go back to the steps.</p>
+<div class="figs"><figure class="shot"><img src="img/screen-seqcfg.png" alt="The sequencer&#x27;s settings" loading="lazy"><figcaption>The sequencer's settings</figcaption></figure></div>
+<div class="table"><table><thead><tr><th>Setting</th><th>Values</th></tr></thead><tbody><tr><td>LENGTH</td><td>16, 32 or 64 steps</td></tr><tr><td>RATE</td><td>1/16, 1/8, 1/32, and the triplets 1/16T, 1/8T, 1/32T</td></tr><tr><td>DIRECTION</td><td>forward, reverse, ping-pong, random</td></tr><tr><td>SWING</td><td>0–100%: the second step of each pair is late</td></tr></tbody></table></div>
+<p>Each track runs on its own clock, so a 1/32 hat can play over a 1/8 bass. A queued clip takes over when the track's pattern ends, in whatever direction it plays.</p>
+<hr>
+<h2 id="s6"><span class="num">6</span>Sound pages and the LFO</h2>
+<p><strong>FX, ENV, LFO and EDIT</strong> show the parameters of the selected track's engine in four groups. The four knobs edit the page; the name and value are under each knob. When a group has more than four parameters there are dots in the strip and OCT-/OCT+ (or pressing the button again) flip pages.</p>
+<div class="figs"><figure class="shot"><img src="img/screen-edit.png" alt="EDIT: the kick&#x27;s frequency, FM, wave and harmonic 2" loading="lazy"><figcaption>EDIT: the kick's frequency, FM, wave and harmonic 2</figcaption></figure><figure class="shot"><img src="img/screen-fx.png" alt="FX: drive, fold, reson and crush" loading="lazy"><figcaption>FX: drive, fold, reson and crush</figcaption></figure><figure class="shot"><img src="img/screen-env.png" alt="ENV: pitch shape, duration and curve" loading="lazy"><figcaption>ENV: pitch shape, duration and curve</figcaption></figure></div>
+<p>What each engine has is listed in section 14. Parameters belong to the <strong>clip</strong>: switch clips and the sound switches with it.</p>
+<p><strong>LFO</strong> (the synths only: ACID, LEAD, FM4 and NOISE, since a drum hit is too short for one) is a modulation of one of the engine's parameters. There is one per clip, saved with it.</p>
+<div class="table"><table><thead><tr><th>Control</th><th></th></tr></thead><tbody><tr><td>SHAPE</td><td>sine, triangle, saw, square, random</td></tr><tr><td>RATE</td><td>continuous, one step a click. Synced to the tempo: from 1/64 to 8 bars. Free: from 0.02 Hz (a cycle every 50 s) to 100 Hz; the slow part (under 1 Hz) takes the first third of the knob, so it is coarser there. A change glides, over about 30 ms, so turning it never jumps</td></tr><tr><td>DEPTH</td><td>0 is off; at full the parameter moves half its range each way</td></tr><tr><td>TARGET</td><td>the parameter it moves</td></tr><tr><td>SYNC</td><td>on: tempo-synced; off: free</td></tr><tr><td>RETRIG</td><td>restart on every note (with random: a new value on every note)</td></tr></tbody></table></div>
+<div class="figs"><figure class="shot"><img src="img/screen-lfo.png" alt="The LFO: a triangle on the cutoff" loading="lazy"><figcaption>The LFO: a triangle on the cutoff</figcaption></figure></div>
+<hr>
+<h2 id="s7"><span class="num">7</span>Clips</h2>
+<p>Press <strong>HOME</strong>. Each track has <strong>sixty-four clips</strong>, in four banks of sixteen; a clip holds everything of the track: pattern, engine, sound, LFO and sequencer settings. The white keys show one bank at a time: <strong>OCT-</strong> and <strong>OCT+</strong> move between the banks, and so does pressing <strong>HOME</strong> again (round again after the fourth; the dots at the right of the screen show which one). The grid shows ten rows (the tracks) of the bank's sixteen clips; a filled square is a clip with notes in it, the playing one is lit.</p>
+<p>The white keys launch a clip of the selected track:</p>
+<ul><li>The first press <strong>queues</strong> it (it blinks) and it takes over at the end of the pattern. It is launched when you let go of the key.</li><li>Press the same key again while it is queued to switch <strong>at once</strong>.</li><li>Hold a clip key for about half a second to open its <strong>clip menu</strong>. KNOB 1 picks a row: <strong>SAVE</strong> copies the clip the track is playing, with its unsaved changes, into this one; <strong>DELETE</strong> empties this one; <strong>EXIT</strong> closes the menu. Press <strong>SAVE</strong> to confirm. Any other button closes the menu without doing anything.</li></ul>
+<p>KNOB 1 on this page is the track's level. KNOB 4 is the track's <strong>song</strong> setting:</p>
+<ul><li><strong>OFF</strong>: a clip plays on its own.</li><li><strong>LOOP</strong>: the track plays its clips one after another, from the clip it is on, each for one pattern. The first empty clip ends the run, and the run starts again from its first clip.</li><li><strong>ONE SHOT</strong>: the same, but after the run's last clip the track goes on to the empty clip and stays silent there.</li></ul>
+<p>Empty clips are how you end a run, so delete a clip (or leave it empty) where a song should stop.</p>
+<div class="figs"><figure class="shot"><img src="img/screen-clips.png" alt="The clips: ten tracks, a bank of sixteen clips each" loading="lazy"><figcaption>The clips: ten tracks, a bank of sixteen clips each</figcaption></figure></div>
+<div class="callout"><p><strong>Changed and not saved?</strong> Only the clip a track is playing keeps its edits. When that track launches another clip, the unsaved edits are lost, and the screen says so. Save first (SAVE, then SAVE again, or the pick) to keep an edit. A song moves on by itself: save a clip before a song plays on from it.</p></div>
+<hr>
+<h2 id="s8"><span class="num">8</span>Scatter effects</h2>
+<p>While it <strong>plays</strong>, the second row of keys on a sound page (FX, ENV, LFO, EDIT), on SEL or on GLO is not for notes but for <strong>scatter effects</strong>, held for as long as you press. The first eight act on the selected track, the last eight on the whole mix:</p>
+<div class="table"><table><thead><tr><th>Keys 1–8 (the track)</th><th>Keys 9–16 (the mix)</th></tr></thead><tbody><tr><td>1/32, 1/16, 1/8: a loop of that length</td><td>1/32, 1/16, 1/8: a loop of that length</td></tr><tr><td>REV: reverse</td><td>REV: reverse</td></tr><tr><td>GATE: chop</td><td>GATE: chop</td></tr><tr><td>CRSH: bit crusher</td><td>CRSH: bit crusher</td></tr><tr><td>DIST: distortion</td><td>LPF: a low-pass filter</td></tr><tr><td>RING: ring modulator</td><td>HPF: a high-pass filter</td></tr></tbody></table></div>
+<p>One effect at a time per scope. Stopped, the same keys audition the track's notes.</p>
+<div class="figs"><figure class="shot"><img src="img/screen-scatter.png" alt="Playing: a scatter effect held on the kick" loading="lazy"><figcaption>Playing: a scatter effect held on the kick</figcaption></figure></div>
+<hr>
+<h2 id="s9"><span class="num">9</span>Keys, arpeggiator and recording</h2>
+<p><strong>ARP</strong> turns the whole keyboard into a keyboard for the selected track, from F3 to G5; OCT- and OCT+ move it up and down. The first knob chooses a mode:</p>
+<div class="table"><table><thead><tr><th>Mode</th><th></th></tr></thead><tbody><tr><td>KEYS</td><td>Plain keyboard.</td></tr><tr><td>UP, DOWN, UPDN, RAND</td><td>The held keys arpeggiate (with PLAY). RATE (1/16, 1/8, 1/4), GATE and OCT (octaves) are the other knobs.</td></tr><tr><td>TRSP</td><td>Transposition: a key is a number of semitones from middle C (the dot). The track's sequence plays transposed until the next key. Leaving TRSP puts it back.</td></tr></tbody></table></div>
+<div class="figs"><figure class="shot"><img src="img/screen-arp.png" alt="ARP in KEYS mode" loading="lazy"><figcaption>ARP in KEYS mode</figcaption></figure></div>
+<p><strong>REC</strong> gives the keyboard to the selected track too, and while the track plays it <strong>records</strong>: a note goes into the nearest step of the track's pattern (a drum hit, or an ACID note whose length is how long you held the key). Stopped, REC just plays.</p>
+<div class="figs"><figure class="shot"><img src="img/screen-rec.png" alt="REC" loading="lazy"><figcaption>REC</figcaption></figure></div>
+<p><strong>Capture</strong> keeps what you play, even when you are not recording. While the track plays, the keys on ARP and REC are kept: the last 32 notes of the track, each at its nearest step, with the length you held it (a synth; a drum keeps its own). Nothing is written into the clip yet. Press <strong>SAVE</strong>, then <strong>REC</strong>: the capture goes into the clip on screen and that clip is saved. Keys played while the track is stopped are not kept, and a clip launch clears the capture.</p>
+<hr>
+<h2 id="s10"><span class="num">10</span>The mix: SEL</h2>
+<p><strong>SEL</strong> is the page of what every track has. Each track is a column: the wide bar is its live level (after the volume and the mute), the white tick the volume, and the two thin bars its sends. Black keys pick the track. The white keys work as on the other sound pages: they play the track when it is stopped, and are the scatter keys while it plays.</p>
+<div class="figs"><figure class="shot"><img src="img/screen-sel.png" alt="SEL: volume, the two sends and engine" loading="lazy"><figcaption>SEL: volume, the two sends and engine</figcaption></figure></div>
+<div class="table"><table><thead><tr><th>Knob</th><th></th></tr></thead><tbody><tr><td>VOLUME</td><td>the track's level</td></tr><tr><td>SEND 1</td><td>how much goes to FX 1</td></tr><tr><td>SEND 2</td><td>how much goes to FX 2</td></tr><tr><td>ENGINE</td><td>which engine the clip on this track plays</td></tr></tbody></table></div>
+<p>The sends start closed. <strong>FX 1 and FX 2</strong> are two master effects (chosen in GLO, next section): raise a track's send to put it in the echo or the room. Sends are after the volume and the mute.</p>
+<hr>
+<h2 id="s11"><span class="num">11</span>Global settings and the master knobs</h2>
+<p><strong>GLO</strong> is a list; KNOB 1 scrolls, KNOB 2 changes the value of the row.</p>
+<div class="figs"><figure class="shot"><img src="img/screen-glo.png" alt="GLO" loading="lazy"><figcaption>GLO</figcaption></figure></div>
+<div class="table"><table><thead><tr><th>Row</th><th></th></tr></thead><tbody><tr><td>TEMPO</td><td>30–300 BPM</td></tr><tr><td>VOLUME</td><td>The master volume. It counts when the MASTER knob is not the volume; otherwise the row says MASTER KNOB.</td></tr><tr><td>DJ FILTER</td><td>One knob: low-pass to the left, high-pass to the right, off in the middle</td></tr><tr><td>DJ RESO</td><td>The DJ filter's resonance</td></tr><tr><td>FX1 TYPE, FX1 AMOUNT, FX1 PARAM</td><td>The first master effect: what it is, its return level and its own control</td></tr><tr><td>FX2 TYPE, FX2 AMOUNT, FX2 PARAM</td><td>The same for the second</td></tr><tr><td>MASTER / SELECT / PRESETS / ALGO KNOB</td><td>What each of the four knobs does</td></tr><tr><td>COMP THRESH … COMP MIX</td><td>The master compressor</td></tr><tr><td>CLIPS</td><td>How many clips are unsaved</td></tr><tr><td>CPU</td><td>The audio's load, and its peak</td></tr><tr><td>BATTERY</td><td>The charge, or USB POWER</td></tr></tbody></table></div>
+<div class="figs"><figure class="shot"><img src="img/screen-glo-fx.png" alt="FX 1 and FX 2 in GLO: type, amount and parameter" loading="lazy"><figcaption>FX 1 and FX 2 in GLO: type, amount and parameter</figcaption></figure></div>
+<h3 id="fx-1-and-fx-2">FX 1 and FX 2</h3>
+<p>Each of the two master effects is one of:</p>
+<div class="table"><table><thead><tr><th>Type</th><th>PARAM is</th></tr></thead><tbody><tr><td>REVERB</td><td>SIZE of the room</td></tr><tr><td>DELAY</td><td>FEEDBACK (a dotted eighth, darker with every repeat)</td></tr><tr><td>DRIVE</td><td>how hard it is driven (a soft clip)</td></tr><tr><td>DISTORT</td><td>how hard it is driven (a hard clip)</td></tr><tr><td>FUZZ</td><td>the fuzz (lopsided clipping)</td></tr><tr><td>WAVSHAPE</td><td>the fold of a wavefolder</td></tr><tr><td>CRUSH</td><td>the bits and the sample rate</td></tr><tr><td>DECIM</td><td>the sample-rate reduction</td></tr><tr><td>RING</td><td>the ring modulator's frequency, 40 Hz–2 kHz</td></tr><tr><td>CHORUS</td><td>the speed of the wobble, 0.2–5 Hz</td></tr><tr><td>FLANGER</td><td>the speed of the sweep, 0.05–2 Hz</td></tr><tr><td>PHASER</td><td>the speed of the sweep, 0.1–4 Hz</td></tr><tr><td>TREMOLO</td><td>the speed of the volume swing, 0.5–12 Hz</td></tr><tr><td>COMB</td><td>the pitch the comb rings at, 40 Hz–2 kHz</td></tr></tbody></table></div>
+<p><strong>AMOUNT</strong> is how much of the effect returns to the mix. The reverb and the delay have one buffer each, so only one of the two slots can be a reverb and only one a delay. CHORUS, FLANGER and COMB share one short line, so only one of the two slots can be one of those.</p>
+<h3 id="the-four-knobs">The four knobs</h3>
+<p>MASTER (a pot) and SELECT, PRESETS and ALGORITHM (encoders) each do one of:</p>
+<p><strong>VOLUME · DJ FILTER · DJ RESO · FX1 AMOUNT · FX2 AMOUNT · BPM</strong></p>
+<p>Choose in GLO with KNOB 2 on the knob's row. A knob and the GLO row of the same name are one value: turn either. BPM on an encoder moves one BPM a click; on the pot, 30 to 300.</p>
+<p>The factory setup: MASTER volume, SELECT the DJ filter, PRESETS FX 1's amount, ALGORITHM FX 2's. The DJ filter acts on the whole mix.</p>
+<h3 id="the-compressor">The compressor</h3>
+<p>The master compressor is always on, then a limiter. GLO has its threshold, ratio, attack, release, makeup and mix. The defaults are a gentle glue: -12 dB, 2:1, 8 ms, 110 ms, +2 dB.</p>
+<hr>
+<h2 id="s12"><span class="num">12</span>Saving</h2>
+<p>Nothing is saved on its own. The <strong>SAVE</strong> light glows when something has changed.</p>
+<p>Press <strong>SAVE</strong> and a pick opens on the screen. Every other button goes dark, SAVE glows at half, and what can be saved blinks:</p>
+<ul><li>the <strong>track keys</strong> whose clip on screen has changed,</li><li><strong>GLO</strong>, if the global settings have changed.</li></ul>
+<div class="figs"><figure class="shot"><img src="img/screen-save.png" alt="The save pick" loading="lazy"><figcaption>The save pick</figcaption></figure></div>
+<p>Press a blinking <strong>track key</strong> to save that clip, or <strong>GLO</strong> to save the settings. <strong>REC</strong> saves the track's capture (section 9) into its clip on screen; REC blinks when there is one. Press <strong>SAVE</strong> again to save everything that changed, including clips that are not on screen. Any other button or key cancels. With nothing to save, SAVE only says so.</p>
+<p>The setting the <strong>MASTER knob</strong> is doing is never saved (its volume, if it is the volume): the pot is a position, and TRIBE reads it when it starts. Everything else on GLO is saved, the volume included when MASTER does something else.</p>
+<p>Clips are saved to the FM-1's flash, one at a time, only the ones that changed. If the power is cut in the middle of a save, the previous version of the clip is still there.</p>
+<hr>
+<h2 id="s13"><span class="num">13</span>Troubleshooting</h2>
+<p><strong>Update mode:</strong> hold OCT- and OCT+ together for five seconds. A countdown appears; let go before it ends to cancel.</p>
+<p><strong>Calibration:</strong> if a button or knob does the wrong thing, hold OCT- and OCT+ while you switch the FM-1 on. The screen then asks you to press each button and turn each knob in turn.</p>
+<p><strong>Questions and bugs:</strong> join the <a href="https://discord.gg/fzHTbjh6x">fm1-tribe Discord</a> or <a href="https://github.com/apiel/fm1-tribe/issues">open an issue</a>.</p>
+<p><strong>It's crackling or cutting out:</strong> look at CPU in GLO while everything plays. Ten tracks of ACIDs and kicks is a lot for the FM-1; turn tracks to NONE or to simpler engines if the peak reaches 100%.</p>
+<p><strong>After a crash:</strong> TRIBE shows a red CRASH screen and restarts by itself a few seconds later. The next start shows RESTARTED AFTER A CRASH and an address (PC ...) for a moment. If you report the problem, include that address and what you were doing.</p>
+<p><strong>Safe mode:</strong> if TRIBE crashes twice in a row while starting, it starts in SAFE MODE instead. There's no sound, but USB works, so the web installer can reach it: reinstall TRIBE, or put the stock firmware back from the same page. Press PLAY to try starting TRIBE normally again. If even safe mode fails twice, the FM-1 drops into the chip's own update mode, and only the rescue below can reach it.</p>
+<h3 id="recovering-an-fm-1-that-won-t-start">Recovering an FM-1 that won't start</h3>
+<p>If the FM-1 is in the chip's own update mode (a blank screen after crashes), neither the web installer nor M-VAVE's updater can see it, but a script can put M-VAVE's firmware back, on a Mac, with the USB cable you already have:</p>
+<p>Open Terminal, paste this line and press Return:</p>
+<pre><code>bash -c "$(curl -fsSL https://raw.githubusercontent.com/apiel/fm1-tribe/main/tools/fm1_rescue.sh)"</code></pre>
+<ol><li>If a window asks to install the command line developer tools, click Install. When it has finished, paste the line again.</li><li>If it asks for a password, type your Mac password (nothing shows as you type) and press Return.</li><li>When it says it's waiting, plug the FM-1 in and switch it on. It crashes and goes blank, and the script catches it. It checks the chip, saves a backup of the FM-1's memory in the <code>fm1-rescue</code> folder in your home folder, and asks before it writes anything.</li><li>Type <strong>yes</strong> and press Return. Don't unplug anything until it says it's restarting the FM-1. The FM-1 then starts into its original firmware, and you can install TRIBE again from there.</li></ol>
+<p>The script downloads M-VAVE's FM-1 V15 firmware and JieLi's flash loader, and checks both against known fingerprints. It writes only the firmware area of the memory, never the bootloader or the FM-1's own settings, and checks everything it writes. Running it again is always safe. If it fails, copy everything in the Terminal window and <a href="https://github.com/apiel/fm1-tribe/issues">open an issue</a>. If the FM-1 never shows up at all, Felucca's <a href="https://github.com/kurogedelic/FM-1-transporter">FM-1-transporter</a> (a small RP2040 board wired to the USB lines) can still reach it.</p>
+<hr>
+<h2 id="s14"><span class="num">14</span>Parameters</h2>
+<p>What each engine's four groups hold, page by page (four knobs a page). Ranges are what the knob shows; every knob is 0–127 underneath.</p>
+<div class="table"><table><thead><tr><th>Engine</th><th>FX</th><th>ENV</th><th>EDIT</th></tr></thead><tbody><tr><td>KICK W</td><td>Drive, Fold, Reson, Crush</td><td>PchShp, Dur, Curve</td><td>Freq, FM, Wave, Harm2, Harm3, Skew, Phase</td></tr><tr><td>KICK P</td><td>Drive, Wfold, Reson, Crush, Boost</td><td>Dur, SwpShp, SwpDpt, FMSnap</td><td>Freq, Morph, FMDpt, FMRat</td></tr><tr><td>909 BD</td><td>Drive, Dist</td><td>Attack, Decay, P.Dpth, Pitch</td><td>Tune</td></tr><tr><td>909 SD</td><td>Drive, Dist</td><td>(none)</td><td>Tune, Tone, Snappy</td></tr><tr><td>909 LT, MT, HT</td><td>Drive, Dist</td><td>Decay, Attack</td><td>Tune</td></tr><tr><td>909 RS</td><td>Drive, Dist</td><td>(none)</td><td>Tune</td></tr><tr><td>909 CP</td><td>Drive, Dist</td><td>Tail</td><td>Tune</td></tr><tr><td>909 CH, OH, CR, RD</td><td>Drive, Dist</td><td>Decay</td><td>Tune</td></tr><tr><td>808 BD</td><td>Drive, Dist</td><td>Decay, Attack</td><td>Tone, Tune</td></tr><tr><td>808 SD</td><td>Drive, Dist</td><td>Decay</td><td>Tone, Snappy, Tune</td></tr><tr><td>808 LT, MT, HT, RS</td><td>Drive, Dist</td><td>Decay</td><td>Tune, Sound</td></tr><tr><td>808 CP</td><td>Drive, Dist</td><td>Decay, Attack</td><td>Tune, Sound</td></tr><tr><td>808 CB, CY, OH, CH</td><td>Drive, Dist</td><td>Decay</td><td>Tune</td></tr><tr><td>ACID</td><td>Drive, Dist, DrvTyp</td><td>Decay, EnvMod, P.Dpth, Slide, Sustain</td><td>Cutoff, Reso, Color, Accent, Tune</td></tr><tr><td>LEAD</td><td>Drive, Dist, DrvTyp, Ring, RingFq</td><td>Attack, Decay, Sustain, Release, EnvMod, Slide</td><td>Cutoff, Reso, Color, Detune, Unison, Sub, Tune</td></tr><tr><td>FM4</td><td>Drive, Trig</td><td>Atk A, Dec A, End A, Lev A, Atk B, Dec B, End B, Lev B, Attack, Decay, Sustain, Release</td><td>Alg, Ratio C, Ratio A, Ratio B, Harm, Detune, Feedbk, Mix, Cutoff, Reso</td></tr><tr><td>NOISE</td><td>Drive, DrvTyp, Crush, CrshRt, Comb, CombFb</td><td>Attack, Decay, Sustain, Release, EnvMod</td><td>NType, FType, Cutoff, Reso, KeyTrk, Mod, ModAmt, ModRat</td></tr></tbody></table></div>
+<p>ACID, LEAD, FM4 and NOISE also have the LFO page (section 6). The track's level is VOLUME on SEL (with the two sends), and KNOB 1 on CLIPS; no sound page has a level of its own.</p>
+<hr>
+<h2 id="s15"><span class="num">15</span>Credits</h2>
+<p>TRIBE is free software under the GNU General Public License, version 3. If you share the firmware, you must also share its source code.</p>
+<ul><li>TRIBE is a fork of <strong>X0X</strong> by Charles Vestal, which is built on <strong>Felucca</strong> by Leo Kuroshita, Hügelton Instruments: the hardware layer, USB, update loader, installer and storage.</li><li>The kicks (KICK W and KICK P) and the scatter effects are from <strong>zicBox</strong> by apiel.</li><li>The 909 is from <strong>9W9</strong> by athousanddetails, which is based on <strong>ER-99</strong> by Matthew Cieplak. Its hat and cymbal samples are ER-99's.</li><li>The 808 is from <strong>8W8</strong> by athousanddetails.</li><li>ACID is a port of the <strong>zicCycle 303</strong> (Model:Cycles, by apiel), in float.</li><li>The fonts are Barlow Semi Condensed and Terminus (SIL Open Font License).</li></ul>
+<p>M-VAVE and FM-1 are trademarks of their owners, and TR-808, TR-909 and TB-303 are Roland trademarks. TRIBE is not connected with M-VAVE, Roland or Hügelton Instruments.</p>
+</div>
+
+<div class="callout-discord">
+  <div><h2>Join the fm1-tribe Discord</h2><p>Questions, bugs, ideas, and what you make with it.</p></div>
+  <a class="discord" href="https://discord.gg/fzHTbjh6x"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.2.5a18.3 18.3 0 0 0-6.4 0L8.6 3A19.8 19.8 0 0 0 3.7 4.4C.6 9 -.2 13.5.2 18a19.9 19.9 0 0 0 6 3l.5-.8c-.9-.3-1.7-.7-2.5-1.2l.6-.5a14.2 14.2 0 0 0 12.4 0l.6.5c-.8.5-1.6.9-2.5 1.2l.5.8a19.9 19.9 0 0 0 6-3c.5-5.2-.8-9.7-3.5-13.6ZM8.3 15.3c-1.2 0-2.1-1.1-2.1-2.4s.9-2.4 2.1-2.4 2.1 1.1 2.1 2.4-.9 2.4-2.1 2.4Zm7.4 0c-1.2 0-2.1-1.1-2.1-2.4s.9-2.4 2.1-2.4 2.1 1.1 2.1 2.4-.9 2.4-2.1 2.4Z"/></svg> Join the Discord</a>
+</div>
+<script>
+// the emulator and the installer sit in frames; each tells its height (they depend on the width)
+addEventListener("message", (e) => {
+  const h = e.data && e.data.tribeHeight;
+  if (!h) return;
+  for (const f of document.querySelectorAll("iframe.embed")) if (f.contentWindow === e.source) f.style.height = Math.ceil(h) + "px";
+});
+</script>
+</main>
+</body>
+</html>

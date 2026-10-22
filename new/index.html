@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TRIBE: What&#x27;s new</title>
+<meta name="description" content="What&#x27;s new for TRIBE, groovebox firmware for the M-VAVE FM-1.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600&family=Barlow+Semi+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400&display=swap">
+<style>
+:root {
+  --ground: #f4f5f6; --sheet: #ffffff; --ink: #1c1f23; --muted: #5b626a; --rule: #d9dde1;
+  --accent: #c8700a; --code-bg: #eef0f2; --swatch-ring: rgba(0,0,0,.18);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #131518; --sheet: #1a1d21; --ink: #e6e8eb; --muted: #9aa1a9; --rule: #2d3137;
+    --accent: #f0a043; --code-bg: #24282d; --swatch-ring: rgba(255,255,255,.22);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --ground: #131518; --sheet: #1a1d21; --ink: #e6e8eb; --muted: #9aa1a9; --rule: #2d3137;
+  --accent: #f0a043; --code-bg: #24282d; --swatch-ring: rgba(255,255,255,.22);
+  color-scheme: dark;
+}
+body {
+  background: var(--ground); color: var(--ink); margin: 0;
+  font: 400 17px/1.6 "Barlow", "Helvetica Neue", Arial, sans-serif;
+  padding-inline: 16px; padding-block: 32px 64px;
+}
+main { max-width: 46rem; margin: 0 auto; }
+h1, h2, h3 { font-family: "Barlow Semi Condensed", "Barlow", "Arial Narrow", sans-serif; text-wrap: balance; line-height: 1.15; }
+h1 { font-size: 2.3rem; font-weight: 700; margin: 0 0 .3rem; letter-spacing: -.01em; }
+h2 { font-size: 1.55rem; font-weight: 600; margin: 3rem 0 .8rem; padding-top: 1rem; border-top: 1px solid var(--rule); }
+h2 .num { color: var(--accent); margin-right: .35em; font-variant-numeric: tabular-nums; }
+h3 { font-size: 1.2rem; font-weight: 600; margin: 2rem 0 .5rem; }
+p, li { max-width: 65ch; }
+p { margin: 0 0 1rem; }
+ul, ol { padding-left: 1.3rem; margin: 0 0 1rem; }
+li { margin: .2rem 0; }
+strong { font-weight: 600; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+code, pre { font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace; font-size: .86em; }
+code { background: var(--code-bg); padding: .08em .35em; border-radius: 4px; }
+pre { background: var(--code-bg); padding: 14px 16px; border-radius: 8px; overflow-x: auto; line-height: 1.45; margin: 0 0 1.2rem; }
+pre code { background: none; padding: 0; font-size: inherit; }
+hr { display: none; }
+.table { overflow-x: auto; margin: 0 0 1.3rem; }
+table { border-collapse: collapse; width: 100%; font-size: .95rem; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; vertical-align: top; padding: .45rem .7rem .45rem 0; border-bottom: 1px solid var(--rule); }
+th { font-family: "Barlow Semi Condensed", "Barlow", sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; font-size: .82rem; color: var(--muted); }
+td:first-child { white-space: nowrap; }
+.lede { color: var(--muted); margin-bottom: 1.6rem; }
+.status { background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; padding: 12px 16px; }
+.status p { margin: 0; }
+a.home { color: inherit; text-decoration: none; }
+main > a.home { display: inline-block; font: 700 1rem "Barlow Semi Condensed", "Barlow", sans-serif; letter-spacing: .03em; color: var(--muted); margin: 0 0 .4rem; }
+a.home:hover { color: var(--accent); }
+.callout { border-left: 3px solid var(--accent); background: var(--sheet); border-radius: 0 8px 8px 0; padding: 10px 16px; margin: 0 0 1.2rem; max-width: 65ch; }
+.callout p { margin: 0; }
+details { border: 1px solid var(--rule); border-radius: 8px; padding: 0 16px; margin: 0 0 1.2rem; }
+details > summary { cursor: pointer; padding: 10px 0; font-weight: 600; color: var(--muted); }
+details[open] > summary { margin-bottom: .4rem; }
+details > :last-child { margin-bottom: 1rem; }
+.swatch { display: inline-block; width: .7em; height: .7em; border-radius: 3px; margin-right: .4em; vertical-align: .02em; box-shadow: 0 0 0 1px var(--swatch-ring); }
+nav.contents ol { columns: 2 14rem; column-gap: 2rem; padding-left: 1.3rem; }
+.figs { display: flex; flex-wrap: wrap; gap: 20px; margin: .4rem 0 1.6rem; }
+figure { margin: 0; flex: 0 1 auto; }
+figure img { display: block; max-width: 100%; height: auto; border-radius: 10px; }
+figure.shot img { width: 300px; box-shadow: 0 0 0 1px var(--rule); }
+figure.wide { flex-basis: 100%; }
+figure.wide img { width: 100%; }
+figcaption { color: var(--muted); font-size: .88rem; margin-top: .4rem; max-width: 300px; }
+figure.wide figcaption { max-width: none; }
+nav.contents li { break-inside: avoid; }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+</head>
+<body>
+<main>
+<a class="home" href="../">TRIBE</a>
+<h1>What's new</h1>
+<p>The newest version first. Install it with the <a href="../install/">web installer</a>; the <a href="../#manual">manual</a> covers everything in detail.</p>
+<h2 id="s0">0.3 beta</h2>
+<h3 id="highlights">Highlights</h3>
+<ul><li><strong>Sixty-four clips per track</strong>, in four banks of sixteen: OCT- and OCT+ on HOME move between the banks.</li><li><strong>Clip menu:</strong> hold a clip key for about half a second to copy the track's clip into it, or to empty it.</li><li><strong>Song mode</strong> (CLIPS, KNOB 4): a track plays its clips one after another, from the clip it is on. LOOP starts again; ONE SHOT stops at the first empty clip.</li><li><strong>Capture:</strong> while a track plays, the notes you play on ARP or REC are kept. SAVE, then REC, writes them into the clip on screen and saves it.</li></ul>
+<h2 id="s0">0.1 beta</h2>
+<p>The first public version of TRIBE, a fork of <a href="https://github.com/charlesvestal/fm1-x0x">X0X</a> that trades its five fixed parts for ten tracks that can play any engine.</p>
+<div class="figs"><figure class="shot"><img src="img/screen-splash.png" alt="TRIBE&#x27;s start screen" loading="lazy"><figcaption>TRIBE's start screen</figcaption></figure></div>
+<h3 id="highlights">Highlights</h3>
+<ul><li><strong>Ten tracks, any engine on any track:</strong> two kicks, the 909 and 808 voices, and the 303.</li><li><strong>Sixteen clips per track</strong>, launched from HOME at the end of the pattern or at once.</li><li><strong>Per-clip sequencer settings:</strong> 16, 32 or 64 steps, six rates including triplets, four directions, swing.</li><li><strong>Scatter effects</strong> on the second row of keys while it plays: loops, reverse, gate, crush, distortion, ring, filters.</li><li><strong>Two master effects</strong>, FX 1 and FX 2, each a reverb, delay, drive, distortion, fuzz, wavefolder, crusher, decimator, ring modulator, chorus, flanger, phaser, tremolo or comb, fed by every track's two sends.</li><li><strong>Four master knobs</strong> (the MASTER pot and three encoders) that you assign to the volume, the DJ filter and its resonance, the amount of either effect, or the tempo.</li><li><strong>An always-on master compressor</strong> and limiter, set in GLO.</li></ul>
+<div class="figs"><figure class="shot"><img src="img/screen-sel.png" alt="The mix: every track&#x27;s level and sends" loading="lazy"><figcaption>The mix: every track's level and sends</figcaption></figure></div>
+<h3 id="playing">Playing</h3>
+<ul><li>ARP turns the keyboard into a keyboard for the selected track, with an arpeggiator (up, down, up-down, random) and a transposition mode.</li><li>REC quantises what you play to the track's own steps.</li><li>A 303 LFO on any of its parameters, saved with the clip.</li></ul>
+<div class="figs"><figure class="shot"><img src="img/screen-seqcfg.png" alt="The sequencer&#x27;s settings" loading="lazy"><figcaption>The sequencer's settings</figcaption></figure></div>
+<h3 id="saving">Saving</h3>
+<ul><li>SAVE opens a pick: the tracks whose clip changed and GLO blink; press one to save it, SAVE again to save everything.</li><li>A clip you changed and did not save comes back as it was when you launch it again.</li><li>What a MASTER knob does is never saved: the pot's position is read when it starts.</li></ul>
+<div class="figs"><figure class="shot"><img src="img/screen-save.png" alt="The save pick" loading="lazy"><figcaption>The save pick</figcaption></figure></div>
+<h3 id="known-limits">Known limits</h3>
+<ul><li>Beta software: it has been tested in a simulator and in the browser emulator more than on the FM-1, and ten tracks of dense 303s can overload the FM-1's processor. GLO shows the CPU load.</li><li>There is no MIDI yet.</li></ul>
+</main>
+</body>
+</html>
