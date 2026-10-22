@@ -18,8 +18,9 @@
  *  Attack, Decay, Sustain, Release   the envelope
  *  EnvMod   the envelope opens the cutoff, up to 60 semitones
  *  EnvWav   the envelope folds the cycle, up to a full fold
- *  FxTyp    Off, Drive, Crush, Decim, Ring: one effect after the filter
- *  FxPar    the one parameter of that effect: drive gain, bit depth, hold, ring frequency
+ *  FxTyp    Off, Drive, Crush, Decim, Ring, Dist, Fuzz, Fold, Trem, Phaser: one effect after the filter
+ *  FxPar    the one parameter of that effect: drive gain, bit depth, hold, ring frequency, clip gain, fuzz gain,
+ *           fold amount, tremolo rate, phaser rate
  *
  * One voice: a note over a sounding one with the slide flag only changes the note the filter follows. Every
  * instance is self-contained (no mutable static state). */
@@ -42,7 +43,7 @@ enum {
     TS_NPARAMS
 };
 enum { TF_LP, TF_HP, TF_BP, TF_NOTCH };
-enum { TX_OFF, TX_DRIVE, TX_CRUSH, TX_DECIM, TX_RING, TX_NFX };
+enum { TX_OFF, TX_DRIVE, TX_CRUSH, TX_DECIM, TX_RING, TX_DIST, TX_FUZZ, TX_FOLD, TX_TREM, TX_PHASER, TX_NFX };
 
 typedef struct tsyn {
     uint8_t pot[TS_NPARAMS];
@@ -57,7 +58,8 @@ typedef struct tsyn {
     float fx_drive;                  /* drive: the gain into tanh */
     float crush_scale;               /* the levels per unit: 2^(bits - 1); 0 = off */
     float hold_n;                    /* decimation: samples held */
-    float ring_inc;                  /* ring modulator: phase step per sample */
+    float fx_gain, fx_fuzz, fx_fold; /* clip gain, fuzz gain, fold amount: from FxPar */
+    float fx_inc;                    /* the phase step per sample of the effect that has one (ring, tremolo, phaser) */
 
     /* voice */
     float ph;                        /* the oscillator's phase, 0 .. 1 */
@@ -65,7 +67,9 @@ typedef struct tsyn {
     float note_st;                   /* the note from A4 in semitones: the filter follows it by KeyTrk */
     int gate, idle, stage, cc;       /* stage: 0 attack, 1 decay / sustain, 2 release */
     float env;
-    float ring_ph;
+    float fx_ph;                     /* that effect's phase, 0 .. 1 */
+    float fx_dc;                     /* fuzz: its DC, taken out again */
+    float ap[4];                     /* phaser: the four allpass states */
     float hold_c, hold_v;            /* decimation: the count and the held value */
     svf_t fl;
 } tsyn_t;

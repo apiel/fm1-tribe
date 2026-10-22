@@ -6,7 +6,7 @@
 #include "cycle.h"
 
 static const char *const ftype_names[] = { "LP", "HP", "BP", "Notch" };
-static const char *const fx_names[] = { "Off", "Drive", "Crush", "Decim", "Ring" };
+static const char *const fx_names[] = { "Off", "Drive", "Crush", "Decim", "Ring", "Dist", "Fuzz", "Fold", "Trem", "Phaser" };
 
 #define TSYN_OUT 0.3f                  /* level: a default note is about as loud as LEAD's (rms 0.17) */
 
@@ -27,8 +27,8 @@ static const x0x_param_t params[TS_NPARAMS] = {
     { "Release", 127, 50, 0 },       /* 5 ms .. 3 s */
     { "EnvMod", 127, 50, 0 },        /* the envelope opens the cutoff: 0 .. 60 semitones */
     { "EnvWav", 127, 0, 0 },         /* the envelope folds the cycle: 0 .. a full fold */
-    { "FxTyp", 4, 0, fx_names },     /* one effect after the filter */
-    { "FxPar", 127, 64, 0 },         /* its one parameter: drive gain, bit depth, hold, ring frequency */
+    { "FxTyp", TX_NFX - 1, 0, fx_names },   /* one effect after the filter */
+    { "FxPar", 127, 64, 0 },         /* its one parameter: drive gain, bit depth, hold, ring frequency, clip, fuzz, fold, tremolo and phaser rates */
 };
 
 int tsyn_nparams(void) { return TS_NPARAMS; }
@@ -36,6 +36,27 @@ const x0x_param_t *tsyn_param(int i) { return (i >= 0 && i < TS_NPARAMS) ? &para
 int tsyn_get(const tsyn_t *b, int i) { return (i >= 0 && i < TS_NPARAMS) ? b->pot[i] : 0; }
 
 static float decay_mul(float seconds, float step_s) { return fm_expf(-step_s / seconds); }
+
+/* the effects with a phase read their rate from FxPar: ring 30 Hz .. 3.8 kHz, tremolo 0.5 .. 12 Hz, phaser 0.1 .. 4 Hz.
+ * Called when either of the two changes, so the rate is the selected effect's */
+static void fx_update(tsyn_t *b)
+{
+    float n = (float)b->pot[TS_FXPAR] * (1.0f / 127.0f);
+    switch (b->fxtyp) {
+    case TX_RING: b->fx_inc = 30.0f * fm_exp2f(n * 7.0f) / TSYN_SR; break;
+    case TX_TREM: b->fx_inc = 0.5f * fm_exp2f(n * 4.58f) / TSYN_SR; break;
+    case TX_PHASER: b->fx_inc = 0.1f * fm_exp2f(n * 5.3f) / TSYN_SR; break;
+    default: break;
+    }
+}
+
+/* a first-order allpass: flat level at every frequency, a phase shift set by A; Z is its one state */
+static float allpass(float x, float a, float *z)
+{
+    float y = a * x + *z;
+    *z = x - a * y;
+    return y;
+}
 
 void tsyn_set(tsyn_t *b, int i, int v)
 {
@@ -67,12 +88,18 @@ void tsyn_set(tsyn_t *b, int i, int v)
     case TS_RELEASE: b->rel_c = decay_mul(0.005f * fm_exp2f(n * 9.2f), 1.0f / TSYN_SR); break;
     case TS_ENVMOD: b->env_st = 60.0f * n; break;
     case TS_ENVWAV: b->env_wav = n; break;
-    case TS_FXTYP: b->fxtyp = v; break;
+    case TS_FXTYP:
+        b->fxtyp = v;
+        fx_update(b);
+        break;
     case TS_FXPAR:                   /* one pot, read by the effect that is selected */
         b->fx_drive = 1.0f + 15.0f * n * n;
         b->crush_scale = v ? fm_exp2f(15.0f - 13.0f * n) : 0.0f;   /* 2^(bits - 1), bits 16 .. 3 */
         b->hold_n = 1.0f + 47.0f * n * n;
-        b->ring_inc = 30.0f * fm_exp2f(n * 7.0f) / TSYN_SR;         /* 30 Hz .. 3.8 kHz */
+        b->fx_gain = 2.0f + 38.0f * n;                              /* the hard clip: 2 .. 40 */
+        b->fx_fuzz = 4.0f + 60.0f * n;                              /* the fuzz: 4 .. 64 */
+        b->fx_fold = 0.5f + 4.5f * n;                               /* the fold: half a fold .. five */
+        fx_update(b);
         break;
     }
 }
@@ -187,10 +214,41 @@ void tsyn_render(tsyn_t *b, float *out, int n)
             y = b->hold_v;
             break;
         case TX_RING:
-            y *= 1.4142f * fm_sin_turns(b->ring_ph);
-            b->ring_ph += b->ring_inc;
-            b->ring_ph -= fm_floorf(b->ring_ph);
+            y *= 1.4142f * fm_sin_turns(b->fx_ph);
+            b->fx_ph += b->fx_inc;
+            b->fx_ph -= fm_floorf(b->fx_ph);
             break;
+        case TX_DIST:                                          /* a hard clip: flat tops */
+            y = fm_clampf(y * b->fx_gain, -1.0f, 1.0f) * 0.7f;
+            break;
+        case TX_FUZZ: {                                        /* lopsided clipping, fizzy; the offset it makes is taken out again */
+            float z = fm_clampf(y * b->fx_fuzz, -0.3f, 0.8f);
+            b->fx_dc += 0.002f * (z - b->fx_dc);
+            y = (z - b->fx_dc) * 0.6f;
+            break;
+        }
+        case TX_FOLD: {                                        /* a wavefolder: the wave bends back on itself */
+            float t = y * b->fx_fold;
+            t -= fm_floorf(t);
+            y = fm_sin_turns(t) * 0.8f;
+            break;
+        }
+        case TX_TREM:                                          /* the level swings with a sine, all the way down */
+            y *= 0.5f + 0.5f * fm_sin_turns(b->fx_ph);
+            b->fx_ph += b->fx_inc;
+            b->fx_ph -= fm_floorf(b->fx_ph);
+            break;
+        case TX_PHASER: {                                      /* four allpass stages whose break point sweeps: notches that move */
+            float a = 0.6f * fm_sin_turns(b->fx_ph), z = y;
+            z = allpass(z, a, &b->ap[0]);
+            z = allpass(z, a, &b->ap[1]);
+            z = allpass(z, a, &b->ap[2]);
+            z = allpass(z, a, &b->ap[3]);
+            y = (y + z) * 0.5f;
+            b->fx_ph += b->fx_inc;
+            b->fx_ph -= fm_floorf(b->fx_ph);
+            break;
+        }
         default:
             break;
         }
