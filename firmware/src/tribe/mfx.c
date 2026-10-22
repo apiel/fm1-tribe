@@ -6,12 +6,12 @@
 
 const char *mx_name(int type)
 {
-    static const char *const N[NMX] = {"REVERB", "DELAY", "DRIVE", "DISTORT", "FUZZ", "WAVSHAPE", "CRUSH", "DECIM", "RING"};
+    static const char *const N[NMX] = {"REVERB", "DELAY", "DRIVE", "DISTORT", "FUZZ", "WAVSHAPE", "CRUSH", "DECIM", "RING", "CHORUS", "FLANGER", "PHASER", "TREMOLO", "COMB"};
     return N[type < NMX ? type : 0];
 }
 const char *mx_pname(int type)
 {
-    static const char *const P[NMX] = {"SIZE", "FDBK", "DRIVE", "DRIVE", "FUZZ", "FOLD", "BITS", "RATE", "FREQ"};
+    static const char *const P[NMX] = {"SIZE", "FDBK", "DRIVE", "DRIVE", "FUZZ", "FOLD", "BITS", "RATE", "FREQ", "RATE", "RATE", "RATE", "RATE", "PITCH"};
     return P[type < NMX ? type : 0];
 }
 
@@ -50,7 +50,7 @@ void dj_format(int v, char *buf)                     /* LP 0..100 left of the mi
 }
 void mx_format(int type, int v, char *buf)
 {
-    if (type == MX_RING)                                 /* the carrier: 40 Hz .. 2 kHz */
+    if (type == MX_RING || type == MX_COMB)              /* the carrier, the comb's pitch: 40 Hz .. 2 kHz */
         puts_(puti_(buf, (int)(40.0f * fm_exp2f((float)v * (5.64f / 127.0f)) + 0.5f)), "Hz");
     else
         puts_(puti_(buf, v * 100 / 127), "%");
@@ -86,6 +86,49 @@ void dj_run(mfxs_t *s, float *x, int n, const uint8_t v[2])
         }
         s->gp = g1;
     }
+}
+
+/* a sine LFO: PH is its phase in turns (kept in the slot's state), INC the step a sample */
+static float lfo(float *ph, float inc)
+{
+    *ph += inc;
+    *ph -= fm_floorf(*ph);
+    return fm_sin_turns(*ph);
+}
+/* a first-order allpass: flat level at every frequency, a phase shift set by A; Z is its one state */
+static float allpass(float x, float a, float *z)
+{
+    float y = a * x + *z;
+    *z = x - a * y;
+    return y;
+}
+
+/* ---- CHORUS, FLANGER and COMB: a short line, 1280 samples (29 ms at 44.1 kHz) of 16-bit samples (2.5 KiB), that they share: only one of FX 1 / FX 2 can use it ---- */
+#define MOD_N 1280
+static int16_t mod_ring[MOD_N] X0X_POOL;
+static int32_t mod_w;
+static uint8_t mod_on;
+
+static float mod_read(float d)                       /* d samples back from the write position, linear between two */
+{
+    float r = (float)mod_w - d, f, a, b;
+    int32_t i;
+    if (r < 0.0f)
+        r += MOD_N;
+    if (r >= MOD_N)
+        r -= MOD_N;
+    i = (int32_t)r;
+    f = r - (float)i;
+    a = (float)mod_ring[i];
+    b = (float)mod_ring[i + 1 == MOD_N ? 0 : i + 1];
+    return (a + (b - a) * f) * (1.0f / 8000.0f);
+}
+static void mod_put(float v)
+{
+    float y = v * 8000.0f;
+    mod_ring[mod_w] = (int16_t)(y > 32000.0f ? 32000 : y < -32000.0f ? -32000 : (int32_t)y);
+    if (++mod_w >= MOD_N)
+        mod_w = 0;
 }
 
 /* a send effect's wet signal: the bus in, the processed bus out, before the return level. PARAM is the effect's own control */
@@ -158,6 +201,51 @@ static void mx_wet(int type, mfxs_t *s, float *x, int n, int par)
             s->b += inc;
             s->b -= fm_floorf(s->b);
             x[i] *= fm_sin_turns(s->b) * 1.4f;
+        }
+        break;
+    }
+    case MX_CHORUS: {                                    /* a copy a few ms late, its time wandering (0.2 .. 5 Hz): the voice doubles and goes a little out of tune */
+        float inc = 0.2f * fm_exp2f(p * 4.64f) * (1.0f / 44100.0f);
+        for (i = 0; i < n; i++) {
+            float o = mod_read(662.0f + 176.0f * lfo(&s->a, inc));
+            mod_put(x[i]);
+            x[i] = o;
+        }
+        break;
+    }
+    case MX_FLANGER: {                                   /* a fed-back copy 0.1 .. 5 ms late, swept (0.05 .. 2 Hz): the dry and the copy cancel at notches that move, a jet */
+        float inc = 0.05f * fm_exp2f(p * 5.3f) * (1.0f / 44100.0f);
+        for (i = 0; i < n; i++) {
+            float o = mod_read(112.0f + 108.0f * lfo(&s->a, inc));
+            mod_put(x[i] + o * 0.6f);
+            x[i] = (x[i] + o) * 0.5f;
+        }
+        break;
+    }
+    case MX_PHASER: {                                    /* four allpass stages whose break point sweeps (0.1 .. 4 Hz): notches that move, a softer sweep than the flanger */
+        float inc = 0.1f * fm_exp2f(p * 5.3f) * (1.0f / 44100.0f);
+        for (i = 0; i < n; i++) {
+            float a = 0.6f * lfo(&s->hold, inc), y = x[i];
+            y = allpass(y, a, &s->a);
+            y = allpass(y, a, &s->b);
+            y = allpass(y, a, &s->c);
+            y = allpass(y, a, &s->d);
+            x[i] = (x[i] + y) * 0.5f;
+        }
+        break;
+    }
+    case MX_TREMOLO: {                                   /* the level swings with a sine (0.5 .. 12 Hz), all the way down */
+        float inc = 0.5f * fm_exp2f(p * 4.58f) * (1.0f / 44100.0f);
+        for (i = 0; i < n; i++)
+            x[i] *= 0.5f + 0.5f * lfo(&s->a, inc);
+        break;
+    }
+    case MX_COMB: {                                      /* a resonator: the input rings at a pitch, PARAM sets it (40 Hz .. 2 kHz) */
+        float d = 44100.0f / (40.0f * fm_exp2f(p * 5.64f));
+        for (i = 0; i < n; i++) {
+            float y = x[i] + 0.7f * mod_read(d);
+            mod_put(y);
+            x[i] = y * 0.25f;
         }
         break;
     }
@@ -252,6 +340,8 @@ void mx_idle(int type)
         dly_on = 0;
     else if (type == MX_REVERB)
         rev_on = 0;
+    else if (MX_LINE(type) == LN_MOD)
+        mod_on = 0;
 }
 
 void mx_run(int type, mfxs_t *s, float *x, int n, int amt, int par, float spl)
@@ -264,6 +354,11 @@ void mx_run(int type, mfxs_t *s, float *x, int n, int amt, int par, float spl)
     } else {
         float g = (float)amt * (1.0f / 127.0f);
         int i;
+        if (MX_LINE(type) == LN_MOD && !mod_on) {        /* a fresh start: no old copies */
+            memset(mod_ring, 0, sizeof mod_ring);
+            mod_w = 0;
+            mod_on = 1;
+        }
         mx_wet(type, s, x, n, par);
         for (i = 0; i < n; i++)
             x[i] *= g;

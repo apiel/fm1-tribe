@@ -81,8 +81,8 @@ if cc -O2 -ffp-contract=off -std=gnu99 -DX0X_HOST -Ifirmware/src -Ifirmware/src/
         build/host/mfx_test comp $c $B >>build/scen/mfx.log 2>&1 || { ok=0; echo "  case failed: comp $c" >>build/scen/mfx.log; }
     done
     # FX 1 / FX 2 (SLOT TYPE AMT PAR SEND): every type, on the 303 track's send. Send 0 or amount 0 leaves the audio alone, a send of 100 changes it.
-    # types: 0 reverb 1 delay 2 drive 3 dist 4 fuzz 5 wave 6 crush 7 decim 8 ring
-    for t in 0 1 2 3 4 5 6 7 8; do
+    # types: 0 reverb 1 delay 2 drive 3 dist 4 fuzz 5 wave 6 crush 7 decim 8 ring 9 chorus 10 flanger 11 phaser 12 tremolo 13 comb
+    for t in 0 1 2 3 4 5 6 7 8 9 10 11 12 13; do
         for sl in 0 1; do
             for c in "$sl $t 100 80 0 same" "$sl $t 0 80 100 same" "$sl $t 100 80 100 diff" "$sl $t 100 20 20 diff" "$sl $t 127 127 127 diff"; do
                 build/host/mfx_test send $c $B >>build/scen/mfx.log 2>&1 || { ok=0; echo "  case failed: send $c" >>build/scen/mfx.log; }

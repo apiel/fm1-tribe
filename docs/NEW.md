@@ -15,7 +15,7 @@ trades its five fixed parts for ten tracks that can play any engine.
 - **Sixteen clips per track**, launched from HOME at the end of the pattern or at once.
 - **Per-clip sequencer settings:** 16, 32 or 64 steps, six rates including triplets, four directions, swing.
 - **Scatter effects** on the second row of keys while it plays: loops, reverse, gate, crush, distortion, ring, filters.
-- **Two master effects**, FX 1 and FX 2, each a reverb, delay, drive, distortion, fuzz, wavefolder, crusher, decimator or ring modulator, fed by every track's two sends.
+- **Two master effects**, FX 1 and FX 2, each a reverb, delay, drive, distortion, fuzz, wavefolder, crusher, decimator, ring modulator, chorus, flanger, phaser, tremolo or comb, fed by every track's two sends.
 - **Four master knobs** (the MASTER pot and three encoders) that you assign to the volume, the DJ filter and its resonance, the amount of either effect, or the tempo.
 - **An always-on master compressor** and limiter, set in GLO.
 

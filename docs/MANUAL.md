@@ -79,7 +79,7 @@ TRIBE starts with a small beat already in it, so there is something to hear stra
    velocity, probability (and length and slide on an ACID).
 4. Press **EDIT**, **ENV** or **FX** to shape the track's sound with the four knobs.
 5. Hold the eleventh black key (**MUTE**) and tap a track key to mute or unmute that track.
-6. Press **HOME** for the clips: sixteen per track. Press a white key to launch one. It switches at
+6. Press **HOME** for the clips: sixty-four per track, in banks of sixteen. Press **HOME** again for the next bank. Press a white key to launch one. It switches at
    the end of the pattern; press it again to switch at once.
 7. Press **SEL** for the mix: each track's volume, its two sends and engine.
 8. Press **SAVE** when you like what you hear.
@@ -99,7 +99,7 @@ The drawing at the top of the manual names every control. In more detail:
 | FX, ENV, LFO, EDIT | The track's sound, in four groups of parameters. Press the same button again for the next page of four. A button is dark when the engine has nothing in that group. |
 | SEL | The mix: volume, sends and engine of every track. |
 | GLO | The global settings. |
-| HOME | The clips. |
+| HOME | The clips. Again: the next bank of sixteen. |
 | SAVE | The save pick (see Saving). |
 | ARP | The keyboard plays the track; arpeggiator and transposition. |
 | SEQ | The steps. Hold it for the sequencer's settings. |
@@ -208,7 +208,7 @@ engine's parameters. There is one per clip, saved with it.
 
 Press **HOME**. Each track has **sixty-four clips**, in four banks of sixteen; a clip holds everything of
 the track: pattern, engine, sound, LFO and sequencer settings. The white keys show one bank at a time:
-**OCT-** and **OCT+** move between the banks (the dots at the right of the screen show which one). The grid
+**OCT-** and **OCT+** move between the banks, and so does pressing **HOME** again (round again after the fourth; the dots at the right of the screen show which one). The grid
 shows ten rows (the tracks) of the bank's sixteen clips; a filled square is a clip with notes in it, the
 playing one is lit.
 
@@ -335,9 +335,14 @@ Each of the two master effects is one of:
 | CRUSH | the bits and the sample rate |
 | DECIM | the sample-rate reduction |
 | RING | the ring modulator's frequency, 40 Hz–2 kHz |
+| CHORUS | the speed of the wobble, 0.2–5 Hz |
+| FLANGER | the speed of the sweep, 0.05–2 Hz |
+| PHASER | the speed of the sweep, 0.1–4 Hz |
+| TREMOLO | the speed of the volume swing, 0.5–12 Hz |
+| COMB | the pitch the comb rings at, 40 Hz–2 kHz |
 
 **AMOUNT** is how much of the effect returns to the mix. The reverb and the delay have one
-buffer each, so only one of the two slots can be a reverb and only one a delay.
+buffer each, so only one of the two slots can be a reverb and only one a delay. CHORUS, FLANGER and COMB share one short line, so only one of the two slots can be one of those.
 
 ### The four knobs
 

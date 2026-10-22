@@ -13,7 +13,6 @@ wait 300
 tapkey w0
 wait 3000
 expect stepon 3
-tap HOME
 tap PLAY
 wait 300
 tapkey w2

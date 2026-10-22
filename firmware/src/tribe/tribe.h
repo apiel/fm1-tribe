@@ -66,8 +66,10 @@ typedef struct {
 enum { KS_VOL, KS_DJ, KS_RESO, KS_FX1, KS_FX2, KS_BPM, NKS };
 /* FX 1 and FX 2: two master effects every track can send to (SEL page). Each is one of these; AMT is its return level, PARAM its
  * own parameter (feedback, room size, drive, bit depth, ...). */
-enum { MX_REVERB, MX_DELAY, MX_DRIVE, MX_DIST, MX_FUZZ, MX_WAVE, MX_CRUSH, MX_DECIM, MX_RING, NMX };
-#define MX_STATEFUL(t) ((t) == MX_REVERB || (t) == MX_DELAY)     /* one buffer each: only one of FX 1 / FX 2 can be one of these */
+enum { MX_REVERB, MX_DELAY, MX_DRIVE, MX_DIST, MX_FUZZ, MX_WAVE, MX_CRUSH, MX_DECIM, MX_RING, MX_CHORUS, MX_FLANGER, MX_PHASER, MX_TREMOLO, MX_COMB, NMX };
+/* the buffers the effects keep: the reverb and the delay have one each, CHORUS / FLANGER / COMB share a short modulated line. Only one of FX 1 / FX 2 can use a line */
+enum { LN_NONE, LN_DELAY, LN_REVERB, LN_MOD };
+#define MX_LINE(t) ((t) == MX_DELAY ? LN_DELAY : (t) == MX_REVERB ? LN_REVERB : ((t) == MX_CHORUS || (t) == MX_FLANGER || (t) == MX_COMB) ? LN_MOD : LN_NONE)
 #define NKNOB 4
 #define PIX_LEVEL 100                   /* a parameter slot that is a track's LEVEL, not an engine pot */
 /* song mode: a track plays the clips after each other, from the one it is on, while they have steps. The first clip

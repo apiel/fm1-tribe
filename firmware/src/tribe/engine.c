@@ -503,13 +503,13 @@ static void lfo_update(int n)
 
 static float bus[2][256];                           /* the sends: FX 1 and FX 2 */
 
-/* FX 1 and FX 2 each hold a type; the reverb and the delay have one buffer each, so if both slots pick the same one the second is off */
+/* FX 1 and FX 2 each hold a type; the reverb, the delay and the modulated line have one buffer each, so if both slots pick the same line the second is off */
 static int slot_type(int i) { return proj.set.fxtype[i] < NMX ? proj.set.fxtype[i] : 0; }
 static int slot_on(int i)
 {
     if (!proj.set.fxamt[i])
         return 0;
-    return !(i == 1 && MX_STATEFUL(slot_type(1)) && slot_type(1) == slot_type(0) && proj.set.fxamt[0]);
+    return !(i == 1 && MX_LINE(slot_type(1)) && MX_LINE(slot_type(1)) == MX_LINE(slot_type(0)) && proj.set.fxamt[0]);
 }
 
 static void mix(float *l, float *r, int n)
@@ -548,7 +548,7 @@ static void mix(float *l, float *r, int n)
             mx_run(slot_type(k), &fx_sl[k], w, n, proj.set.fxamt[k], proj.set.fxpar[k], spl);
             for (i = 0; i < n; i++)
                 l[i] += w[i];
-        } else if (!(send_on[k ^ 1] && slot_type(k ^ 1) == slot_type(k)))   /* (not while the other slot is running the same buffer) */
+        } else if (!(send_on[k ^ 1] && MX_LINE(slot_type(k ^ 1)) == MX_LINE(slot_type(k))))   /* (not while the other slot is running the same buffer) */
             mx_idle(slot_type(k));
     }
     if (dk_scat_g)

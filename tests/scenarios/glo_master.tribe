@@ -25,7 +25,7 @@ expectfxtype 1 2
 turn K2 -1
 expectfxtype 1 0
 turn K2 -1
-expectfxtype 1 8
+expectfxtype 1 13
 turn K2 1
 expectfxtype 1 0
 # FX2 AMOUNT and PARAM are numbers

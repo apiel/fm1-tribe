@@ -375,7 +375,7 @@ static void fxtype_step(int i, int d)
     int v = proj.set.fxtype[i] < NMX ? proj.set.fxtype[i] : 0, other = proj.set.fxtype[i ^ 1], n;
     for (n = 0; n < NMX; n++) {
         v = (v + NMX + (d > 0 ? 1 : -1)) % NMX;
-        if (!(MX_STATEFUL(v) && v == other))
+        if (!(MX_LINE(v) && MX_LINE(v) == MX_LINE(other)))
             break;
     }
     proj.set.fxtype[i] = (uint8_t)v;
@@ -771,7 +771,9 @@ static void button_down(int b)
     case B_REC:
         ui.view = ui.view == V_REC ? V_SEQ : V_REC;
         break;
-    case B_HOME:
+    case B_HOME:                                          /* HOME again: the next bank, round again (as FX, ENV, LFO, EDIT pages) */
+        if (ui.view == V_HOME)
+            ui.bank = (uint8_t)((ui.bank + 1) % NBANK);
         ui.view = V_HOME;
         break;
     case B_GLO:

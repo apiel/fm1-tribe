@@ -31,3 +31,13 @@ tapkey w5
 wait 3000
 expect clip 5
 shot clips64_bank1.png
+# HOME again: the next bank, and round again after the fourth
+tap HOME
+expect bank 1
+tap HOME
+tap HOME
+tap HOME
+expect bank 0
+tapkey w5
+wait 3000
+expect clip 5
