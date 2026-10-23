@@ -84,9 +84,9 @@ build/desktop/tribe --shot panel.png   # no window: two seconds of the device, d
 ```
 
 The controls are the browser page's: click or drag the knobs (or use the wheel), `Shift`-click or
-right-click a button to latch it, `Q`–`I` and `A`–`K` are the white keys, `1`–`0` and `-` the black
-keys, `Space` PLAY, `Enter` REC, `Shift` SEL, `Esc` HOME, `Z` and `X` OCT− and OCT+, the arrow keys
-turn SELECT. `--data DIR` puts the saved data somewhere else.
+right-click a button to latch it, `Q`–`I` and `J` `K` `L` `M` `,` `.` `/` `;` are the white keys, `1`–`0` and `-` the black
+keys, `A` FX, `S` SEL, `D` ENV, `F` LFO, `G` EDIT, `H` GLO, `Z` `X` `C` `V` `B` `N` HOME, SAVE, ARP, SEQ, PLAY, REC,
+`Left` and `Right` OCT− and OCT+, the up and down arrows turn SELECT. `--data DIR` puts the saved data somewhere else.
 
 ## Install
 

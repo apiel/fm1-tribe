@@ -10,6 +10,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <mutex>
 #include <set>
 #include <string>
@@ -35,7 +36,8 @@ const sf::Color BODY(58, 61, 66), TRAY(38, 40, 44), KNOB(31, 33, 36), KNOB_RIM(6
     BTN_RIM(74, 77, 82), LABEL(232, 232, 234), KEY_WHITE(217, 218, 220), KEY_BLACK(28, 29, 32), SCREEN_RIM(17, 18, 20),
     LIT_WHITE(243, 178, 92), LIT_BLACK(224, 144, 44), DIM_WHITE(246, 220, 182), DIM_BLACK(122, 83, 38),
     FAINT_WHITE(232, 224, 210), FAINT_BLACK(70, 52, 32), BTN_DIM(96, 80, 52), BTN_LIT(243, 178, 92),
-    HELD(240, 160, 67), LATCHED(111, 195, 255), INK_DARK(30, 30, 32);
+    HELD(240, 160, 67), LATCHED(111, 195, 255), INK_DARK(30, 30, 32), HINT(150, 152, 158),
+    HINT_ON_WHITE(70, 72, 78), HINT_ON_BLACK(190, 192, 198);
 
 struct Knob { float x, y, r; const char *label; int role; };
 const Knob KNOBS[] = {
@@ -46,55 +48,64 @@ const Knob KNOBS[] = {
 constexpr int NKNOBS = sizeof KNOBS / sizeof KNOBS[0];
 constexpr int SELECT_KNOB = 1;                        // KNOBS[] index of SELECT: the arrow keys turn it
 
-struct Button { float x, y, w, h; int bit; const char *top; const char *bottom; };
+struct Button { float x, y, w, h; int bit; const char *top; const char *bottom; std::string hint; };
 std::vector<Button> make_buttons()
 {
-    std::vector<Button> b = {{72, 268, 82, 38, BTN_OCTDN, "OCT-", nullptr}, {170, 268, 82, 38, BTN_OCTUP, "OCT+", nullptr}};
+    std::vector<Button> b = {{72, 268, 82, 38, BTN_OCTDN, "OCT-", nullptr, ""}, {170, 268, 82, 38, BTN_OCTUP, "OCT+", nullptr, ""}};
     const char *row1[] = {"FX", "SEL", "ENV", "LFO", "EDIT", "GLO"};
     const char *row2[] = {"HOME", "SAVE", "ARP", "SEQ", "PLAY", "REC"};
     for (int i = 0; i < 6; i++) {
-        b.push_back({582.0f + i * 63, 174, 54, 48, i, row1[i], nullptr});
-        b.push_back({582.0f + i * 63, 236, 54, 48, 6 + i, row2[i], i == 4 ? "STOP" : nullptr});
+        b.push_back({582.0f + i * 63, 174, 54, 48, i, row1[i], nullptr, ""});
+        b.push_back({582.0f + i * 63, 236, 54, 48, 6 + i, row2[i], i == 4 ? "STOP" : nullptr, ""});
     }
     return b;
 }
 
-struct Key { float x, y, w, h; int key; bool black; };
+struct Key { float x, y, w, h; int key; bool black; std::string hint; };
 std::vector<Key> make_keys()
 {
     const float x0 = 36, y0 = 340, w = 928, h = 270, pitch = (w - 24) / 16, kw = pitch * 0.78f;
     const int black_after[11] = {0, 1, 2, 4, 5, 7, 8, 9, 11, 12, 14};
     std::vector<Key> k;
     for (int i = 0; i < 16; i++)
-        k.push_back({x0 + 12 + i * pitch + (pitch - kw) / 2, y0 + h * 0.43f, kw, h * 0.52f, tribe_white_key(i), false});
+        k.push_back({x0 + 12 + i * pitch + (pitch - kw) / 2, y0 + h * 0.43f, kw, h * 0.52f, tribe_white_key(i), false, ""});
     for (int i = 0; i < 11; i++)
-        k.push_back({x0 + 12 + (black_after[i] + 1) * pitch - kw / 2, y0 + h * 0.06f, kw, h * 0.33f, tribe_black_key(i), true});
+        k.push_back({x0 + 12 + (black_after[i] + 1) * pitch - kw / 2, y0 + h * 0.06f, kw, h * 0.33f, tribe_black_key(i), true, ""});
     return k;
 }
 
-// the computer's keys, as the page has them: Q-I and A-K white keys, 1-0 and - black keys, Space PLAY, Enter REC,
-// Shift SEL, Esc HOME, Z and X OCT- and OCT+
+// the computer's keys: Q-I and J-; white keys, 1-0 and - black keys, A S D F G H FX SEL ENV LFO EDIT GLO,
+// Z X C V B N HOME SAVE ARP SEQ PLAY REC, Left and Right OCT- and OCT+
 struct Bind { sf::Keyboard::Key code; bool is_key; int index; };
 sf::Keyboard::Key letter(char c) { return sf::Keyboard::Key(sf::Keyboard::A + (c - 'a')); }
 sf::Keyboard::Key digit(char c) { return c == '0' ? sf::Keyboard::Num0 : sf::Keyboard::Key(sf::Keyboard::Num1 + (c - '1')); }
 std::vector<Bind> make_binds()
 {
     std::vector<Bind> b;
-    const char *white_a = "qwertyui", *white_b = "asdfghjk", *black = "1234567890";
-    for (int i = 0; i < 8; i++) {
+    const char *white_a = "qwertyui", *black = "1234567890";
+    for (int i = 0; i < 8; i++)
         b.push_back({letter(white_a[i]), true, tribe_white_key(i)});
-        b.push_back({letter(white_b[i]), true, tribe_white_key(8 + i)});
-    }
+    const sf::Keyboard::Key white_b[8] = {letter('j'), letter('k'), letter('l'), letter('m'), sf::Keyboard::Comma,
+                                          sf::Keyboard::Period, sf::Keyboard::Slash, sf::Keyboard::SemiColon};
+    for (int i = 0; i < 8; i++)
+        b.push_back({white_b[i], true, tribe_white_key(8 + i)});
     for (int i = 0; i < 10; i++)
         b.push_back({digit(black[i]), true, tribe_black_key(i)});
     b.push_back({sf::Keyboard::Hyphen, true, tribe_black_key(10)});
-    b.push_back({sf::Keyboard::Space, false, BTN_PLAY});
-    b.push_back({sf::Keyboard::Return, false, BTN_REC});
-    b.push_back({sf::Keyboard::LShift, false, BTN_SEL});
-    b.push_back({sf::Keyboard::RShift, false, BTN_SEL});
-    b.push_back({sf::Keyboard::Escape, false, BTN_HOME});
-    b.push_back({sf::Keyboard::Z, false, BTN_OCTDN});
-    b.push_back({sf::Keyboard::X, false, BTN_OCTUP});
+    b.push_back({letter('a'), false, BTN_FX});
+    b.push_back({letter('s'), false, BTN_SEL});
+    b.push_back({letter('d'), false, BTN_ENV});
+    b.push_back({letter('f'), false, BTN_LFO});
+    b.push_back({letter('g'), false, BTN_EDIT});
+    b.push_back({letter('h'), false, BTN_GLO});
+    b.push_back({letter('z'), false, BTN_HOME});
+    b.push_back({letter('x'), false, BTN_SAVE});
+    b.push_back({letter('c'), false, BTN_ARP});
+    b.push_back({letter('v'), false, BTN_SEQ});
+    b.push_back({letter('b'), false, BTN_PLAY});
+    b.push_back({letter('n'), false, BTN_REC});
+    b.push_back({sf::Keyboard::Left, false, BTN_OCTDN});
+    b.push_back({sf::Keyboard::Right, false, BTN_OCTUP});
     return b;
 }
 
@@ -117,6 +128,22 @@ private:
     sf::Int16 samples[CHUNK * 2];
 };
 
+std::string key_name(sf::Keyboard::Key c)
+{
+    if (c >= sf::Keyboard::A && c <= sf::Keyboard::Z) return std::string(1, static_cast<char>('A' + (c - sf::Keyboard::A)));
+    if (c >= sf::Keyboard::Num0 && c <= sf::Keyboard::Num9) return std::string(1, static_cast<char>('0' + (c - sf::Keyboard::Num0)));
+    switch (c) {
+    case sf::Keyboard::Hyphen: return "-";
+    case sf::Keyboard::Comma: return ",";
+    case sf::Keyboard::Period: return ".";
+    case sf::Keyboard::Slash: return "/";
+    case sf::Keyboard::SemiColon: return ";";
+    case sf::Keyboard::Left: return "LEFT";
+    case sf::Keyboard::Right: return "RIGHT";
+    default: return "";
+    }
+}
+
 bool inside(float x, float y, float px, float py, float w, float h)
 {
     return x >= px && x < px + w && y >= py && y < py + h;
@@ -132,6 +159,8 @@ public:
         buttons_ = make_buttons();
         keys_ = make_keys();
         binds_ = make_binds();
+        for (Button &b : buttons_) b.hint = hint_of(false, b.bit);
+        for (Key &k : keys_) k.hint = hint_of(true, k.key);
         set_master(MASTER_START);
     }
 
@@ -257,6 +286,14 @@ public:
     }
 
 private:
+    // the computer key that presses a control (the first one listed for it)
+    std::string hint_of(bool is_key, int index) const
+    {
+        for (const Bind &b : binds_)
+            if (b.is_key == is_key && b.index == index) return key_name(b.code);
+        return "";
+    }
+
     // the knobs turn as the page's do: a MASTER step is 64 of 4096, an encoder's detent is 18 degrees
     void turn(int k, int n)
     {
@@ -355,6 +392,7 @@ private:
         t.draw(ind);
 
         label(t, k.x, k.y - k.r - 16, k.label, 17, LABEL);
+        if (k.role == ROLE_SELECT) label(t, k.x, k.y + k.r + 14, "UP DOWN", 10, HINT);
     }
 
     void draw_button(sf::RenderTarget &t, const Button &b) const
@@ -381,6 +419,7 @@ private:
         } else {
             label(t, b.x + b.w / 2, b.y + b.h / 2, b.top, 15, ink);
         }
+        if (!b.hint.empty()) label(t, b.x + b.w / 2, b.y + b.h - 6, b.hint.c_str(), 10, lit ? INK_DARK : HINT);
     }
 
     void draw_key(sf::RenderTarget &t, const Key &k) const
@@ -398,6 +437,7 @@ private:
             r.setOutlineThickness(3);
         }
         t.draw(r);
+        if (!k.hint.empty()) label(t, k.x + k.w / 2, k.y + k.h - (k.black ? 12.0f : 14.0f), k.hint.c_str(), 11, k.black ? HINT_ON_BLACK : HINT_ON_WHITE);
     }
 
     std::string dir_;
@@ -415,6 +455,21 @@ private:
     int master_ = 0;
     float angle_[NKNOBS] = {};
 };
+
+// where the window was last: "x y" in window.txt of the data folder; the first run opens at the top left
+sf::Vector2i load_place(const std::string &dir)
+{
+    std::ifstream f(dir + "/window.txt");
+    int x = 0, y = 0;
+    if (f >> x >> y) return {x, y};
+    return {0, 0};
+}
+
+void save_place(const std::string &dir, sf::Vector2i p)
+{
+    std::ofstream f(dir + "/window.txt");
+    f << p.x << ' ' << p.y << '\n';
+}
 
 std::string default_dir()
 {
@@ -470,8 +525,12 @@ int main(int argc, char **argv)
 
     sf::RenderWindow window(sf::VideoMode(W, H), "TRIBE", sf::Style::Titlebar | sf::Style::Close);
     window.setFramerateLimit(60);
+    window.setPosition(load_place(dir));
     Panel panel(dir, font);
 
+    // the place is saved when the window is moved, once the window manager has placed it (the first half second is skipped)
+    sf::Vector2i place = window.getPosition();
+    int frames = 0;
     DeviceSound sound;
     sound.play();
     while (window.isOpen()) {
@@ -480,6 +539,10 @@ int main(int argc, char **argv)
         window.clear(sf::Color::Black);
         panel.draw(window);
         window.display();
+        if (++frames > 30 && window.getPosition() != place) {
+            place = window.getPosition();
+            save_place(dir, place);
+        }
     }
     sound.stop();
     std::lock_guard<std::mutex> lock(device_lock);
