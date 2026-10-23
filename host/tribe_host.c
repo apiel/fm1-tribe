@@ -1,7 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* TRIBE on the host: the whole app (UI, project, engine, sequencer, every DSP part) run against a
  * simulated FM-1 driven by a script. Audio goes to a WAV, the screen to PNGs, the lights to a
- * text dump. The same file, with TRIBE_WEB, is the browser emulator (web/emu/tribe_web.c).
+ * text dump. The same file, with TRIBE_WEB, is the browser emulator (web/emu/tribe_web.c), and with
+ * TRIBE_DESKTOP the native one with a window and sound (desktop/tribe_core.c).
  *
  *   tribe_host SCRIPT [OUTDIR]
  *
@@ -317,8 +318,8 @@ static void run_ms(uint32_t ms)
         while (audio_due_ms <= (double)now_ms) {      /* 256-frame half buffers, as the I2S DMA */
             uint32_t k;
             engine_render(blk, 256);
-#ifdef TRIBE_WEB
-            web_audio(blk, 256);                         /* the browser build: to the AudioWorklet */
+#if defined(TRIBE_WEB) || defined(TRIBE_DESKTOP)
+            audio_out(blk, 256);                         /* the browser build: to the AudioWorklet; the desktop build: to the sound card */
 #endif
             for (k = 0; k < 256; k++) {
                 float l = (float)blk[2 * k] / 8388608.0f, r = (float)blk[2 * k + 1] / 8388608.0f;
@@ -356,7 +357,7 @@ static void run_ms(uint32_t ms)
     }
 }
 
-#ifndef TRIBE_WEB
+#if !defined(TRIBE_WEB) && !defined(TRIBE_DESKTOP)
 /* ---------------------------------------------------------- script --- */
 static const char *const BTN_N[NB] = {"FX", "SEL", "ENV", "LFO", "EDIT", "GLO", "HOME", "SAVE", "ARP", "SEQ",
                                       "PLAY", "REC", "OCT-", "OCT+"};

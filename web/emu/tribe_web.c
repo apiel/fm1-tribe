@@ -8,7 +8,7 @@
  *   web/emu/build.sh   ->  build/emu/tribe.wasm (+ the page) */
 #include <stdint.h>
 
-static void web_audio(const int32_t *blk, uint32_t n);
+static void audio_out(const int32_t *blk, uint32_t n);
 #include "../../host/tribe_host.c"
 
 #undef __attribute__
@@ -16,7 +16,7 @@ static void web_audio(const int32_t *blk, uint32_t n);
 #define RING 4096u                       /* output ring, stereo float, filled by run_ms, drained by web_render */
 static float ring[RING * 2];
 static uint32_t ring_w, ring_r;
-static void web_audio(const int32_t *blk, uint32_t n)
+static void audio_out(const int32_t *blk, uint32_t n)
 {
     uint32_t k;
     for (k = 0; k < n; k++) {

@@ -53,6 +53,7 @@ The FM-1's screen, from the same code (the [manual](https://apiel.github.io/fm1-
 ```
 tests/run_tests.sh     # host scenarios, audio tests, and the wasm build in node
 ./run_emu.sh           # build the browser emulator and serve it on http://localhost:8000 (needs Emscripten: ~/emsdk)
+desktop/build.sh       # build the native emulator (a window with sound; needs SFML 2.x): build/desktop/tribe
 tools/flash.sh --build # build build/tribe.fwsc and check that the FM-1 answers; add --yes to install it
 ```
 

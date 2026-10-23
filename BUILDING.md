@@ -71,6 +71,23 @@ script (the command list is at the top of `host/tribe_host.c`).
 The browser emulator needs Emscripten: `source ~/emsdk/emsdk_env.sh && ./run_emu.sh` builds it and
 serves it on <http://localhost:8000>.
 
+## The native emulator
+
+`desktop/build.sh` builds TRIBE as a program with a window and sound (needs SFML 2.x and pkg-config; on Linux,
+`libsfml-dev` and `pkg-config`). It runs the same sources as the browser build:
+
+```
+desktop/build.sh                       # build/desktop/tribe
+build/desktop/tribe                    # starts at once; saves to ~/.local/share/tribe
+build/desktop/tribe --reset            # the factory reset: forget the saved clips and settings
+build/desktop/tribe --shot panel.png   # no window: two seconds of the device, drawn to a PNG
+```
+
+The controls are the browser page's: click or drag the knobs (or use the wheel), `Shift`-click or
+right-click a button to latch it, `Q`–`I` and `A`–`K` are the white keys, `1`–`0` and `-` the black
+keys, `Space` PLAY, `Enter` REC, `Shift` SEL, `Esc` HOME, `Z` and `X` OCT− and OCT+, the arrow keys
+turn SELECT. `--data DIR` puts the saved data somewhere else.
+
 ## Install
 
 TRIBE's web installer is <https://apiel.github.io/fm1-tribe/install/>. To install your own build, use
