@@ -70,3 +70,5 @@ scatter effects come from [zicBox](https://github.com/apiel/zicBox); the 909, 80
 
 GPL-3.0-only. M-VAVE and FM-1 are trademarks of their owners; TRIBE is not connected with M-VAVE,
 Roland or Hügelton Instruments.
+
+You can also try TRIBE in the browser, no flashing needed, in the free community [FM-1 Emulator](https://fm1-emulator.atst.tools/).
